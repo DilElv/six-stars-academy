@@ -67,7 +67,7 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap gap-4">
               <Link
-                to="/login?tab=daftar"
+                to="/pricelist"
                 className="inline-flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold text-base px-8 py-3.5 rounded-xl transition-all duration-200 shadow-xl shadow-gold-500/30 hover:shadow-gold-500/50"
               >
                 Daftar Sekarang
@@ -170,7 +170,7 @@ export default function Home() {
                 Daftarkan putra Anda sekarang dan mulailah perjalanan menuju karir sepak bola profesional.
               </p>
               <Link
-                to="/login?tab=daftar"
+                to="/pricelist"
                 className="inline-flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold text-base px-8 py-3.5 rounded-xl transition-all duration-200 shadow-xl shadow-gold-500/30"
               >
                 Daftar Sekarang

@@ -45,7 +45,7 @@ export default function Navbar() {
               Masuk
             </Link>
             <Link
-              to="/login?tab=daftar"
+              to="/pricelist"
               className="inline-flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-5 py-2.5 rounded-xl transition-all duration-200 shadow-lg shadow-gold-500/25 hover:shadow-gold-500/40"
             >
               Daftar
@@ -91,7 +91,7 @@ export default function Navbar() {
               Masuk
             </Link>
             <Link
-              to="/login?tab=daftar"
+              to="/pricelist"
               onClick={() => setOpen(false)}
               className="block px-4 py-3 rounded-lg text-sm font-semibold text-navy-900 bg-gold-400 hover:bg-gold-500 text-center transition-all"
             >

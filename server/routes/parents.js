@@ -24,6 +24,11 @@ router.get('/child', authenticate, authorize('parent'), async (req, res) => {
       [student.id]
     )
 
+    const monthlyReportResult = await pool.query(
+      `SELECT * FROM metrics WHERE student_id = $1 AND report_type = 'monthly' AND is_published = TRUE ORDER BY period DESC LIMIT 1`,
+      [student.id]
+    )
+
     const attendanceResult = await pool.query(
       `SELECT COUNT(*) FILTER (WHERE status = 'hadir') as attended,
               COUNT(*) as total
@@ -72,6 +77,7 @@ router.get('/child', authenticate, authorize('parent'), async (req, res) => {
     res.json({
       student,
       metrics: metricsResult.rows[0] || null,
+      monthlyReport: monthlyReportResult.rows[0] || null,
       attendance: {
         sessionsAttended: attended,
         totalSessions: Math.max(totalSessions, attended),

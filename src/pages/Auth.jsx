@@ -3,10 +3,25 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LogIn, UserPlus, Mail, Lock, Eye, EyeOff, ShieldAlert, CheckCircle, User, Phone, Calendar, MapPin } from 'lucide-react'
 import { login, register } from '../api'
 
+const PACKAGE_INFO = {
+  '1bulan-1sesi': { label: '1 Bulan', sesi: '1 Sesi / Minggu', price: 550000 },
+  '1bulan-2sesi': { label: '1 Bulan', sesi: '2 Sesi / Minggu', price: 750000 },
+  '3bulan-1sesi': { label: '3 Bulan', sesi: '1 Sesi / Minggu', price: 1400000 },
+  '3bulan-2sesi': { label: '3 Bulan', sesi: '2 Sesi / Minggu', price: 2000000 },
+  '6bulan-1sesi': { label: '6 Bulan', sesi: '1 Sesi / Minggu', price: 2500000 },
+  '6bulan-2sesi': { label: '6 Bulan', sesi: '2 Sesi / Minggu', price: 3800000 },
+}
+
+function formatPrice(n) {
+  return 'Rp' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
 export default function Auth() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialTab = searchParams.get('tab') === 'daftar' ? 'daftar' : 'masuk'
+  const pkg = searchParams.get('package')
+  const selectedPkg = pkg && PACKAGE_INFO[pkg] ? { key: pkg, ...PACKAGE_INFO[pkg] } : null
   const [tab, setTab] = useState(initialTab)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,6 +37,7 @@ export default function Auth() {
   const [childPhone, setChildPhone] = useState('')
   const [childDob, setChildDob] = useState('')
   const [childAddress, setChildAddress] = useState('')
+  const [childMedicalHistory, setChildMedicalHistory] = useState('')
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -55,9 +71,10 @@ export default function Auth() {
     if (!registerEmail.includes('@')) { setError('Email tidak valid.'); return }
     if (registerPassword.length < 6) { setError('Password minimal 6 karakter.'); return }
     if (registerPassword !== registerConfirm) { setError('Konfirmasi password tidak cocok.'); return }
+    if (!selectedPkg) { setError('Silakan pilih paket latihan terlebih dahulu.'); return }
 
     try {
-      await register(registerEmail, registerPassword, registerName, 'parent', { childName, childPhone, childDob, childAddress })
+      await register(registerEmail, registerPassword, registerName, 'parent', { childName, childPhone, childDob, childAddress, childMedicalHistory, packageType: selectedPkg.key })
       setSuccess('Pendaftaran berhasil! Silakan login.')
       setTab('masuk')
       setRegisterName('')
@@ -130,6 +147,36 @@ export default function Auth() {
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2 mb-4">
                 <CheckCircle size={18} className="text-green-500 shrink-0 mt-0.5" />
                 <p className="text-green-700 text-sm">{success}</p>
+              </div>
+            )}
+
+            {tab === 'daftar' && selectedPkg && (
+              <div className="bg-gradient-to-r from-navy-50 to-gold-50 border border-gold-200 rounded-xl p-3 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-gray-500 font-medium">Paket Dipilih</p>
+                    <p className="text-sm font-bold text-navy-900">{selectedPkg.label} — {selectedPkg.sesi}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">SPP</p>
+                    <p className="text-sm font-bold text-gold-600">{formatPrice(selectedPkg.price)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gold-100">
+                  <p className="text-[11px] text-gray-400">Biaya daftar (jersey + bola)</p>
+                  <p className="text-xs font-semibold text-navy-700">{formatPrice(750000)}</p>
+                </div>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-xs font-semibold text-navy-800">Total pembayaran awal</p>
+                  <p className="text-sm font-bold text-emerald-600">{formatPrice(selectedPkg.price + 750000)}</p>
+                </div>
+              </div>
+            )}
+
+            {tab === 'daftar' && !selectedPkg && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex items-center gap-2 cursor-pointer" onClick={() => navigate('/pricelist')}>
+                <ShieldAlert size={16} className="text-amber-500 shrink-0" />
+                <p className="text-amber-700 text-sm">Pilih paket latihan dulu <span className="font-semibold underline">di sini</span></p>
               </div>
             )}
 
@@ -317,6 +364,17 @@ export default function Auth() {
                         onChange={(e) => setChildAddress(e.target.value)}
                         placeholder="Alamat rumah"
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-navy-900 placeholder:text-gray-400 focus:outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Riwayat Penyakit</label>
+                      <textarea
+                        value={childMedicalHistory}
+                        onChange={(e) => setChildMedicalHistory(e.target.value)}
+                        placeholder="Alergi, asma, atau kondisi medis lainnya (opsional)"
+                        rows={2}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-navy-900 placeholder:text-gray-400 focus:outline-none focus:border-gold-400 focus:ring-2 focus:ring-gold-400/20 transition-all resize-none"
                       />
                     </div>
                   </div>

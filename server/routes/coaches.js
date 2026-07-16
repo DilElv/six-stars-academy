@@ -35,11 +35,23 @@ router.get('/profile', authenticate, authorize('coach'), async (req, res) => {
 })
 
 router.put('/profile', authenticate, authorize('coach'), async (req, res) => {
-  const { title, phone } = req.body
+  const { title, phone, avatar } = req.body
   try {
-    const result = await pool.query(
-      `UPDATE coaches SET title=$1, phone=$2 WHERE profile_id=$3 RETURNING *`,
+    await pool.query(
+      `UPDATE coaches SET title=$1, phone=$2 WHERE profile_id=$3`,
       [title, phone, req.user.id]
+    )
+    if (avatar) {
+      await pool.query(
+        `UPDATE profiles SET avatar=$1 WHERE id=$2`,
+        [avatar, req.user.id]
+      )
+    }
+    const result = await pool.query(
+      `SELECT c.*, p.email, p.name, p.avatar
+       FROM coaches c JOIN profiles p ON c.profile_id = p.id
+       WHERE c.profile_id = $1`,
+      [req.user.id]
     )
     res.json(result.rows[0])
   } catch (err) {

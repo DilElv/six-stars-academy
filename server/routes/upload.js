@@ -30,8 +30,9 @@ const router = Router()
 
 router.post('/', authenticate, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  const baseUrl = `${req.protocol}://${req.get('host')}`
   res.json({
-    url: `/uploads/${req.file.filename}`,
+    url: `${baseUrl}/uploads/${req.file.filename}`,
     filename: req.file.filename,
   })
 })

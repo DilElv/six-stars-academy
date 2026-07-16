@@ -62,14 +62,17 @@ const tables = [
   `CREATE TABLE IF NOT EXISTS metrics (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-    period VARCHAR(50) DEFAULT 'current',
+    period VARCHAR(10) NOT NULL DEFAULT to_char(CURRENT_DATE, 'YYYY-MM-DD'),
+    report_type VARCHAR(20) NOT NULL DEFAULT 'session' CHECK (report_type IN ('session', 'monthly')),
     passing INT DEFAULT 50,
     dribbling INT DEFAULT 50,
     stamina INT DEFAULT 50,
     shooting INT DEFAULT 50,
     tactics INT DEFAULT 50,
     coach_note TEXT DEFAULT '',
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(student_id, period, report_type)
   )`,
 
   `CREATE TABLE IF NOT EXISTS schedules (
@@ -124,6 +127,17 @@ const tables = [
   )`,
 ]
 
+const alter = [
+  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS report_type VARCHAR(20) NOT NULL DEFAULT 'session' CHECK (report_type IN ('session', 'monthly'))`,
+  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
+  `ALTER TABLE metrics ALTER COLUMN period SET DEFAULT to_char(CURRENT_DATE, 'YYYY-MM-DD')`,
+  `ALTER TABLE metrics DROP CONSTRAINT IF EXISTS metrics_student_id_period_report_type_key`,
+  `ALTER TABLE metrics ADD CONSTRAINT metrics_student_id_period_report_type_key UNIQUE(student_id, period, report_type)`,
+  `ALTER TABLE students ADD COLUMN IF NOT EXISTS package_type VARCHAR(50) DEFAULT ''`,
+  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT FALSE`,
+  `ALTER TABLE metrics ADD COLUMN IF NOT EXISTS metrics_data JSONB DEFAULT '{}'`,
+]
+
 async function migrate() {
   console.log('Running migrations...')
   for (const sql of tables) {
@@ -133,6 +147,14 @@ async function migrate() {
     } catch (err) {
       console.error('  ✗ Migration failed:', err.message)
       throw err
+    }
+  }
+  for (const sql of alter) {
+    try {
+      await pool.query(sql)
+      console.log('  ✓', sql.substring(0, 70) + '...')
+    } catch (err) {
+      console.error('  ✗ Alter failed:', err.message)
     }
   }
   console.log('All migrations complete.')

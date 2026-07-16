@@ -100,7 +100,7 @@ async function seed() {
     const studentId = s.rows[0].id
 
     await pool.query(
-      `INSERT INTO metrics (student_id, passing, dribbling, stamina, shooting, tactics, coach_note) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      `INSERT INTO metrics (student_id, period, report_type, passing, dribbling, stamina, shooting, tactics, coach_note) VALUES ($1, to_char(CURRENT_DATE, 'YYYY-MM-DD'), 'session', $2,$3,$4,$5,$6,$7)`,
       [studentId, st.metrics.passing, st.metrics.dribbling, st.metrics.stamina, st.metrics.shooting, st.metrics.tactics, st.note]
     )
 

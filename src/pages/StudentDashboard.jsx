@@ -429,6 +429,10 @@ function CoachFeedbackCard({ child }) {
 
 function RadarChartCard({ child }) {
   const metrics = child?.metrics || defaultMetrics
+  const reportPeriod = child?.monthlyReportPeriod || null
+  const periodLabel = reportPeriod
+    ? (() => { const [y, m] = reportPeriod.split('-'); const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']; return months[parseInt(m)-1] + ' ' + y })()
+    : 'Bulan Ini'
 
   const radarData = [
     { metric: 'Passing', score: metrics.passing },
@@ -449,7 +453,7 @@ function RadarChartCard({ child }) {
           <Target className="text-navy-700" size={20} />
           <h3 className="font-heading font-bold text-navy-900">Analytics Performa</h3>
         </div>
-        <span className="text-xs text-gray-400 font-medium">Bulan Ini</span>
+        <span className="text-xs text-gray-400 font-medium">{periodLabel}</span>
       </div>
 
       <div className="relative">
@@ -616,17 +620,19 @@ export default function StudentDashboard() {
     }
     import('../api').then((api) => {
       api.getMyChild().then((data) => {
+        const monthlyMetrics = data.monthlyReport || data.metrics
         const c = {
           name: data.student?.name || '-',
           studentId: data.student?.id?.substring(0, 8) || '-',
           ageGroup: data.student?.age_group_label || '-',
           avatar: data.student?.avatar || '',
           position: data.student?.position_singkatan || '',
-          metrics: data.metrics || { passing: 0, dribbling: 0, stamina: 0, shooting: 0, tactics: 0 },
+          metrics: monthlyMetrics || { passing: 0, dribbling: 0, stamina: 0, shooting: 0, tactics: 0 },
+          monthlyReportPeriod: data.monthlyReport?.period || null,
           attendance: data.attendance || { sessionsAttended: 0, totalSessions: 12, percentage: 0 },
           coachFeedback: {
             name: '-',
-            note: data.metrics?.coach_note || 'Belum ada catatan dari pelatih.',
+            note: monthlyMetrics?.coach_note || 'Belum ada catatan dari pelatih.',
             avatar: data.student?.avatar || '',
           },
           spp: data.spp ? { ...data.spp, id: data.spp.id, package: '8 Sesi / Bulan' } : { package: '8 Sesi / Bulan', status: 'unpaid', sessionsUsed: 0, sessionsPaid: 8 },

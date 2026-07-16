@@ -6,11 +6,13 @@ import Schedule from './pages/Schedule'
 import Gallery from './pages/Gallery'
 import Sponsors from './pages/Sponsors'
 import Auth from './pages/Auth'
+import PriceList from './pages/PriceList'
 import DashboardLayout from './components/DashboardLayout'
 import StudentDashboard from './pages/StudentDashboard'
 import DashboardProfile from './pages/DashboardProfile'
 import DashboardSchedule from './pages/DashboardSchedule'
 import DashboardPayment from './pages/DashboardPayment'
+import DashboardRaport from './pages/DashboardRaport'
 import CoachDashboard from './pages/CoachDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 
@@ -24,6 +26,7 @@ export default function App() {
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/sponsors" element={<Sponsors />} />
         <Route path="/login" element={<Auth />} />
+        <Route path="/pricelist" element={<PriceList />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
       <Route path="/dashboard" element={<DashboardLayout />}>
@@ -31,6 +34,7 @@ export default function App() {
         <Route path="profil" element={<DashboardProfile />} />
         <Route path="jadwal" element={<DashboardSchedule />} />
         <Route path="pembayaran" element={<DashboardPayment />} />
+        <Route path="rapor" element={<DashboardRaport />} />
       </Route>
       <Route path="/coach" element={<CoachDashboard />} />
       <Route path="/admin" element={<AdminDashboard />} />

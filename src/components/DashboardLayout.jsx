@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   LogOut,
@@ -6,17 +6,20 @@ import {
   UserCircle,
   ClipboardList,
   DollarSign,
+  FileText,
   Menu,
   ChevronDown,
   Star,
+  Camera,
 } from 'lucide-react'
-import { getMe, logout as apiLogout } from '../api'
+import { getMe, logout as apiLogout, uploadFile, updateMyProfile } from '../api'
 
 const navItems = [
   { label: 'Dasbor', icon: LayoutDashboard, path: '/dashboard' },
   { label: 'Profil Anak', icon: UserCircle, path: '/dashboard/profil' },
   { label: 'Jadwal', icon: ClipboardList, path: '/dashboard/jadwal' },
   { label: 'Pembayaran', icon: DollarSign, path: '/dashboard/pembayaran' },
+  { label: 'Rapor', icon: FileText, path: '/dashboard/rapor' },
 ]
 
 function getSession() {
@@ -28,10 +31,26 @@ function getSession() {
   }
 }
 
-function DashboardNavbar({ session, onLogout }) {
+function DashboardNavbar({ session, onLogout, onAvatarUpdate }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
+
+  async function handleAvatarChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    try {
+      const { url } = await uploadFile(file)
+      const updated = await updateMyProfile({ avatar: url })
+      onAvatarUpdate(updated)
+    } catch (err) {
+      console.error('Avatar upload failed:', err)
+    }
+    setAvatarUploading(false)
+  }
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-40">
@@ -75,11 +94,24 @@ function DashboardNavbar({ session, onLogout }) {
 
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-1.5">
-              <img
-                src={session.avatar}
-                alt={session.name}
-                className="w-7 h-7 rounded-full"
-              />
+              <div
+                className="relative group cursor-pointer"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                <img
+                  src={session.avatar}
+                  alt={session.name}
+                  className="w-7 h-7 rounded-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                  {avatarUploading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Camera size={12} className="text-white" />
+                  )}
+                </div>
+                <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+              </div>
               <span className="text-sm font-medium text-navy-800">
                 {session.name}
               </span>
@@ -114,11 +146,23 @@ function DashboardNavbar({ session, onLogout }) {
             )
           })}
           <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 border-t border-gray-100 pt-3 mt-2">
-            <img
-              src={session.avatar}
-              alt={session.name}
-              className="w-6 h-6 rounded-full"
-            />
+            <div
+              className="relative group cursor-pointer"
+              onClick={() => avatarInputRef.current?.click()}
+            >
+              <img
+                src={session.avatar}
+                alt={session.name}
+                className="w-6 h-6 rounded-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                {avatarUploading ? (
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Camera size={10} className="text-white" />
+                )}
+              </div>
+            </div>
             {session.name}
           </div>
         </div>
@@ -154,13 +198,18 @@ export default function DashboardLayout() {
     navigate('/login', { replace: true })
   }
 
+  function handleAvatarUpdate(updatedProfile) {
+    setSession(updatedProfile)
+    localStorage.setItem('ssb_parent_session', JSON.stringify(updatedProfile))
+  }
+
   if (loading || !session) return null
 
   return (
     <div className="bg-gray-50 min-h-screen">
       {session && (
         <>
-          <DashboardNavbar session={session} onLogout={handleLogout} />
+          <DashboardNavbar session={session} onLogout={handleLogout} onAvatarUpdate={handleAvatarUpdate} />
           <Outlet context={{ session }} />
         </>
       )}

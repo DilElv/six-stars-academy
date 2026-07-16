@@ -79,12 +79,38 @@ export async function deleteStudent(id) {
 }
 
 // -- Metrics --
-export async function getMetrics(studentId) {
-  return request(`/metrics/student/${studentId}`)
+export async function getMetrics(studentId, params = {}) {
+  const qs = new URLSearchParams(params).toString()
+  return request(`/metrics/student/${studentId}${qs ? '?' + qs : ''}`)
 }
 
 export async function updateMetrics(studentId, data) {
   return request(`/metrics/student/${studentId}`, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export async function getMetricsHistory(studentId) {
+  return request(`/metrics/student/${studentId}/history`)
+}
+
+export async function getAverageReport(params = {}) {
+  const qs = new URLSearchParams(params).toString()
+  return request(`/metrics/report/average${qs ? '?' + qs : ''}`)
+}
+
+export async function generateMonthlyReport(period) {
+  return request('/metrics/report/generate-monthly', { method: 'POST', body: JSON.stringify({ period }) })
+}
+
+export async function getMonthlyReport(period) {
+  return request(`/metrics/report/monthly?period=${period}`)
+}
+
+export async function publishMonthlyReport(period) {
+  return request('/metrics/report/publish', { method: 'POST', body: JSON.stringify({ period }) })
+}
+
+export async function getAvailablePeriods() {
+  return request('/metrics/available-periods')
 }
 
 // -- Attendance --
@@ -233,6 +259,11 @@ export async function updateProfile(id, data) {
 
 export async function deleteProfile(id) {
   return request(`/admin/profiles/${id}`, { method: 'DELETE' })
+}
+
+// -- My Profile (parent) --
+export async function updateMyProfile(data) {
+  return request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) })
 }
 
 // -- Upload --
