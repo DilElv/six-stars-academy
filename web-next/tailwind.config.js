@@ -7,10 +7,34 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        heading: ["var(--font-oswald)", "sans-serif"],
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        popover: "var(--popover)",
+        "popover-foreground": "var(--popover-foreground)",
+        border: "var(--border)",
+        input: "var(--input)",
+        ring: "var(--ring)",
+        accent: "var(--accent)",
+        "accent-foreground": "var(--accent-foreground)",
+        muted: "var(--muted)",
+        "muted-foreground": "var(--muted-foreground)",
+        primary: "var(--primary)",
+        "primary-foreground": "var(--primary-foreground)",
+        destructive: "var(--destructive)",
+        "destructive-foreground": "var(--destructive-foreground)",
         navy: {
+          50: "#eef1f6",
+          100: "#dfe5ee",
+          200: "#c3ccdc",
           950: "#060e1a",
           900: "#0a1628",
           800: "#0f1f3a",
@@ -19,10 +43,13 @@ module.exports = {
           500: "#234a91",
         },
         gold: {
+          50: "#fbf4df",
+          100: "#f6e7ba",
           300: "#f0d078",
-          400: "#d4a843",
+          400: "#d4af37",
           500: "#c49a35",
           600: "#a8812a",
+          700: "#b8960c",
         },
       },
       keyframes: {
@@ -59,6 +86,10 @@ module.exports = {
         flicker: "flicker 5s ease-in-out infinite",
         "draw-line": "drawLine 1.4s cubic-bezier(0.16,1,0.3,1) forwards",
         marquee: "marquee 26s linear infinite",
+      },
+      boxShadow: {
+        gold: "0 4px 16px rgba(212, 175, 55, 0.25)",
+        "gold-lg": "0 6px 20px rgba(212, 175, 55, 0.35)",
       },
     },
   },

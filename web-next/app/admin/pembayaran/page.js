@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, Wallet, CheckCircle2, Clock } from 'lucide-react'
 import * as api from '@/lib/api'
+import { AppSelect } from '@/components/ui/app-select'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -41,61 +42,72 @@ export default function AdminPembayaranPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Pembayaran</h1>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-          <option value="">Semua Status</option>
-          <option value="pending">Menunggu Verifikasi</option>
-          <option value="success">Lunas</option>
-          <option value="failed">Gagal</option>
-        </select>
+        <AppSelect
+          value={filterStatus}
+          onChange={setFilterStatus}
+          allLabel="Semua Status"
+          placeholder="Semua Status"
+          options={[
+            { value: 'pending', label: 'Menunggu Verifikasi' },
+            { value: 'success', label: 'Lunas' },
+            { value: 'failed', label: 'Gagal' },
+          ]}
+        />
       </div>
 
-      {loading ? null : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Siswa</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Paket</th>
-                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Total</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
-                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Tanggal</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {payments.map((p) => {
-                const s = statusMap[p.status] || statusMap.pending
-                return (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-navy-900">{p.student?.fullName}</div>
-                      <div className="text-xs text-gray-400">{p.student?.studentId} · {p.student?.parentName}</div>
-                    </td>
-                    <td className="px-3 py-3 text-gray-500">{p.package?.name || '-'}</td>
-                    <td className="px-3 py-3 text-right font-semibold text-navy-900">{formatRupiah(p.totalAmount)}</td>
-                    <td className="px-3 py-3 text-center">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
-                    </td>
-                    <td className="px-3 py-3 text-right text-gray-400">{new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</td>
-                    <td className="px-4 py-3 text-right">
-                      {p.status === 'pending' && (
-                        <button
-                          onClick={() => handleVerify(p.id)}
-                          disabled={verifying === p.id}
-                          className="flex items-center gap-1 ml-auto text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
-                        >
-                          {verifying === p.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Verifikasi
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 text-gold-300 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0"><Wallet size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Pendapatan Lunas</div>
+            <div className="text-xs sm:text-lg font-bold text-navy-900 leading-tight break-all sm:break-normal">{formatRupiah(payments.filter((p) => p.status === 'success').reduce((sum, p) => sum + p.totalAmount, 0))}</div>
           </div>
-          {payments.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Tidak ada transaksi.</div>}
+        </div>
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md shadow-emerald-500/25 flex items-center justify-center shrink-0"><CheckCircle2 size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Transaksi Lunas</div>
+            <div className="text-sm sm:text-lg font-bold text-navy-900">{payments.filter((p) => p.status === 'success').length}</div>
+          </div>
+        </div>
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md shadow-amber-500/25 flex items-center justify-center shrink-0"><Clock size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Pending</div>
+            <div className="text-sm sm:text-lg font-bold text-navy-900">{payments.filter((p) => p.status === 'pending').length}</div>
+          </div>
+        </div>
+      </div>
+
+      {loading ? null : payments.length === 0 ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Tidak ada transaksi.</div>
+      ) : (
+        <div className="space-y-3">
+          {payments.map((p) => {
+            const s = statusMap[p.status] || statusMap.pending
+            return (
+              <div key={p.id} className="flex items-center gap-4 glass-card rounded-3xl p-4 hover:border-gold-200 transition-colors duration-200">
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-navy-900 truncate">{p.student?.fullName}</div>
+                  <div className="text-xs text-gray-400">{p.student?.studentId} · {p.student?.parentName}</div>
+                  <div className="text-xs text-gray-400">{p.package?.name || '-'} · {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-bold text-navy-900">{formatRupiah(p.totalAmount)}</div>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
+                </div>
+                {p.status === 'pending' && (
+                  <button
+                    onClick={() => handleVerify(p.id)}
+                    disabled={verifying === p.id}
+                    className="shrink-0 flex items-center gap-1 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl disabled:opacity-50"
+                  >
+                    {verifying === p.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Verifikasi
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

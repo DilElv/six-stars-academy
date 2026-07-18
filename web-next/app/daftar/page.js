@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Check, ChevronRight, ChevronLeft, Loader2, Upload, PartyPopper } from 'lucide-react'
 import * as api from '@/lib/api'
 import AuthBackground from '@/components/AuthBackground'
+import { AppSelect } from '@/components/ui/app-select'
+import { DatePicker } from '@/components/ui/date-picker'
 
 const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'CM', 'CAM', 'LW', 'RW', 'ST']
 const AGE_GROUP_BRACKETS = [
@@ -202,16 +204,13 @@ function DaftarWizard() {
                 </div>
                 <Field label="Nama Lengkap Anak" value={form.fullName} onChange={(v) => setForm((f) => ({ ...f, fullName: v }))} required />
                 <div className="grid grid-cols-2 gap-3">
-                  <Field type="date" label="Tanggal Lahir" value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} required />
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
+                    <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} max={new Date().toISOString().slice(0, 10)} className="w-full" />
+                  </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
-                    <select
-                      value={form.position}
-                      onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
-                    >
-                      {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
                   </div>
                 </div>
                 {agePreview && (
@@ -219,14 +218,14 @@ function DaftarWizard() {
                 )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                  <select
+                  <AppSelect
                     value={form.branchId}
-                    onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
-                    required
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
-                  >
-                    {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
-                  </select>
+                    onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                    className="w-full"
+                    allLabel="Pilih Cabang"
+                    placeholder="Pilih Cabang"
+                    options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                  />
                 </div>
                 <Field label="Nama Orang Tua" value={form.parentName} onChange={(v) => setForm((f) => ({ ...f, parentName: v }))} required />
                 <Field label="No. Telepon Orang Tua" value={form.parentPhone} onChange={(v) => setForm((f) => ({ ...f, parentPhone: v }))} required />

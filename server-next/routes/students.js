@@ -25,10 +25,12 @@ async function sendQrImage(res, qrCode) {
 
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   try {
-    const where = req.query.ageGroup ? { ageGroup: req.query.ageGroup } : {}
+    const where = {}
+    if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
+    if (req.query.branchId) where.branchId = req.query.branchId
     const students = await prisma.student.findMany({
       where,
-      include: { package: true },
+      include: { package: true, branch: true },
       orderBy: { fullName: 'asc' },
     })
     res.json(students)
@@ -42,7 +44,7 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   try {
     const student = await prisma.student.findFirst({
       where: { userId: req.user.id },
-      include: { package: true },
+      include: { package: true, branch: true },
       orderBy: { createdAt: 'asc' },
     })
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
@@ -69,7 +71,7 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
   try {
     const student = await prisma.student.findUnique({
       where: { id: req.params.id },
-      include: { package: true, payments: { orderBy: { createdAt: 'desc' } }, assessments: { orderBy: [{ year: 'desc' }, { month: 'desc' }] } },
+      include: { package: true, branch: true, payments: { orderBy: { createdAt: 'desc' } }, assessments: { orderBy: [{ year: 'desc' }, { month: 'desc' }] } },
     })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
     res.json(student)
@@ -80,13 +82,14 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 })
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status } = req.body
+  const { fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId } = req.body
   try {
     const student = await prisma.student.update({
       where: { id: req.params.id },
       data: {
         fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        branchId: branchId !== undefined ? (branchId || null) : undefined,
       },
     })
     res.json(student)

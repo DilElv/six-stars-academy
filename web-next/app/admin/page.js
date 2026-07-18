@@ -7,6 +7,7 @@ import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
 import PaymentStatusDonut from '@/components/charts/PaymentStatusDonut'
+import RevenueAreaChart from '@/components/charts/RevenueAreaChart'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -22,18 +23,20 @@ const CARDS = [
 ]
 
 const TONE = {
-  navy: 'bg-navy-50 text-navy-700',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  amber: 'bg-amber-50 text-amber-600',
+  navy: 'bg-gradient-to-br from-navy-600 to-navy-800 text-gold-300 shadow-md shadow-navy-900/25',
+  emerald: 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md shadow-emerald-500/25',
+  amber: 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md shadow-amber-500/25',
 }
 
 export default function AdminDasborPage() {
   const [stats, setStats] = useState(null)
   const [byGroup, setByGroup] = useState(null)
   const [paymentCounts, setPaymentCounts] = useState(null)
+  const [revenueTrend, setRevenueTrend] = useState(null)
 
   useEffect(() => {
     api.getAdminStats().then(setStats)
+    api.getRevenueTrend().then(setRevenueTrend)
     Promise.all(AGE_GROUPS.map((ag) => api.getStudents(ag))).then((results) => {
       const map = {}
       AGE_GROUPS.forEach((ag, i) => { map[ag] = results[i].length })
@@ -68,19 +71,19 @@ export default function AdminDasborPage() {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {CARDS.map((c) => (
           <Link
             key={c.key}
             href={c.href}
-            className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+            className="group flex items-center gap-3 sm:gap-4 glass-card rounded-3xl p-3.5 sm:p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
           >
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${TONE[c.tone]}`}>
-              <c.icon size={18} />
+            <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center shrink-0 ${TONE[c.tone]}`}>
+              <c.icon size={16} />
             </div>
-            <div>
-              <div className="text-xs text-gray-400 mb-0.5">{c.label}</div>
-              <div className="text-xl font-bold text-navy-900 tabular-nums">
+            <div className="min-w-0">
+              <div className="text-[11px] sm:text-xs text-gray-400 mb-0.5">{c.label}</div>
+              <div className="text-lg sm:text-xl font-bold text-navy-900 tabular-nums">
                 {stats ? stats[c.key] : '...'}
               </div>
             </div>
@@ -88,12 +91,17 @@ export default function AdminDasborPage() {
         ))}
       </div>
 
+      <div className="glass-card rounded-3xl p-6">
+        <h2 className="text-sm font-semibold text-gray-500 mb-4">Tren Pendapatan 6 Bulan Terakhir</h2>
+        {revenueTrend ? <RevenueAreaChart data={revenueTrend} /> : <div className="h-[220px]" />}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+        <div className="glass-card rounded-3xl p-6">
           <h2 className="text-sm font-semibold text-gray-500 mb-4">Distribusi Siswa per Kelompok Umur</h2>
           {byGroup ? <AgeGroupBarChart data={chartData} /> : <div className="h-[220px]" />}
         </div>
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+        <div className="glass-card rounded-3xl p-6">
           <h2 className="text-sm font-semibold text-gray-500 mb-4">Status Pembayaran</h2>
           {paymentCounts ? <PaymentStatusDonut counts={paymentCounts} /> : <div className="h-[200px]" />}
         </div>

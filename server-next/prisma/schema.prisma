@@ -24,6 +24,8 @@ model User {
   photo     String?
   bio       String?
   status    String   @default("active")
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -32,8 +34,41 @@ model User {
   trainingSessions  TrainingSession[]
   schedules         Schedule[]
   notifications     Notification[]
+  staffAttendances  StaffAttendance[]
 
   @@map("users")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            User[]
+  students         Student[]
+  schedules        Schedule[]
+  staffAttendances StaffAttendance[]
+
+  @@map("branches")
+}
+
+model StaffAttendance {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId    String?
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  date        DateTime
+  status      String    @default("hadir")
+  checkInTime DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, date])
+  @@map("staff_attendances")
 }
 
 model Notification {
@@ -69,6 +104,8 @@ model Student {
   packageStartDate  DateTime?
   packageEndDate    DateTime?
   status            String    @default("active")
+  branchId          String?
+  branch            Branch?   @relation(fields: [branchId], references: [id])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -252,6 +289,8 @@ model Schedule {
   coachId    String?
   coach      User?     @relation(fields: [coachId], references: [id])
   status     String    @default("active")
+  branchId   String?
+  branch     Branch?   @relation(fields: [branchId], references: [id])
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

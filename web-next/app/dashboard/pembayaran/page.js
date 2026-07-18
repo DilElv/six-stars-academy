@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck } from 'lucide-react'
 import * as api from '@/lib/api'
 
 const statusMap = {
@@ -9,6 +10,13 @@ const statusMap = {
   failed: { label: 'Gagal', color: 'bg-red-50 text-red-700 border-red-200' },
 }
 
+const FILTERS = [
+  { value: 'all', label: 'Semua' },
+  { value: 'success', label: 'Lunas' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'failed', label: 'Gagal' },
+]
+
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
 }
@@ -16,6 +24,8 @@ function formatRupiah(n) {
 export default function PembayaranAnakPage() {
   const [payments, setPayments] = useState(null)
   const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all')
+  const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
     api.getMyPayments().then(setPayments).catch((err) => setError(err.message))
@@ -24,47 +34,132 @@ export default function PembayaranAnakPage() {
   if (error) return <p className="text-sm text-red-500">{error}</p>
   if (!payments) return null
 
+  const totalLunas = payments.filter((p) => p.status === 'success').reduce((sum, p) => sum + p.totalAmount, 0)
+  const jumlahLunas = payments.filter((p) => p.status === 'success').length
+  const jumlahPending = payments.filter((p) => p.status === 'pending').length
+  const filtered = filter === 'all' ? payments : payments.filter((p) => p.status === filter)
+
   return (
     <div className="space-y-6">
       <h1 className="font-bold text-navy-900 text-lg">Riwayat Pembayaran</h1>
 
-      {payments.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 text-gold-300 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0"><Wallet size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Total Dibayar</div>
+            <div className="text-xs sm:text-lg font-bold text-navy-900 leading-tight break-all sm:break-normal">{formatRupiah(totalLunas)}</div>
+          </div>
+        </div>
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md shadow-emerald-500/25 flex items-center justify-center shrink-0"><CheckCircle2 size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Transaksi Lunas</div>
+            <div className="text-sm sm:text-lg font-bold text-navy-900">{jumlahLunas}</div>
+          </div>
+        </div>
+        <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md shadow-amber-500/25 flex items-center justify-center shrink-0"><Clock size={15} /></div>
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-gray-400 mb-0.5">Pending</div>
+            <div className="text-sm sm:text-lg font-bold text-navy-900">{jumlahPending}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={`text-xs font-semibold px-3.5 py-2 rounded-full border transition-colors duration-150 ${
+              filter === f.value ? 'bg-navy-900 border-navy-900 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Belum ada riwayat pembayaran.
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Paket</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Jenis</th>
-                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Total</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Tanggal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {payments.map((p) => {
-                const s = statusMap[p.status] || statusMap.pending
-                return (
-                  <tr key={p.id}>
-                    <td className="px-4 py-3 font-medium text-navy-900">{p.package?.name || '-'}</td>
-                    <td className="px-3 py-3 text-gray-500 capitalize">{p.paymentType}</td>
-                    <td className="px-3 py-3 text-right font-semibold text-navy-900">{formatRupiah(p.totalAmount)}</td>
-                    <td className="px-3 py-3 text-center">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-400">
-                      {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          </div>
+        <div className="space-y-3">
+          {filtered.map((p) => {
+            const s = statusMap[p.status] || statusMap.pending
+            const isOpen = expanded === p.id
+            return (
+              <div key={p.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-200 transition-colors duration-200">
+                <button
+                  onClick={() => setExpanded((e) => (e === p.id ? null : p.id))}
+                  className="w-full flex items-center gap-4 p-4 text-left"
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 text-gold-300 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0">
+                    <Wallet size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-navy-900 truncate">{p.package?.name || '-'}</div>
+                    <div className="text-xs text-gray-400 capitalize">{p.paymentType} · {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-bold text-navy-900">{formatRupiah(p.totalAmount)}</div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
+                  </div>
+                  <ChevronDown size={16} className={`text-gray-300 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isOpen && (
+                  <div className="px-4 pb-4">
+                    <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        <Receipt size={13} /> Rincian Pembayaran
+                      </div>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Biaya Paket</span>
+                          <span className="text-navy-900 font-medium tabular-nums">{formatRupiah(p.amount)}</span>
+                        </div>
+                        {p.registrationFee > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Biaya Pendaftaran</span>
+                            <span className="text-navy-900 font-medium tabular-nums">{formatRupiah(p.registrationFee)}</span>
+                          </div>
+                        )}
+                        <div className="h-px bg-gray-200 my-1" />
+                        <div className="flex justify-between font-bold">
+                          <span className="text-navy-900">Total</span>
+                          <span className="text-navy-900 tabular-nums">{formatRupiah(p.totalAmount)}</span>
+                        </div>
+                      </div>
+                      <div className="h-px bg-gray-200" />
+                      <div className="grid sm:grid-cols-2 gap-2.5 text-xs text-gray-500">
+                        <div className="flex items-center gap-2">
+                          <CreditCard size={13} className="text-gray-400 shrink-0" />
+                          Metode: {p.paymentMethod || '-'}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Hash size={13} className="text-gray-400 shrink-0" />
+                          ID Transaksi: {p.transactionId || p.id.slice(0, 10)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CalendarCheck size={13} className="text-gray-400 shrink-0" />
+                          Dibuat: {new Date(p.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                        {p.paidAt && (
+                          <div className="flex items-center gap-2">
+                            <CalendarCheck size={13} className="text-emerald-500 shrink-0" />
+                            Dibayar: {new Date(p.paidAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import { AppSelect } from '@/components/ui/app-select'
 
 const emptyForm = { ageGroup: AGE_GROUPS[0], day: '', startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
@@ -73,10 +74,7 @@ export default function AdminJadwalPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Jadwal Latihan</h1>
         <div className="flex items-center gap-2">
-          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Cabang</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
           <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
             <Plus size={16} /> Tambah Jadwal
           </button>
@@ -84,7 +82,7 @@ export default function AdminJadwalPage() {
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="glass-card rounded-3xl overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -135,9 +133,7 @@ export default function AdminJadwalPage() {
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-                <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-                  {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-                </select>
+                <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Hari</label>
@@ -159,17 +155,25 @@ export default function AdminJadwalPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Coach</label>
-                <select value={form.coachId} onChange={(e) => setForm((f) => ({ ...f, coachId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-                  <option value="">- Belum ditentukan -</option>
-                  {coaches.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.role === 'head_coach' ? 'Head Coach' : 'Coach'})</option>)}
-                </select>
+                <AppSelect
+                  value={form.coachId}
+                  onChange={(v) => setForm((f) => ({ ...f, coachId: v }))}
+                  className="w-full"
+                  allLabel="- Belum ditentukan -"
+                  placeholder="- Belum ditentukan -"
+                  options={coaches.map((c) => ({ value: c.id, label: `${c.name} (${c.role === 'head_coach' ? 'Head Coach' : 'Coach'})` }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                <select value={form.branchId} onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-                  <option value="">- Belum ditentukan -</option>
-                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
-                </select>
+                <AppSelect
+                  value={form.branchId}
+                  onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                  className="w-full"
+                  allLabel="- Belum ditentukan -"
+                  placeholder="- Belum ditentukan -"
+                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                />
               </div>
               <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan

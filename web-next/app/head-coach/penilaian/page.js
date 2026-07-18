@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Save, Loader2, FileText, Download } from 'lucide-react'
+import { Save, Loader2, FileText, Download, ChevronDown } from 'lucide-react'
 import * as api from '@/lib/api'
 import { ASSESSMENT_CATEGORIES, scoreCategory } from '@/lib/assessmentFields'
 import SkillRadar from '@/components/charts/SkillRadar'
+import { AppSelect } from '@/components/ui/app-select'
 
 function categoryAvg(scores, fields) {
   const values = fields.map(([key]) => Number(scores[key])).filter((v) => !isNaN(v) && v > 0)
@@ -30,6 +31,7 @@ function PenilaianContent() {
   const [hasAssessment, setHasAssessment] = useState(false)
   const [report, setReport] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [openCategory, setOpenCategory] = useState(ASSESSMENT_CATEGORIES[0]?.key)
 
   useEffect(() => {
     api.getStudents().then(setStudents)
@@ -114,72 +116,97 @@ function PenilaianContent() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Penilaian</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm font-medium min-w-[200px]">
-            <option value="">Pilih Siswa</option>
-            {students.map((s) => <option key={s.id} value={s.id}>{s.fullName} ({s.studentId})</option>)}
-          </select>
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            {MONTHS.slice(1).map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <AppSelect
+            value={studentId}
+            onChange={setStudentId}
+            allLabel="Pilih Siswa"
+            placeholder="Pilih Siswa"
+            className="min-w-[200px]"
+            options={students.map((s) => ({ value: s.id, label: `${s.fullName} (${s.studentId})` }))}
+          />
+          <AppSelect
+            value={String(month)}
+            onChange={(v) => setMonth(Number(v))}
+            options={MONTHS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))}
+          />
+          <AppSelect
+            value={String(year)}
+            onChange={(v) => setYear(Number(v))}
+            options={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))}
+          />
         </div>
       </div>
 
       {!studentId ? (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Pilih siswa dulu untuk mulai menilai.
         </div>
       ) : loading ? null : (
         <>
-          <div className="bg-navy-900 text-white rounded-3xl p-5 flex items-center justify-between">
-            <div>
-              <div className="font-bold">{selectedStudent?.fullName}</div>
+          <div className="relative overflow-hidden bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 text-white rounded-3xl p-6 flex items-center justify-between">
+            <div aria-hidden="true" className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-gold-400/15 blur-[80px]" />
+            <div className="relative">
+              <div className="font-bold text-lg">{selectedStudent?.fullName}</div>
               <div className="text-xs text-gray-300">{MONTHS[month]} {year} · {selectedStudent?.position} · {selectedStudent?.ageGroup}</div>
             </div>
-            <div className="text-right">
-              <div className="text-xs text-gray-300">OVR (preview)</div>
-              <div className="text-2xl font-bold text-gold-400">{overallPreview ?? '-'}</div>
+            <div className="relative text-right">
+              <div className="text-xs text-gray-300 mb-0.5">OVR (preview)</div>
+              <div className="text-4xl font-extrabold text-gold-400 tabular-nums leading-none">{overallPreview ?? '-'}</div>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+          <div className="glass-card rounded-3xl p-5">
             <h2 className="text-sm font-semibold text-gray-500 mb-2">Preview Radar Skill</h2>
             <SkillRadar assessment={liveAssessment} height={240} />
           </div>
 
           {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-          {ASSESSMENT_CATEGORIES.map((cat) => (
-            <div key={cat.key} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
-              <h2 className="font-semibold text-navy-900 text-sm mb-4">{cat.title}</h2>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {cat.fields.map(([key, label]) => {
-                  const val = scores[key]
-                  const cat2 = val !== '' && val !== undefined ? scoreCategory(Number(val)) : null
-                  return (
-                    <div key={key} className="flex items-center justify-between gap-3">
-                      <label className="text-sm text-gray-600">{label}</label>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={val ?? ''}
-                          onChange={(e) => setScores((s) => ({ ...s, [key]: e.target.value }))}
-                          className="w-16 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-center"
-                        >
-                          <option value="">-</option>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                        {cat2 && <span className={`text-xs font-semibold w-20 ${cat2.color}`}>{cat2.label}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
+          {ASSESSMENT_CATEGORIES.map((cat) => {
+            const isOpen = openCategory === cat.key
+            const avg = categoryAvg(scores, cat.fields)
+            return (
+              <div key={cat.key} className="glass-card rounded-3xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenCategory((k) => (k === cat.key ? null : cat.key))}
+                  className="w-full flex items-center justify-between gap-3 p-5"
+                >
+                  <h2 className="font-semibold text-navy-900 text-sm">{cat.title}</h2>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gold-600 tabular-nums">{avg > 0 ? avg : '-'}</span>
+                    <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-5 pb-5 grid sm:grid-cols-2 gap-3">
+                    {cat.fields.map(([key, label]) => {
+                      const val = scores[key]
+                      const cat2 = val !== '' && val !== undefined ? scoreCategory(Number(val)) : null
+                      return (
+                        <div key={key} className="flex items-center justify-between gap-3">
+                          <label className="text-sm text-gray-600">{label}</label>
+                          <div className="flex items-center gap-2">
+                            <AppSelect
+                              value={val === undefined || val === '' ? '' : String(val)}
+                              onChange={(v) => setScores((s) => ({ ...s, [key]: v }))}
+                              allLabel="-"
+                              placeholder="-"
+                              className="w-16 py-1.5 px-2.5 justify-center"
+                              options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ value: String(n), label: String(n) }))}
+                            />
+                            {cat2 && <span className={`text-xs font-semibold w-20 ${cat2.color}`}>{cat2.label}</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
 
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+          <div className="glass-card rounded-3xl p-5">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>
             <textarea
               value={comment}

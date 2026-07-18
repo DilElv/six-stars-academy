@@ -11,12 +11,31 @@ function startOfDay(dateStr) {
   return d
 }
 
+router.get('/me', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
+    if (!student) return res.json([])
+    const attendances = await prisma.attendance.findMany({
+      where: { studentId: student.id },
+      orderBy: { date: 'desc' },
+    })
+    res.json(attendances)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   try {
     const date = startOfDay(req.query.date)
     const where = { date }
-    if (req.query.ageGroup) where.student = { ageGroup: req.query.ageGroup }
-    const attendances = await prisma.attendance.findMany({ where, include: { student: true } })
+    if (req.query.ageGroup || req.query.branchId) {
+      where.student = {}
+      if (req.query.ageGroup) where.student.ageGroup = req.query.ageGroup
+      if (req.query.branchId) where.student.branchId = req.query.branchId
+    }
+    const attendances = await prisma.attendance.findMany({ where, include: { student: { include: { branch: true } }, coach: { select: { name: true } } } })
     res.json(attendances)
   } catch (err) {
     console.error(err)

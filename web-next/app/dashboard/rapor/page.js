@@ -26,14 +26,14 @@ export default function RaporAnakPage() {
       <h1 className="font-bold text-navy-900 text-lg">Rapor Bulanan</h1>
 
       {reports.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
+        <div className="glass-card rounded-3xl p-10 text-center">
           <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
           <p className="text-sm text-gray-400">Belum ada rapor bulanan. Rapor akan muncul setelah Coach/Head Coach menyelesaikan penilaian bulan berjalan.</p>
         </div>
       ) : (
         <>
           {latest?.assessment && (
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+            <div className="glass-card rounded-3xl p-6">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <div className="text-xs text-gray-400">Rapor Terbaru</div>
@@ -63,7 +63,7 @@ export default function RaporAnakPage() {
               <h2 className="text-sm font-semibold text-gray-500 mb-3">Riwayat Rapor</h2>
               <div className="grid sm:grid-cols-2 gap-4">
                 {older.map((r) => (
-                  <div key={r.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+                  <div key={r.id} className="glass-card rounded-3xl p-5">
                     <div className="font-bold text-navy-900 mb-1">{MONTHS[r.month]} {r.year}</div>
                     <div className="text-sm text-gray-500 mb-3">
                       Nilai Rata-rata (OVR): <b className="text-navy-900">{r.assessment?.overallAvg ?? '-'}</b>

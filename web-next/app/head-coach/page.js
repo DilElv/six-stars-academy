@@ -38,23 +38,23 @@ export default function HeadCoachDasborPage() {
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center">
-            <Users size={18} className="text-navy-700" />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0">
+            <Users size={16} className="text-gold-300" />
           </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Total Siswa</div>
-            <div className="text-xl font-bold text-navy-900 tabular-nums">{totalStudents ?? '...'}</div>
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-xs text-gray-400 mb-0.5">Total Siswa</div>
+            <div className="text-lg sm:text-xl font-bold text-navy-900 tabular-nums">{totalStudents ?? '...'}</div>
           </div>
         </div>
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center">
-            <ClipboardCheck size={18} className="text-emerald-600" />
+        <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md shadow-emerald-500/25 flex items-center justify-center shrink-0">
+            <ClipboardCheck size={16} className="text-white" />
           </div>
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">Hadir Hari Ini (semua kelompok)</div>
-            <div className="text-xl font-bold text-navy-900 tabular-nums">{hadirToday ?? '...'}</div>
+          <div className="min-w-0">
+            <div className="text-[11px] sm:text-xs text-gray-400 mb-0.5">Hadir Hari Ini</div>
+            <div className="text-lg sm:text-xl font-bold text-navy-900 tabular-nums">{hadirToday ?? '...'}</div>
           </div>
         </div>
       </div>
@@ -68,10 +68,10 @@ export default function HeadCoachDasborPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+            className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
           >
-            <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
-              <a.icon size={18} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center transition-shadow duration-200 shrink-0">
+              <a.icon size={18} className="text-gold-300" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-navy-900">{a.label}</div>
@@ -82,7 +82,7 @@ export default function HeadCoachDasborPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+      <div className="glass-card rounded-3xl p-6">
         <h2 className="text-sm font-semibold text-gray-500 mb-4">Distribusi Siswa per Kelompok Umur</h2>
         {byGroup ? <AgeGroupBarChart data={chartData} /> : <div className="h-[220px]" />}
       </div>

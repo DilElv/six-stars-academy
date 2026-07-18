@@ -60,7 +60,7 @@ function assignAgeGroup(dob) {
 router.post('/register', async (req, res) => {
   const {
     packageId, fullName, dateOfBirth, position, photo,
-    parentName, parentPhone, address, email, password,
+    parentName, parentPhone, address, email, password, branchId,
   } = req.body
 
   try {
@@ -102,6 +102,7 @@ router.post('/register', async (req, res) => {
           packageId: pkg.id,
           packageStartDate,
           packageEndDate,
+          branchId: branchId || null,
         },
       })
 
@@ -147,7 +148,7 @@ router.post('/register', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } })
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { branch: true } })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const { password: _pw, ...profile } = user
     res.json(profile)
@@ -158,11 +159,12 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 router.put('/me', authenticate, async (req, res) => {
-  const { name, phone, photo, bio } = req.body
+  const { name, phone, photo, bio, branchId } = req.body
   try {
     const user = await prisma.user.update({
       where: { id: req.user.id },
-      data: { name, phone, photo, bio },
+      data: { name, phone, photo, bio, branchId: branchId !== undefined ? (branchId || null) : undefined },
+      include: { branch: true },
     })
     const { password: _pw, ...profile } = user
     res.json(profile)

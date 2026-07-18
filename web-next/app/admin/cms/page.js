@@ -1,92 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Save, Loader2 } from 'lucide-react'
-import * as api from '@/lib/api'
+import Link from 'next/link'
+import { Sparkles, LayoutList, CalendarClock, Images, Handshake } from 'lucide-react'
 
-const SECTIONS = [
-  { key: 'quickStats', label: 'Statistik Beranda' },
-  { key: 'programs', label: 'Program Latihan' },
-  { key: 'schedulePreview', label: 'Jadwal (Preview Publik)' },
-  { key: 'gallery', label: 'Galeri' },
-  { key: 'sponsors', label: 'Sponsor' },
+const MENU = [
+  { href: '/admin/cms/statistik', label: 'Statistik Beranda', desc: 'Angka-angka di bawah hero landing page (jumlah siswa, pelatih, dst).', icon: Sparkles },
+  { href: '/admin/cms/program', label: 'Program Latihan', desc: 'Kartu program yang tampil di halaman /program.', icon: LayoutList },
+  { href: '/admin/cms/jadwal', label: 'Jadwal Latihan', desc: 'Cuplikan jadwal mingguan di halaman /jadwal.', icon: CalendarClock },
+  { href: '/admin/cms/galeri', label: 'Galeri Foto', desc: 'Foto-foto momen latihan di halaman /galeri.', icon: Images },
+  { href: '/admin/cms/sponsor', label: 'Sponsor & Mitra', desc: 'Daftar nama mitra/sponsor di halaman /sponsor.', icon: Handshake },
 ]
 
-export default function AdminCmsPage() {
-  const [content, setContent] = useState({})
-  const [drafts, setDrafts] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState('')
-  const [message, setMessage] = useState('')
-  const [errors, setErrors] = useState({})
-
-  useEffect(() => {
-    api.getCmsContent().then((data) => {
-      setContent(data)
-      const d = {}
-      for (const s of SECTIONS) d[s.key] = JSON.stringify(data[s.key] ?? [], null, 2)
-      setDrafts(d)
-      setLoading(false)
-    })
-  }, [])
-
-  function flash(msg) {
-    setMessage(msg)
-    setTimeout(() => setMessage(''), 3000)
-  }
-
-  async function handleSave(key) {
-    setErrors((e) => ({ ...e, [key]: '' }))
-    let parsed
-    try {
-      parsed = JSON.parse(drafts[key])
-    } catch {
-      setErrors((e) => ({ ...e, [key]: 'JSON tidak valid' }))
-      return
-    }
-    setSaving(key)
-    try {
-      await api.updateCmsSection(key, parsed)
-      flash(`Konten "${key}" berhasil disimpan`)
-    } catch (err) {
-      setErrors((e) => ({ ...e, [key]: err.message }))
-    } finally {
-      setSaving('')
-    }
-  }
-
-  if (loading) return null
-
+export default function AdminCmsMenuPage() {
   return (
     <div className="space-y-6">
-      <h1 className="font-bold text-navy-900 text-lg">CMS Landing Page</h1>
+      <div>
+        <h1 className="font-bold text-navy-900 text-lg">CMS Landing Page</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Pilih bagian yang ingin diedit. Setiap halaman landing page kini terpisah, jadi lebih mudah dikelola.</p>
+      </div>
 
-      {message && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-sm text-emerald-700">{message}</div>
-      )}
-
-      {SECTIONS.map((s) => (
-        <div key={s.key} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-navy-900 text-sm">{s.label}</h2>
-            <button
-              onClick={() => handleSave(s.key)}
-              disabled={saving === s.key}
-              className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50"
-            >
-              {saving === s.key ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Simpan
-            </button>
-          </div>
-          <textarea
-            value={drafts[s.key] ?? ''}
-            onChange={(e) => setDrafts((d) => ({ ...d, [s.key]: e.target.value }))}
-            rows={8}
-            className="w-full font-mono text-xs bg-gray-50 border border-gray-200 rounded-2xl p-3 focus:outline-none focus:border-gold-400"
-          />
-          {errors[s.key] && <p className="text-xs text-red-500 mt-1">{errors[s.key]}</p>}
-        </div>
-      ))}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        {MENU.map((m) => (
+          <Link
+            key={m.href}
+            href={m.href}
+            className="group flex flex-col items-center text-center gap-2 glass-card rounded-3xl p-4 sm:p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0">
+              <m.icon size={19} className="text-gold-300" />
+            </div>
+            <div className="font-semibold text-navy-900 text-sm">{m.label}</div>
+            <div className="text-xs text-gray-400 hidden sm:block">{m.desc}</div>
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

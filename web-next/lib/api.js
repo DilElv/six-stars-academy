@@ -55,6 +55,11 @@ export async function getCmsContent() {
   return request('/cms/public')
 }
 
+export async function getCmsSection(section) {
+  const res = await request(`/cms/public/${section}`)
+  return res.data
+}
+
 export async function updateCmsSection(section, data) {
   return request(`/cms/${section}`, { method: 'PUT', body: JSON.stringify({ data }) })
 }
@@ -101,6 +106,10 @@ export async function getAttendance(date, ageGroup, branchId) {
   if (ageGroup) params.set('ageGroup', ageGroup)
   if (branchId) params.set('branchId', branchId)
   return request(`/attendance?${params.toString()}`)
+}
+
+export async function getMyAttendance() {
+  return request('/attendance/me')
 }
 
 export async function submitAttendance(date, records) {
@@ -173,6 +182,10 @@ export async function generateReport(studentId, month, year) {
 
 export async function deleteStudent(id) {
   return request(`/students/${id}`, { method: 'DELETE' })
+}
+
+export async function getRevenueTrend() {
+  return request('/admin/revenue-trend')
 }
 
 export async function getAdminStats() {

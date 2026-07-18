@@ -47,13 +47,13 @@ export default function DashboardShell({ role, title, navItems, children }) {
   if (loading || !user) return null
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen dashboard-mesh-bg flex">
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
       )}
 
       <aside
-        className={`fixed lg:sticky top-0 h-screen w-64 flex-shrink-0 z-50 transform transition-transform duration-300 lg:translate-x-0 overflow-hidden ${
+        className={`fixed lg:sticky top-0 h-screen w-72 flex-shrink-0 z-50 transform transition-transform duration-300 lg:translate-x-0 overflow-hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -80,13 +80,13 @@ export default function DashboardShell({ role, title, navItems, children }) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`relative flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 ${
                     active
-                      ? 'bg-gradient-to-r from-gold-400/15 to-transparent text-gold-300'
+                      ? 'bg-gold-400/10 text-gold-300'
                       : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                   }`}
                 >
-                  {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-gold-400" />}
+                  {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-gold-400" />}
                   <item.icon size={17} className={active ? 'text-gold-400' : ''} />
                   {item.label}
                 </Link>
@@ -109,7 +109,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white/80 backdrop-blur border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 shadow-sm shadow-gray-100/50">
+        <header className="h-16 bg-white/60 backdrop-blur-xl border-b border-white/50 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 shadow-sm shadow-gray-100/50">
           <button className="lg:hidden text-navy-700" onClick={() => setMobileOpen(true)}>
             <Menu size={20} />
           </button>
@@ -126,8 +126,11 @@ export default function DashboardShell({ role, title, navItems, children }) {
             </button>
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div key={pathname} className="page-fade-in">
+        <main className="relative flex-1 p-4 sm:p-6 lg:p-8 overflow-hidden">
+          <div aria-hidden="true" className="absolute -top-24 right-[-4rem] w-72 h-72 rounded-full bg-gold-400/20 blur-[100px] pointer-events-none" />
+          <div aria-hidden="true" className="absolute top-[40%] -left-24 w-72 h-72 rounded-full bg-navy-700/15 blur-[100px] pointer-events-none" />
+          <div aria-hidden="true" className="absolute bottom-[-6rem] right-[15%] w-72 h-72 rounded-full bg-emerald-400/15 blur-[100px] pointer-events-none" />
+          <div key={pathname} className="relative page-fade-in">
             {children}
           </div>
         </main>

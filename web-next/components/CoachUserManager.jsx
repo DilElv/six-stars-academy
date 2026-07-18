@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import { AppSelect } from '@/components/ui/app-select'
 
 export default function CoachUserManager({ role, label }) {
   const [users, setUsers] = useState([])
@@ -36,7 +37,7 @@ export default function CoachUserManager({ role, label }) {
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="glass-card rounded-3xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -176,10 +177,12 @@ function EditModal({ user, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-              <option value="active">Aktif</option>
-              <option value="inactive">Nonaktif</option>
-            </select>
+            <AppSelect
+              value={form.status}
+              onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+              className="w-full"
+              options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Password baru (kosongkan jika tidak diubah)</label>

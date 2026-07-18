@@ -6,6 +6,7 @@ import prisma from '../lib/prisma.js'
 async function main() {
   console.log('Seeding server-next database...')
 
+  await prisma.staffAttendance.deleteMany()
   await prisma.report.deleteMany()
   await prisma.assessment.deleteMany()
   await prisma.attendance.deleteMany()
@@ -17,15 +18,26 @@ async function main() {
   await prisma.package.deleteMany()
   await prisma.cmsContent.deleteMany()
   await prisma.user.deleteMany()
+  await prisma.branch.deleteMany()
+
+  const branchDefs = [
+    { name: 'Tangerang', code: 'TGR' },
+    { name: 'Bogor', code: 'BGR' },
+    { name: 'Jakarta', code: 'JKT' },
+  ]
+  const branches = []
+  for (const def of branchDefs) branches.push(await prisma.branch.create({ data: def }))
+  const [tgr] = branches
+  console.log('  ✓ 3 cabang dibuat (TGR, BGR, JKT)')
 
   const admin = await prisma.user.create({
     data: { name: 'Admin SixStars', email: 'admin@ssb.com', password: await bcrypt.hash('admin123', 10), role: 'admin' },
   })
   const headCoach = await prisma.user.create({
-    data: { name: 'Budi Santoso', email: 'headcoach@ssb.com', password: await bcrypt.hash('headcoach123', 10), role: 'head_coach', phone: '081234567890' },
+    data: { name: 'Budi Santoso', email: 'headcoach@ssb.com', password: await bcrypt.hash('headcoach123', 10), role: 'head_coach', phone: '081234567890', branchId: tgr.id },
   })
   const coach = await prisma.user.create({
-    data: { name: 'Andi Wijaya', email: 'coach@ssb.com', password: await bcrypt.hash('coach123', 10), role: 'coach', phone: '081234567891' },
+    data: { name: 'Andi Wijaya', email: 'coach@ssb.com', password: await bcrypt.hash('coach123', 10), role: 'coach', phone: '081234567891', branchId: tgr.id },
   })
   const parent = await prisma.user.create({
     data: { name: 'Siti Rahayu', email: 'parent@ssb.com', password: await bcrypt.hash('parent123', 10), role: 'parent', phone: '081234567892' },
@@ -97,6 +109,7 @@ async function main() {
       packageId: pkg.id,
       packageStartDate,
       packageEndDate,
+      branchId: tgr.id,
     },
   })
   console.log('  ✓ Student demo dibuat untuk akun parent')
@@ -123,12 +136,12 @@ async function main() {
 
   await prisma.schedule.createMany({
     data: [
-      { ageGroup: 'U-8', day: 'Senin & Rabu', startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: coach.id },
-      { ageGroup: 'U-10', day: 'Selasa & Kamis', startTime: '16.00', endTime: '18.00', location: 'Lapangan A', coachId: coach.id },
-      { ageGroup: 'U-12', day: 'Senin & Rabu', startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id },
-      { ageGroup: 'U-14', day: 'Jumat & Sabtu', startTime: '15.30', endTime: '17.30', location: 'Lapangan B', coachId: headCoach.id },
-      { ageGroup: 'U-16', day: 'Selasa & Jumat', startTime: '16.00', endTime: '18.00', location: 'Lapangan C', coachId: headCoach.id },
-      { ageGroup: 'U-18', day: 'Senin, Rabu & Jumat', startTime: '17.00', endTime: '19.00', location: 'Lapangan C', coachId: headCoach.id },
+      { ageGroup: 'U-8', day: 'Senin & Rabu', startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: coach.id, branchId: tgr.id },
+      { ageGroup: 'U-10', day: 'Selasa & Kamis', startTime: '16.00', endTime: '18.00', location: 'Lapangan A', coachId: coach.id, branchId: tgr.id },
+      { ageGroup: 'U-12', day: 'Senin & Rabu', startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id, branchId: tgr.id },
+      { ageGroup: 'U-14', day: 'Jumat & Sabtu', startTime: '15.30', endTime: '17.30', location: 'Lapangan B', coachId: headCoach.id, branchId: tgr.id },
+      { ageGroup: 'U-16', day: 'Selasa & Jumat', startTime: '16.00', endTime: '18.00', location: 'Lapangan C', coachId: headCoach.id, branchId: tgr.id },
+      { ageGroup: 'U-18', day: 'Senin, Rabu & Jumat', startTime: '17.00', endTime: '19.00', location: 'Lapangan C', coachId: headCoach.id, branchId: tgr.id },
     ],
   })
   console.log('  ✓ Jadwal latihan demo dibuat')

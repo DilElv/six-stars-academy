@@ -5,6 +5,11 @@ import { Eye, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
+import { AppSelect } from '@/components/ui/app-select'
+
+function initials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 export default function AdminDataAnakPage() {
   const [students, setStudents] = useState([])
@@ -44,69 +49,56 @@ export default function AdminDataAnakPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={filterAgeGroup} onChange={(e) => setFilterAgeGroup(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Kelompok Umur</option>
-            {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-          </select>
-          <select value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Posisi</option>
-            {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Status</option>
-            <option value="active">Aktif</option>
-            <option value="inactive">Nonaktif</option>
-          </select>
-          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Cabang</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+          <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
+          <AppSelect
+            value={filterStatus}
+            onChange={setFilterStatus}
+            allLabel="Semua Status"
+            placeholder="Semua Status"
+            options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+          />
+          <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
         </div>
       </div>
 
-      {loading ? null : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">ID</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Nama</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Posisi</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Kelompok</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-400">{s.studentId}</td>
-                  <td className="px-3 py-3 font-medium text-navy-900">{s.fullName}</td>
-                  <td className="px-3 py-3 text-center">{s.position}</td>
-                  <td className="px-3 py-3 text-center">{s.ageGroup}</td>
-                  <td className="px-3 py-3 text-center">
-                    {s.branch ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-xs text-gray-300">-</span>}
-                  </td>
-                  <td className="px-3 py-3 text-center">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setViewStudent(s)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Eye size={14} /></button>
-                      <button onClick={() => setEditStudent(s)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Edit3 size={14} /></button>
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-          {filtered.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Tidak ada data.</div>}
+      {loading ? null : filtered.length === 0 ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Tidak ada data.</div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+          {filtered.map((s) => (
+            <div key={s.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+              <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
+                <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-gray-300'}`}>
+                  {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                </span>
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden flex items-center justify-center font-bold text-white text-sm">
+                  {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+                </div>
+                <h3 className="font-heading font-bold text-white text-xs sm:text-sm truncate">{s.fullName}</h3>
+                <p className="text-[10px] sm:text-xs text-gray-300">{s.studentId}</p>
+              </div>
+              <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Posisi</span>
+                  <span className="font-medium text-navy-900">{s.position}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Kelompok</span>
+                  <span className="font-medium text-navy-900">{s.ageGroup}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Cabang</span>
+                  {s.branch ? <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
+                <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
+                <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
+                <button onClick={() => handleDelete(s.id)} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -197,15 +189,11 @@ function EditModal({ student, branches, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
-              <select value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-                {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-              <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-                {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-              </select>
+              <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
             </div>
           </div>
           <div>
@@ -222,17 +210,23 @@ function EditModal({ student, branches, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-              <option value="active">Aktif</option>
-              <option value="inactive">Nonaktif</option>
-            </select>
+            <AppSelect
+              value={form.status}
+              onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+              className="w-full"
+              options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+            />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-            <select value={form.branchId} onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
-              <option value="">- Belum ditentukan -</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
-            </select>
+            <AppSelect
+              value={form.branchId}
+              onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+              className="w-full"
+              allLabel="- Belum ditentukan -"
+              placeholder="- Belum ditentukan -"
+              options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+            />
           </div>
           <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving && <Loader2 size={14} className="animate-spin" />} Simpan Perubahan

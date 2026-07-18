@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Wallet, Calendar, FileText, ClipboardList, ChevronRight } from 'lucide-react'
+import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon } from 'lucide-react'
 import * as api from '@/lib/api'
 import OvrGauge from '@/components/charts/OvrGauge'
+import SkillRadar from '@/components/charts/SkillRadar'
+import OvrTrendChart from '@/components/charts/OvrTrendChart'
 
 const paymentStatusLabel = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -84,40 +86,40 @@ export default function ParentDasborPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex flex-col items-center gap-2 bg-white rounded-3xl border border-gray-100 shadow-sm p-4 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+            className="group flex flex-col items-center gap-2 glass-card rounded-3xl p-4 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
           >
-            <div className="w-10 h-10 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200">
-              <a.icon size={18} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 group-hover:shadow-gold-400/30 flex items-center justify-center transition-shadow duration-200">
+              <a.icon size={18} className="text-gold-300 transition-colors duration-200" />
             </div>
             <span className="text-xs font-semibold text-navy-800">{a.label}</span>
           </Link>
         ))}
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center shrink-0">
-            <Wallet size={18} className="text-navy-700" />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center shrink-0">
+            <Wallet size={16} className="text-gold-300" />
           </div>
           <div className="min-w-0">
-            <div className="text-xs text-gray-400 mb-1">Status Pembayaran</div>
+            <div className="text-[11px] sm:text-xs text-gray-400 mb-1">Status Bayar</div>
             {status ? (
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
+              <span className={`text-[11px] sm:text-xs font-semibold px-2 py-0.5 rounded-full border ${status.color}`}>{status.label}</span>
             ) : (
-              <span className="text-sm text-gray-400">Belum ada data</span>
+              <span className="text-sm text-gray-400">Belum ada</span>
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center shrink-0">
-            <Calendar size={18} className="text-navy-700" />
+        <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md shadow-emerald-500/25 flex items-center justify-center shrink-0">
+            <Calendar size={16} className="text-white" />
           </div>
           <div className="min-w-0">
-            <div className="text-xs text-gray-400 mb-1">Paket Aktif Hingga</div>
-            <div className="text-sm font-semibold text-navy-900">
-              {student.packageEndDate ? new Date(student.packageEndDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
-              {remaining !== null && <span className="text-gray-400 font-normal"> · {remaining} hari lagi</span>}
+            <div className="text-[11px] sm:text-xs text-gray-400 mb-1">Paket Aktif Hingga</div>
+            <div className="text-xs sm:text-sm font-semibold text-navy-900 truncate">
+              {student.packageEndDate ? new Date(student.packageEndDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+              {remaining !== null && <span className="text-gray-400 font-normal block sm:inline"> · {remaining} hari lagi</span>}
             </div>
           </div>
         </div>
@@ -127,7 +129,7 @@ export default function ParentDasborPage() {
       {latestReport?.assessment && (
         <Link
           href="/dashboard/rapor"
-          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
           <OvrGauge value={latestReport.assessment.overallAvg ?? 0} />
           <div className="flex-1 min-w-0">
@@ -138,6 +140,36 @@ export default function ParentDasborPage() {
           </div>
           <ChevronRight size={18} className="text-gray-300 group-hover:text-gold-500 group-hover:translate-x-1 transition-all duration-200 shrink-0" />
         </Link>
+      )}
+
+      {/* Skill statistics */}
+      {latestReport?.assessment && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="glass-card rounded-3xl p-5">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-navy-900 mb-2">
+              <RadarIcon size={14} className="text-gold-500" /> Profil Skill Terbaru
+            </div>
+            <SkillRadar assessment={latestReport.assessment} height={220} />
+          </div>
+          <div className="glass-card rounded-3xl p-5">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-navy-900 mb-2">
+              <ClipboardList size={14} className="text-gold-500" /> Tren OVR Bulanan
+            </div>
+            {reports.length > 1 ? (
+              <OvrTrendChart
+                data={[...reports]
+                  .filter((r) => r.assessment)
+                  .reverse()
+                  .map((r) => ({ label: `${MONTHS[r.month]} '${String(r.year).slice(2)}`, ovr: r.assessment.overallAvg ?? 0 }))}
+                height={220}
+              />
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-center text-sm text-gray-400 px-6">
+                Tren akan muncul setelah rapor bulan berikutnya terbit.
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

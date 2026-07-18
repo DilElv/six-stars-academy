@@ -43,10 +43,10 @@ export default function CoachDasborPage() {
       <div className="grid sm:grid-cols-2 gap-3">
         <Link
           href="/coach/absensi"
-          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
-          <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
-            <ClipboardList size={19} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center transition-shadow duration-200 shrink-0">
+            <ClipboardList size={19} className="text-gold-300" />
           </div>
           <div className="flex-1">
             <div className="font-semibold text-navy-900">Absensi</div>
@@ -56,10 +56,10 @@ export default function CoachDasborPage() {
         </Link>
         <Link
           href="/coach/topik-latihan"
-          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
-          <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
-            <BookOpen size={19} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center transition-shadow duration-200 shrink-0">
+            <BookOpen size={19} className="text-gold-300" />
           </div>
           <div className="flex-1">
             <div className="font-semibold text-navy-900">Topik Latihan</div>
@@ -71,7 +71,7 @@ export default function CoachDasborPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-gray-500 mb-3">Kelompok Umur</h2>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {AGE_GROUPS.map((ag) => {
             const count = counts?.[ag] ?? 0
             const pct = counts ? Math.round((count / maxCount) * 100) : 0
@@ -79,7 +79,7 @@ export default function CoachDasborPage() {
               <Link
                 key={ag}
                 href={`/coach/absensi?ageGroup=${ag}`}
-                className="group relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                className="group relative overflow-hidden glass-card rounded-3xl p-3.5 sm:p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
               >
                 <span
                   aria-hidden="true"
@@ -89,8 +89,8 @@ export default function CoachDasborPage() {
                 </span>
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-2xl bg-navy-50 flex items-center justify-center">
-                      <Users size={16} className="text-navy-700" />
+                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center">
+                      <Users size={16} className="text-gold-300" />
                     </div>
                     <div className="font-bold text-navy-900">{ag}</div>
                   </div>

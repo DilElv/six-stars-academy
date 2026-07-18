@@ -91,7 +91,7 @@ export default function AdminPengaturanPage() {
 
       {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-      <form onSubmit={handleSaveSettings} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <form onSubmit={handleSaveSettings} className="glass-card rounded-3xl p-6 space-y-4">
         <h2 className="font-semibold text-navy-900 text-sm">Data SSB &amp; Biaya Pendaftaran</h2>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Biaya Pendaftaran (Rp)</label>
@@ -125,7 +125,7 @@ export default function AdminPengaturanPage() {
         </button>
       </form>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+      <div className="glass-card rounded-3xl p-6">
         <h2 className="font-semibold text-navy-900 text-sm mb-4">Kelola Cabang</h2>
         <div className="space-y-2 mb-4">
           {branches.map((b) => (
@@ -167,7 +167,7 @@ export default function AdminPengaturanPage() {
         </form>
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+      <div className="glass-card rounded-3xl p-6">
         <h2 className="font-semibold text-navy-900 text-sm mb-4">Harga Paket Latihan</h2>
         <div className="space-y-3">
           {packages.map((pkg) => (

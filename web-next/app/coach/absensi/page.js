@@ -7,6 +7,7 @@ import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import QrScannerModal from '@/components/QrScannerModal'
 import StaffCheckinCard from '@/components/StaffCheckinCard'
+import { AppSelect } from '@/components/ui/app-select'
 
 const STATUS_OPTIONS = [
   { value: 'hadir', label: 'Hadir', color: 'bg-emerald-500 text-white' },
@@ -16,6 +17,10 @@ const STATUS_OPTIONS = [
 ]
 
 const today = new Date().toISOString().slice(0, 10)
+
+function initials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 function AbsensiContent() {
   const searchParams = useSearchParams()
@@ -89,13 +94,7 @@ function AbsensiContent() {
           >
             <QrCode size={16} /> Scan QR
           </button>
-          <select
-            value={ageGroup}
-            onChange={(e) => setAgeGroup(e.target.value)}
-            className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm font-medium"
-          >
-            {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-          </select>
+          <AppSelect value={ageGroup} onChange={setAgeGroup} options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
         </div>
       </div>
 
@@ -106,50 +105,44 @@ function AbsensiContent() {
       )}
 
       {loading ? null : students.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Belum ada siswa di kelompok umur ini.
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Nama</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">ID</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {students.map((s) => (
-                <tr key={s.id}>
-                  <td className="px-4 py-3 font-medium text-navy-900">{s.fullName}</td>
-                  <td className="px-3 py-3 text-gray-400">{s.studentId}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                      {STATUS_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setStatusMap((m) => ({ ...m, [s.id]: opt.value }))}
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${
-                            statusMap[s.id] === opt.value ? opt.color + ' border-transparent' : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-          <div className="p-4 border-t border-gray-100 flex justify-end">
+        <div className="space-y-3">
+          {students.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center gap-4 glass-card rounded-3xl p-4 hover:border-gold-200 transition-colors duration-200"
+            >
+              <div className="w-11 h-11 rounded-full bg-navy-50 overflow-hidden flex items-center justify-center shrink-0 font-bold text-navy-700 text-sm">
+                {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-navy-900 truncate">{s.fullName}</div>
+                <div className="text-xs text-gray-400">{s.studentId}</div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {STATUS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStatusMap((m) => ({ ...m, [s.id]: opt.value }))}
+                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-colors duration-150 ${
+                      statusMap[s.id] === opt.value ? opt.color + ' border-transparent shadow-sm' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="sticky bottom-4 pt-2">
             <button
               onClick={handleSubmit}
               disabled={sending}
-              className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-5 py-2.5 rounded-2xl disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-5 py-3.5 rounded-2xl shadow-lg disabled:opacity-50"
             >
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               Kirim Absensi

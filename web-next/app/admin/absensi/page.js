@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { UserCheck } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import { AppSelect } from '@/components/ui/app-select'
+import { DatePicker } from '@/components/ui/date-picker'
 
 const STATUS_LABEL = { hadir: 'Hadir', izin: 'Izin', sakit: 'Sakit', alfa: 'Alfa' }
 const STATUS_COLOR = {
@@ -51,28 +53,22 @@ export default function AdminAbsensiPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Laporan Absensi</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm" />
-          <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Cabang</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
-            <option value="">Semua Kelompok Umur</option>
-            {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
-          </select>
+          <DatePicker value={date} max={today} onChange={setDate} />
+          <AppSelect value={branchId} onChange={setBranchId} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
+          <AppSelect value={ageGroup} onChange={setAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
         </div>
       </div>
 
       <div>
         <h2 className="text-sm font-semibold text-gray-500 mb-3">Staff Hadir</h2>
         {loading ? null : staffRecords.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 text-center text-sm text-gray-400">
+          <div className="glass-card rounded-3xl p-6 text-center text-sm text-gray-400">
             Belum ada Head Coach/Coach yang check-in untuk filter ini.
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {staffRecords.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
+              <div key={r.id} className="flex items-center gap-3 glass-card rounded-3xl p-4">
                 <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
                   <UserCheck size={16} className="text-emerald-600" />
                 </div>
@@ -90,7 +86,7 @@ export default function AdminAbsensiPage() {
 
       <div className="grid grid-cols-4 gap-3">
         {Object.entries(STATUS_LABEL).map(([key, label]) => (
-          <div key={key} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4 text-center">
+          <div key={key} className="glass-card rounded-3xl p-4 text-center">
             <div className="text-xl font-bold text-navy-900">{counts[key] || 0}</div>
             <div className="text-xs text-gray-400">{label}</div>
           </div>
@@ -98,7 +94,7 @@ export default function AdminAbsensiPage() {
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="glass-card rounded-3xl overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">

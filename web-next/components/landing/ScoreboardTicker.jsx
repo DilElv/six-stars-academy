@@ -58,7 +58,7 @@ function CountUpValue({ value }) {
 
 export default function ScoreboardTicker({ stats }) {
   return (
-    <div className="relative bg-navy-950 border-y border-gold-400/20 overflow-hidden">
+    <div className="relative bg-navy-900 border-y border-gold-400/20 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none opacity-[0.06] [background-image:repeating-linear-gradient(180deg,#fff_0px,#fff_1px,transparent_1px,transparent_3px)]" />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-7 grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         {stats.map((s, i) => (

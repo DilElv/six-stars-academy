@@ -39,13 +39,43 @@ router.get('/stats', async (req, res) => {
   }
 })
 
+router.get('/revenue-trend', async (req, res) => {
+  try {
+    const now = new Date()
+    const months = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push({ year: d.getFullYear(), month: d.getMonth() + 1 })
+    }
+    const rangeStart = new Date(months[0].year, months[0].month - 1, 1)
+    const payments = await prisma.payment.findMany({
+      where: { status: 'success', paidAt: { gte: rangeStart } },
+      select: { totalAmount: true, paidAt: true },
+    })
+    const MONTH_LABEL = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+    const result = months.map(({ year, month }) => {
+      const total = payments
+        .filter((p) => p.paidAt && p.paidAt.getFullYear() === year && p.paidAt.getMonth() + 1 === month)
+        .reduce((sum, p) => sum + p.totalAmount, 0)
+      return { label: `${MONTH_LABEL[month]} ${year}`, total }
+    })
+    res.json(result)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/users', async (req, res) => {
   try {
-    const where = req.query.role ? { role: req.query.role } : {}
+    const where = {}
+    if (req.query.role) where.role = req.query.role
+    if (req.query.branchId) where.branchId = req.query.branchId
     const users = await prisma.user.findMany({
       where,
       select: {
         id: true, name: true, email: true, role: true, phone: true, photo: true, bio: true, status: true, createdAt: true,
+        branchId: true, branch: true,
         _count: { select: { coachAttendances: true, trainingSessions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -58,10 +88,10 @@ router.get('/users', async (req, res) => {
 })
 
 router.post('/users', async (req, res) => {
-  const { name, email, password, role, phone } = req.body
+  const { name, email, password, role, phone, branchId } = req.body
   try {
     const hashed = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({ data: { name, email, password: hashed, role, phone } })
+    const user = await prisma.user.create({ data: { name, email, password: hashed, role, phone, branchId: branchId || null } })
     const { password: _pw, ...profile } = user
     res.status(201).json(profile)
   } catch (err) {
@@ -72,9 +102,9 @@ router.post('/users', async (req, res) => {
 })
 
 router.put('/users/:id', async (req, res) => {
-  const { name, phone, status, password } = req.body
+  const { name, phone, status, password, branchId } = req.body
   try {
-    const data = { name, phone, status }
+    const data = { name, phone, status, branchId: branchId !== undefined ? (branchId || null) : undefined }
     if (password) data.password = await bcrypt.hash(password, 10)
     const user = await prisma.user.update({ where: { id: req.params.id }, data })
     const { password: _pw, ...profile } = user

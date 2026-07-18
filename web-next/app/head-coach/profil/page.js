@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
+import { AppSelect } from '@/components/ui/app-select'
 
 export default function HeadCoachProfilPage() {
   const [form, setForm] = useState(null)
@@ -51,7 +52,7 @@ export default function HeadCoachProfilPage() {
 
       {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="glass-card rounded-3xl p-6 space-y-4">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
             {form.photo ? <img src={form.photo} alt="" className="w-full h-full object-cover" /> : <Upload size={18} className="text-gray-300" />}
@@ -80,14 +81,14 @@ export default function HeadCoachProfilPage() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-          <select
+          <AppSelect
             value={form.branchId}
-            onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
-            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
-          >
-            <option value="">- Belum ditentukan -</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
-          </select>
+            onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+            className="w-full"
+            allLabel="- Belum ditentukan -"
+            placeholder="- Belum ditentukan -"
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+          />
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Bio</label>
