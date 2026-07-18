@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes drawLine {
+  0% { stroke-dashoffset: 440; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-group.in-view > * {
+  animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.reveal-group.in-view > *:nth-child(1) { animation-delay: 0ms; }
+.reveal-group.in-view > *:nth-child(2) { animation-delay: 90ms; }
+.reveal-group.in-view > *:nth-child(3) { animation-delay: 180ms; }
+.reveal-group.in-view > *:nth-child(4) { animation-delay: 270ms; }
+.reveal-group.in-view > *:nth-child(5) { animation-delay: 360ms; }
+.reveal-group.in-view > *:nth-child(6) { animation-delay: 450ms; }
+
+.pitch-line-draw {
+  stroke-dasharray: 440;
+  stroke-dashoffset: 440;
+}
+.in-view .pitch-line-draw {
+  animation: drawLine 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}

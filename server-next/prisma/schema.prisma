@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  head_coach
+  coach
+  parent
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  phone     String?
+  photo     String?
+  bio       String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students          Student[]         @relation("ParentStudents")
+  coachAttendances  Attendance[]      @relation("CoachAttendances")
+  trainingSessions  TrainingSession[]
+  schedules         Schedule[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model Student {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation("ParentStudents", fields: [userId], references: [id])
+  studentId         String    @unique
+  fullName          String
+  dateOfBirth       DateTime
+  position          String
+  ageGroup          String
+  photo             String?
+  parentName        String
+  parentPhone       String
+  parentEmail       String?
+  address           String
+  packageId         String?
+  package           Package?  @relation(fields: [packageId], references: [id])
+  packageStartDate  DateTime?
+  packageEndDate    DateTime?
+  status            String    @default("active")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  payments     Payment[]
+  attendances  Attendance[]
+  assessments  Assessment[]
+  reports      Report[]
+  studentCard  StudentCard?
+
+  @@map("students")
+}
+
+model Package {
+  id               String   @id @default(cuid())
+  name             String
+  durationMonths   Int
+  sessionsPerWeek  Int
+  price            Int
+  status           String   @default("active")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  students Student[]
+  payments Payment[]
+
+  @@map("packages")
+}
+
+model Payment {
+  id                String    @id @default(cuid())
+  studentId         String
+  student           Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  packageId         String?
+  package           Package?  @relation(fields: [packageId], references: [id])
+  amount            Int
+  registrationFee   Int       @default(0)
+  totalAmount       Int
+  paymentType       String
+  status            String    @default("pending")
+  paymentMethod     String?
+  transactionId     String?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("payments")
+}
+
+model Attendance {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  coachId       String?
+  coach         User?     @relation("CoachAttendances", fields: [coachId], references: [id])
+  date          DateTime
+  status        String
+  checkInTime   DateTime?
+  method        String    @default("manual")
+  notes         String?
+  submittedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([studentId, date])
+  @@map("attendances")
+}
+
+model TrainingSession {
+  id                String   @id @default(cuid())
+  coachId           String
+  coach             User     @relation(fields: [coachId], references: [id])
+  ageGroup          String
+  date              DateTime
+  topicTitle        String
+  topicDescription  String?
+  objective         String?
+  duration          String?
+  equipment         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("training_sessions")
+}
+
+model Assessment {
+  id               String   @id @default(cuid())
+  studentId        String
+  student          Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  coachId          String
+  assessmentDate   DateTime
+  month            Int
+  year             Int
+
+  // TEKNIK
+  passing            Int?
+  control            Int?
+  runningWithBall    Int?
+  dribbling          Int?
+  shooting           Int?
+  longPassing        Int?
+  oneVsOneAttacking  Int?
+  oneVsOneDefending  Int?
+  teknikAvg          Float?
+
+  // TAKTIK - ATTACKING
+  attackingPrinciples   Int?
+  possession            Int?
+  transitionAttacking   Int?
+  combinationPlay       Int?
+  switchingPlay         Int?
+  playingOutFromBack    Int?
+  finishingFinalThird   Int?
+  attackingAvg          Float?
+
+  // TAKTIK - DEFENDING
+  defendingPrinciples  Int?
+  zonalDefending       Int?
+  retreatRecovery      Int?
+  compactness          Int?
+  transitionDefending  Int?
+  defendingAvg         Float?
+  taktikAvg            Float?
+
+  // FISIK
+  maximalStrength  Int?
+  aerobicCapacity  Int?
+  reaction         Int?
+  acceleration     Int?
+  maximalSpeed     Int?
+  speedEndurance   Int?
+  awareness        Int?
+  power            Int?
+  fisikAvg         Float?
+
+  // MENTAL
+  selfConfidence  Int?
+  decision        Int?
+  leadership      Int?
+  enthusiasm      Int?
+  communication   Int?
+  discipline      Int?
+  mentalAvg       Float?
+
+  // OVERALL
+  overallAvg    Float?
+  coachComment  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports Report[]
+
+  @@unique([studentId, month, year])
+  @@map("assessments")
+}
+
+model Report {
+  id            String      @id @default(cuid())
+  studentId     String
+  student       Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  month         Int
+  year          Int
+  assessmentId  String?
+  assessment    Assessment? @relation(fields: [assessmentId], references: [id])
+  pdfUrl        String?
+  generatedAt   DateTime?
+  sentToParent  Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@map("reports")
+}
+
+model Schedule {
+  id         String    @id @default(cuid())
+  ageGroup   String
+  day        String
+  date       DateTime?
+  startTime  String
+  endTime    String
+  location   String
+  coachId    String?
+  coach      User?     @relation(fields: [coachId], references: [id])
+  status     String    @default("active")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("schedules")
+}
+
+model CmsContent {
+  id        String   @id @default(cuid())
+  section   String
+  title     String?
+  content   Json?
+  image     String?
+  order     Int      @default(0)
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cms_contents")
+}
+
+model StudentCard {
+  id          String   @id @default(cuid())
+  studentId   String   @unique
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  qrCode      String   @unique
+  cardNumber  String   @unique
+  issuedAt    DateTime @default(now())
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+
+  @@map("student_cards")
+}
