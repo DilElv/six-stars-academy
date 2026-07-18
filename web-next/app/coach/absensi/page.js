@@ -6,6 +6,7 @@ import { Send, Loader2, QrCode } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import QrScannerModal from '@/components/QrScannerModal'
+import StaffCheckinCard from '@/components/StaffCheckinCard'
 
 const STATUS_OPTIONS = [
   { value: 'hadir', label: 'Hadir', color: 'bg-emerald-500 text-white' },
@@ -74,6 +75,8 @@ function AbsensiContent() {
 
   return (
     <div className="space-y-6">
+      <StaffCheckinCard />
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-bold text-navy-900 text-lg">Absensi</h1>
@@ -82,14 +85,14 @@ function AbsensiContent() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowScanner(true)}
-            className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-3 py-2 rounded-xl"
+            className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-3 py-2 rounded-2xl"
           >
             <QrCode size={16} /> Scan QR
           </button>
           <select
             value={ageGroup}
             onChange={(e) => setAgeGroup(e.target.value)}
-            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium"
+            className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm font-medium"
           >
             {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
           </select>
@@ -99,15 +102,15 @@ function AbsensiContent() {
       {showScanner && <QrScannerModal onScan={handleScan} onClose={() => setShowScanner(false)} />}
 
       {message && (
-        <div className="text-sm bg-navy-50 text-navy-700 border border-navy-100 rounded-xl px-3 py-2">{message}</div>
+        <div className="text-sm bg-navy-50 text-navy-700 border border-navy-100 rounded-2xl px-3 py-2">{message}</div>
       )}
 
       {loading ? null : students.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
           Belum ada siswa di kelompok umur ini.
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -146,7 +149,7 @@ function AbsensiContent() {
             <button
               onClick={handleSubmit}
               disabled={sending}
-              className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-5 py-2.5 rounded-xl disabled:opacity-50"
+              className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-5 py-2.5 rounded-2xl disabled:opacity-50"
             >
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               Kirim Absensi

@@ -28,13 +28,13 @@ export default function JadwalAnakPage() {
       <p className="text-xs text-gray-400 -mt-4">Kelompok umur {student.ageGroup}</p>
 
       {schedules.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
           Belum ada jadwal untuk kelompok umur ini.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
           {schedules.map((s) => (
-            <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div key={s.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
               <div className="font-bold text-navy-900 mb-3">{s.day}</div>
               <div className="space-y-2 text-sm text-gray-500">
                 <div className="flex items-center gap-2"><Clock size={14} /> {s.startTime} - {s.endTime} WIB</div>

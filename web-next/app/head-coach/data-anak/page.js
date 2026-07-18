@@ -9,16 +9,19 @@ import { POSITIONS } from '@/lib/positions'
 
 export default function DataAnakPage() {
   const [students, setStudents] = useState([])
+  const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterAgeGroup, setFilterAgeGroup] = useState('')
   const [filterPosition, setFilterPosition] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterBranch, setFilterBranch] = useState('')
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
 
   function load() {
     setLoading(true)
     api.getStudents().then(setStudents).finally(() => setLoading(false))
+    api.getBranches().then(setBranches)
   }
 
   useEffect(load, [])
@@ -27,6 +30,7 @@ export default function DataAnakPage() {
     if (filterAgeGroup && s.ageGroup !== filterAgeGroup) return false
     if (filterPosition && s.position !== filterPosition) return false
     if (filterStatus && s.status !== filterStatus) return false
+    if (filterBranch && s.branchId !== filterBranch) return false
     return true
   })
 
@@ -35,24 +39,28 @@ export default function DataAnakPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={filterAgeGroup} onChange={(e) => setFilterAgeGroup(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+          <select value={filterAgeGroup} onChange={(e) => setFilterAgeGroup(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
             <option value="">Semua Kelompok Umur</option>
             {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
           </select>
-          <select value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+          <select value={filterPosition} onChange={(e) => setFilterPosition(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
             <option value="">Semua Posisi</option>
             {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
             <option value="">Semua Status</option>
             <option value="active">Aktif</option>
             <option value="inactive">Nonaktif</option>
+          </select>
+          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
+            <option value="">Semua Cabang</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </div>
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -61,6 +69,7 @@ export default function DataAnakPage() {
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Nama</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Posisi</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Kelompok</th>
+                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
                 <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
               </tr>
@@ -72,6 +81,9 @@ export default function DataAnakPage() {
                   <td className="px-3 py-3 font-medium text-navy-900">{s.fullName}</td>
                   <td className="px-3 py-3 text-center">{s.position}</td>
                   <td className="px-3 py-3 text-center">{s.ageGroup}</td>
+                  <td className="px-3 py-3 text-center">
+                    {s.branch ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-xs text-gray-300">-</span>}
+                  </td>
                   <td className="px-3 py-3 text-center">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                       {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
@@ -94,7 +106,7 @@ export default function DataAnakPage() {
       )}
 
       {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
-      {editStudent && <EditModal student={editStudent} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+      {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
     </div>
   )
 }
@@ -124,6 +136,7 @@ function ViewModal({ student, onClose }) {
           <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID')} />
           <Row label="Posisi" value={student.position} />
           <Row label="Kelompok Umur" value={student.ageGroup} />
+          <Row label="Cabang" value={student.branch?.name} />
           <Row label="Nama Orang Tua" value={student.parentName} />
           <Row label="Telepon" value={student.parentPhone} />
           <Row label="Alamat" value={student.address} />
@@ -135,7 +148,7 @@ function ViewModal({ student, onClose }) {
   )
 }
 
-function EditModal({ student, onClose, onSaved }) {
+function EditModal({ student, branches, onClose, onSaved }) {
   const [form, setForm] = useState({
     fullName: student.fullName,
     position: student.position,
@@ -144,6 +157,7 @@ function EditModal({ student, onClose, onSaved }) {
     parentName: student.parentName,
     parentPhone: student.parentPhone,
     status: student.status,
+    branchId: student.branchId || '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -173,42 +187,49 @@ function EditModal({ student, onClose, onSaved }) {
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Lengkap</label>
-            <input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+            <input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
-              <select value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+              <select value={form.position} onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
                 {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-              <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+              <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
                 {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
               </select>
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Orang Tua</label>
-            <input value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+            <input value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Telepon Orang Tua</label>
-            <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+            <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Alamat</label>
-            <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={2} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+            <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={2} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+            <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
               <option value="active">Aktif</option>
               <option value="inactive">Nonaktif</option>
             </select>
           </div>
-          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-xl disabled:opacity-50">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+            <select value={form.branchId} onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
+              <option value="">- Belum ditentukan -</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+            </select>
+          </div>
+          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving && <Loader2 size={14} className="animate-spin" />} Simpan Perubahan
           </button>
         </form>

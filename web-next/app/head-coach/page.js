@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Users, ClipboardCheck, ClipboardList, Star, ChevronRight } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -25,11 +26,11 @@ export default function HeadCoachDasborPage() {
     })
   }, [])
 
-  const maxCount = byGroup ? Math.max(1, ...Object.values(byGroup)) : 1
+  const chartData = AGE_GROUPS.map((ag) => ({ ageGroup: ag, count: byGroup?.[ag] ?? 0 }))
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 p-6">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 to-navy-800 p-6">
         <div aria-hidden="true" className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-gold-400/15 blur-[70px]" />
         <div className="relative">
           <h1 className="font-bold text-white text-lg">Dasbor Head Coach</h1>
@@ -38,8 +39,8 @@ export default function HeadCoachDasborPage() {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-navy-50 flex items-center justify-center">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center">
             <Users size={18} className="text-navy-700" />
           </div>
           <div>
@@ -47,8 +48,8 @@ export default function HeadCoachDasborPage() {
             <div className="text-xl font-bold text-navy-900 tabular-nums">{totalStudents ?? '...'}</div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center">
             <ClipboardCheck size={18} className="text-emerald-600" />
           </div>
           <div>
@@ -67,9 +68,9 @@ export default function HeadCoachDasborPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex items-center gap-4 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+            className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
           >
-            <div className="w-11 h-11 rounded-xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
               <a.icon size={18} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
             </div>
             <div className="flex-1 min-w-0">
@@ -81,26 +82,9 @@ export default function HeadCoachDasborPage() {
         ))}
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-sm font-semibold text-gray-500 mb-4">Distribusi Siswa per Kelompok Umur</h2>
-        <div className="space-y-3">
-          {AGE_GROUPS.map((ag) => {
-            const count = byGroup?.[ag] ?? 0
-            const pct = byGroup ? Math.round((count / maxCount) * 100) : 0
-            return (
-              <div key={ag} className="flex items-center gap-3">
-                <span className="w-12 shrink-0 text-xs font-bold text-navy-700">{ag}</span>
-                <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-navy-700 to-gold-400 transition-all duration-700 ease-out"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-                <span className="w-6 shrink-0 text-xs text-gray-400 text-right tabular-nums">{count}</span>
-              </div>
-            )
-          })}
-        </div>
+        {byGroup ? <AgeGroupBarChart data={chartData} /> : <div className="h-[220px]" />}
       </div>
     </div>
   )

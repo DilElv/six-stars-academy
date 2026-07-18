@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { LogIn, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import AuthBackground from '@/components/AuthBackground'
 
 const roleRedirect = {
   admin: '/admin',
@@ -35,10 +36,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy-950 px-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8">
+    <AuthBackground className="flex items-center justify-center px-4">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-3" />
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-3" />
           <h1 className="font-bold text-navy-900 text-lg">Masuk ke SixStars Academy</h1>
         </div>
 
@@ -56,7 +57,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold-400"
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-gold-400"
             />
           </div>
           <div>
@@ -66,13 +67,13 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold-400"
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-gold-400"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-xl disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
             Masuk
@@ -90,6 +91,6 @@ export default function LoginPage() {
           <div>Demo: parent@ssb.com / parent123</div>
         </div>
       </div>
-    </div>
+    </AuthBackground>
   )
 }

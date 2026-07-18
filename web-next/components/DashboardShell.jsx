@@ -80,7 +80,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`relative flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-medium transition-all duration-200 ${
                     active
                       ? 'bg-gradient-to-r from-gold-400/15 to-transparent text-gold-300'
                       : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
@@ -95,7 +95,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
           </nav>
 
           <div className="relative p-3 border-t border-white/10 shrink-0">
-            <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-white/5">
+            <div className="flex items-center gap-3 px-2 py-2 rounded-2xl bg-white/5">
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-900 font-bold text-xs shrink-0">
                 {initials(user.name)}
               </div>
@@ -127,7 +127,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
           </div>
         </header>
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
-          <div key={pathname} className="animate-fade-up">
+          <div key={pathname} className="page-fade-in">
             {children}
           </div>
         </main>

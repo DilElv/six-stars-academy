@@ -51,13 +51,13 @@ export default function TopikLatihanPage() {
           <select
             value={ageGroup}
             onChange={(e) => setAgeGroup(e.target.value)}
-            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium"
+            className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm font-medium"
           >
             {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
           </select>
           <button
             onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-xl"
+            className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl"
           >
             <Plus size={16} /> Topik Baru
           </button>
@@ -65,7 +65,7 @@ export default function TopikLatihanPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
+        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-3">
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Judul Topik" value={form.topicTitle} onChange={(v) => setForm((f) => ({ ...f, topicTitle: v }))} required />
@@ -80,7 +80,7 @@ export default function TopikLatihanPage() {
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-xl disabled:opacity-50"
+            className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50"
           >
             {saving && <Loader2 size={14} className="animate-spin" />} Simpan Topik
           </button>
@@ -88,13 +88,13 @@ export default function TopikLatihanPage() {
       )}
 
       {sessions.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
           Belum ada topik latihan untuk kelompok umur ini.
         </div>
       ) : (
         <div className="space-y-3">
           {sessions.map((s) => (
-            <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start justify-between gap-4">
+            <div key={s.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs text-gray-400 mb-1">{new Date(s.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
                 <div className="font-bold text-navy-900 mb-1">{s.topicTitle}</div>
@@ -125,7 +125,7 @@ function Field({ label, value, onChange, type = 'text', required, textarea, plac
           value={value}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
         />
       ) : (
         <input
@@ -134,7 +134,7 @@ function Field({ label, value, onChange, type = 'text', required, textarea, plac
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
         />
       )}
     </div>

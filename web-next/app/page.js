@@ -89,7 +89,7 @@ export default async function Home() {
             const num = jerseyNumber(p.title)
             return (
               <Reveal key={p.title} className={i === 1 ? 'md:translate-y-6' : ''}>
-                <div className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 h-full shadow-sm hover:shadow-xl hover:border-gold-300 transition-all duration-300 hover:-translate-y-1">
+                <div className="group relative overflow-hidden rounded-3xl border border-gray-100 bg-white p-8 h-full shadow-sm hover:shadow-xl hover:border-gold-300 transition-all duration-300 hover:-translate-y-1">
                   {num && (
                     <span
                       aria-hidden="true"
@@ -157,14 +157,14 @@ export default async function Home() {
             ? gallery.map((g, i) => (
                 <Reveal key={i} className={i % 2 === 1 ? 'sm:translate-y-8' : ''}>
                   <div
-                    className="aspect-square rounded-2xl bg-cover bg-center bg-navy-800 shadow-md hover:shadow-xl transition-shadow duration-300"
+                    className="aspect-square rounded-3xl bg-cover bg-center bg-navy-800 shadow-md hover:shadow-xl transition-shadow duration-300"
                     style={{ backgroundImage: `url(${g.image || g.url})` }}
                   />
                 </Reveal>
               ))
             : [0, 1, 2, 3].map((i) => (
                 <Reveal key={i} className={i % 2 === 1 ? 'sm:translate-y-8' : ''}>
-                  <div className="group aspect-square rounded-2xl bg-gradient-to-br from-navy-800 to-navy-600 shadow-md hover:shadow-xl transition-shadow duration-300 flex items-center justify-center overflow-hidden">
+                  <div className="group aspect-square rounded-3xl bg-gradient-to-br from-navy-800 to-navy-600 shadow-md hover:shadow-xl transition-shadow duration-300 flex items-center justify-center overflow-hidden">
                     <svg className="w-10 h-10 text-white/10 group-hover:text-gold-400/30 transition-colors duration-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <circle cx="12" cy="12" r="9" />
                       <path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
@@ -213,7 +213,7 @@ export default async function Home() {
               return (
                 <Reveal key={p.name} className={popular ? 'md:-translate-y-3' : ''}>
                   <div
-                    className={`relative rounded-2xl p-8 border overflow-hidden ${
+                    className={`relative rounded-3xl p-8 border overflow-hidden ${
                       popular
                         ? 'border-gold-400/60 shadow-[0_0_0_1px_rgba(212,168,67,0.3),0_20px_50px_-12px_rgba(212,168,67,0.35)] bg-navy-900'
                         : 'border-gray-100 shadow-sm bg-white'
@@ -239,7 +239,7 @@ export default async function Home() {
                     </div>
                     <Link
                       href={`/daftar?packageId=${p.id2}`}
-                      className={`flex items-center justify-center gap-1.5 w-full py-3 rounded-xl font-semibold text-sm transition-colors duration-200 ${
+                      className={`flex items-center justify-center gap-1.5 w-full py-3 rounded-2xl font-semibold text-sm transition-colors duration-200 ${
                         popular ? 'bg-gold-400 text-navy-900 hover:bg-gold-300' : 'bg-navy-900 text-white hover:bg-navy-800'
                       }`}
                     >

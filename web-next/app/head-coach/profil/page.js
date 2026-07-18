@@ -10,8 +10,11 @@ export default function HeadCoachProfilPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
+  const [branches, setBranches] = useState([])
+
   useEffect(() => {
-    api.getMe().then((profile) => setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '' }))
+    api.getMe().then((profile) => setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '', branchId: profile.branchId || '' }))
+    api.getBranches().then(setBranches)
   }, [])
 
   async function handlePhotoChange(e) {
@@ -46,9 +49,9 @@ export default function HeadCoachProfilPage() {
     <div className="space-y-6 max-w-lg">
       <h1 className="font-bold text-navy-900 text-lg">Profil</h1>
 
-      {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl px-3 py-2">{message}</div>}
+      {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
             {form.photo ? <img src={form.photo} alt="" className="w-full h-full object-cover" /> : <Upload size={18} className="text-gray-300" />}
@@ -64,7 +67,7 @@ export default function HeadCoachProfilPage() {
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
         </div>
         <div>
@@ -72,8 +75,19 @@ export default function HeadCoachProfilPage() {
           <input
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+          <select
+            value={form.branchId}
+            onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+          >
+            <option value="">- Belum ditentukan -</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Bio</label>
@@ -81,14 +95,14 @@ export default function HeadCoachProfilPage() {
             value={form.bio}
             onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
             rows={3}
-            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
         </div>
 
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-xl disabled:opacity-50"
+          className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50"
         >
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan
         </button>

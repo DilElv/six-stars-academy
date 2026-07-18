@@ -33,7 +33,7 @@ export default function ProfilAnakPage() {
       <h1 className="font-bold text-navy-900 text-lg">Profil Anak</h1>
       <p className="text-xs text-gray-400 -mt-4">Data ini hanya bisa diubah oleh Head Coach.</p>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden shrink-0">
             {student.photo && <img src={student.photo} alt="" className="w-full h-full object-cover" />}
@@ -55,7 +55,7 @@ export default function ProfilAnakPage() {
         <Row label="Status" value={student.status} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 text-center">
         <div className="flex items-center justify-center gap-2 mb-3">
           <QrCode size={16} className="text-navy-700" />
           <h2 className="font-semibold text-navy-900 text-sm">Kartu Siswa (untuk Absensi QR)</h2>

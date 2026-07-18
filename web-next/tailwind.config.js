@@ -28,11 +28,11 @@ module.exports = {
       keyframes: {
         fadeUp: {
           "0%": { opacity: "0", transform: "translateY(18px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+          "100%": { opacity: "1", transform: "none" },
         },
         scaleIn: {
           "0%": { opacity: "0", transform: "scale(0.92)" },
-          "100%": { opacity: "1", transform: "scale(1)" },
+          "100%": { opacity: "1", transform: "none" },
         },
         floodlight: {
           "0%, 100%": { opacity: "0.18" },

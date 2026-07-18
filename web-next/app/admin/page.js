@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Users, Shield, UserCog, ClipboardList, AlertCircle, FileWarning, TrendingUp } from 'lucide-react'
 import * as api from '@/lib/api'
+import { AGE_GROUPS } from '@/lib/ageGroups'
+import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
+import PaymentStatusDonut from '@/components/charts/PaymentStatusDonut'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -26,20 +29,34 @@ const TONE = {
 
 export default function AdminDasborPage() {
   const [stats, setStats] = useState(null)
+  const [byGroup, setByGroup] = useState(null)
+  const [paymentCounts, setPaymentCounts] = useState(null)
 
   useEffect(() => {
     api.getAdminStats().then(setStats)
+    Promise.all(AGE_GROUPS.map((ag) => api.getStudents(ag))).then((results) => {
+      const map = {}
+      AGE_GROUPS.forEach((ag, i) => { map[ag] = results[i].length })
+      setByGroup(map)
+    })
+    api.getAllPayments().then((payments) => {
+      const counts = { success: 0, pending: 0, failed: 0 }
+      for (const p of payments) counts[p.status] = (counts[p.status] || 0) + 1
+      setPaymentCounts(counts)
+    })
   }, [])
+
+  const chartData = AGE_GROUPS.map((ag) => ({ ageGroup: ag, count: byGroup?.[ag] ?? 0 }))
 
   return (
     <div className="space-y-6">
       <h1 className="font-bold text-navy-900 text-lg">Dasbor Admin</h1>
 
       {/* Revenue hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 p-6">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 p-6">
         <div aria-hidden="true" className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-gold-400/15 blur-[80px] animate-floodlight" />
         <div className="relative flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gold-400/15 border border-gold-400/25 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-gold-400/15 border border-gold-400/25 flex items-center justify-center shrink-0">
             <TrendingUp size={20} className="text-gold-400" />
           </div>
           <div>
@@ -56,9 +73,9 @@ export default function AdminDasborPage() {
           <Link
             key={c.key}
             href={c.href}
-            className="group flex items-center gap-4 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+            className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
           >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${TONE[c.tone]}`}>
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${TONE[c.tone]}`}>
               <c.icon size={18} />
             </div>
             <div>
@@ -69,6 +86,17 @@ export default function AdminDasborPage() {
             </div>
           </Link>
         ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-sm font-semibold text-gray-500 mb-4">Distribusi Siswa per Kelompok Umur</h2>
+          {byGroup ? <AgeGroupBarChart data={chartData} /> : <div className="h-[220px]" />}
+        </div>
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-sm font-semibold text-gray-500 mb-4">Status Pembayaran</h2>
+          {paymentCounts ? <PaymentStatusDonut counts={paymentCounts} /> : <div className="h-[200px]" />}
+        </div>
       </div>
     </div>
   )

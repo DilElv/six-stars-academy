@@ -41,7 +41,7 @@ export default function AdminPembayaranPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Pembayaran</h1>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
           <option value="">Semua Status</option>
           <option value="pending">Menunggu Verifikasi</option>
           <option value="success">Lunas</option>
@@ -50,7 +50,7 @@ export default function AdminPembayaranPage() {
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">

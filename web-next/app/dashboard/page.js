@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wallet, Calendar, FileText, ClipboardList, ChevronRight } from 'lucide-react'
 import * as api from '@/lib/api'
+import OvrGauge from '@/components/charts/OvrGauge'
 
 const paymentStatusLabel = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -17,35 +18,6 @@ function daysLeft(dateStr) {
   if (!dateStr) return null
   const diff = new Date(dateStr).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-}
-
-function OvrGauge({ value }) {
-  const pct = Math.min(100, Math.max(0, (value / 10) * 100))
-  const radius = 30
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (pct / 100) * circumference
-  return (
-    <div className="relative w-16 h-16 shrink-0">
-      <svg viewBox="0 0 72 72" className="w-16 h-16 -rotate-90">
-        <circle cx="36" cy="36" r={radius} fill="none" stroke="#f3f4f6" strokeWidth="7" />
-        <circle
-          cx="36"
-          cy="36"
-          r={radius}
-          fill="none"
-          stroke="#d4a843"
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className="transition-all duration-1000 ease-out"
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center font-extrabold text-navy-900 text-sm tabular-nums">
-        {value}
-      </div>
-    </div>
-  )
 }
 
 export default function ParentDasborPage() {
@@ -75,7 +47,7 @@ export default function ParentDasborPage() {
       <h1 className="font-bold text-navy-900 text-lg">Dasbor</h1>
 
       {/* Player hero card */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 shadow-lg">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 shadow-lg">
         <div aria-hidden="true" className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-gold-400/15 blur-[70px]" />
         <div
           aria-hidden="true"
@@ -112,9 +84,9 @@ export default function ParentDasborPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex flex-col items-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+            className="group flex flex-col items-center gap-2 bg-white rounded-3xl border border-gray-100 shadow-sm p-4 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
           >
-            <div className="w-10 h-10 rounded-xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200">
+            <div className="w-10 h-10 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200">
               <a.icon size={18} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
             </div>
             <span className="text-xs font-semibold text-navy-800">{a.label}</span>
@@ -123,8 +95,8 @@ export default function ParentDasborPage() {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-navy-50 flex items-center justify-center shrink-0">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center shrink-0">
             <Wallet size={18} className="text-navy-700" />
           </div>
           <div className="min-w-0">
@@ -137,8 +109,8 @@ export default function ParentDasborPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-navy-50 flex items-center justify-center shrink-0">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-navy-50 flex items-center justify-center shrink-0">
             <Calendar size={18} className="text-navy-700" />
           </div>
           <div className="min-w-0">
@@ -155,7 +127,7 @@ export default function ParentDasborPage() {
       {latestReport?.assessment && (
         <Link
           href="/dashboard/rapor"
-          className="group flex items-center gap-4 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
           <OvrGauge value={latestReport.assessment.overallAvg ?? 0} />
           <div className="flex-1 min-w-0">

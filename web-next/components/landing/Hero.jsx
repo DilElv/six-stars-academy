@@ -59,14 +59,14 @@ export default function Hero() {
           <div className="animate-fade-up [animation-delay:330ms] flex flex-wrap gap-4">
             <Link
               href="/daftar"
-              className="group inline-flex items-center gap-2 bg-gold-400 hover:bg-gold-300 text-navy-900 font-bold px-8 py-3.5 rounded-xl transition-all duration-200 shadow-[0_0_0_0_rgba(212,168,67,0.5)] hover:shadow-[0_0_32px_4px_rgba(212,168,67,0.35)]"
+              className="group inline-flex items-center gap-2 bg-gold-400 hover:bg-gold-300 text-navy-900 font-bold px-8 py-3.5 rounded-2xl transition-all duration-200 shadow-[0_0_0_0_rgba(212,168,67,0.5)] hover:shadow-[0_0_32px_4px_rgba(212,168,67,0.35)]"
             >
               Daftar Sekarang
               <ChevronRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
             <Link
               href="#program"
-              className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-semibold px-8 py-3.5 rounded-xl border border-white/15 transition-colors duration-200"
+              className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-semibold px-8 py-3.5 rounded-2xl border border-white/15 transition-colors duration-200"
             >
               Lihat Program
             </Link>

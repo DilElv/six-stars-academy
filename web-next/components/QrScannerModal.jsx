@@ -51,7 +51,7 @@ export default function QrScannerModal({ onScan, onClose }) {
           </button>
         </div>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</div>}
-        <div id={SCANNER_ELEMENT_ID} className="rounded-xl overflow-hidden bg-black" />
+        <div id={SCANNER_ELEMENT_ID} className="rounded-2xl overflow-hidden bg-black" />
         <p className="text-xs text-gray-400 mt-3 text-center">Arahkan kamera ke QR pada kartu siswa.</p>
       </div>
     </div>

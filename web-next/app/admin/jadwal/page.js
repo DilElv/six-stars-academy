@@ -5,12 +5,14 @@ import { Plus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 
-const emptyForm = { ageGroup: AGE_GROUPS[0], day: '', startTime: '', endTime: '', location: '', coachId: '' }
+const emptyForm = { ageGroup: AGE_GROUPS[0], day: '', startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
 export default function AdminJadwalPage() {
   const [schedules, setSchedules] = useState([])
   const [coaches, setCoaches] = useState([])
+  const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filterBranch, setFilterBranch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editSchedule, setEditSchedule] = useState(null)
   const [form, setForm] = useState(emptyForm)
@@ -19,15 +21,18 @@ export default function AdminJadwalPage() {
 
   function load() {
     setLoading(true)
-    Promise.all([api.getSchedules(), api.getUsers('coach'), api.getUsers('head_coach')])
-      .then(([sched, coach, headCoach]) => {
+    Promise.all([api.getSchedules(), api.getUsers('coach'), api.getUsers('head_coach'), api.getBranches()])
+      .then(([sched, coach, headCoach, br]) => {
         setSchedules(sched)
         setCoaches([...headCoach, ...coach])
+        setBranches(br)
       })
       .finally(() => setLoading(false))
   }
 
   useEffect(load, [])
+
+  const filteredSchedules = filterBranch ? schedules.filter((s) => s.branchId === filterBranch) : schedules
 
   function openAdd() {
     setForm(emptyForm)
@@ -36,7 +41,7 @@ export default function AdminJadwalPage() {
   }
 
   function openEdit(s) {
-    setForm({ ageGroup: s.ageGroup, day: s.day, startTime: s.startTime, endTime: s.endTime, location: s.location, coachId: s.coachId || '' })
+    setForm({ ageGroup: s.ageGroup, day: s.day, startTime: s.startTime, endTime: s.endTime, location: s.location, coachId: s.coachId || '', branchId: s.branchId || '' })
     setEditSchedule(s)
     setShowForm(true)
   }
@@ -65,15 +70,21 @@ export default function AdminJadwalPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Jadwal Latihan</h1>
-        <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-xl">
-          <Plus size={16} /> Tambah Jadwal
-        </button>
+        <div className="flex items-center gap-2">
+          <select value={filterBranch} onChange={(e) => setFilterBranch(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
+            <option value="">Semua Cabang</option>
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
+            <Plus size={16} /> Tambah Jadwal
+          </button>
+        </div>
       </div>
 
       {loading ? null : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
@@ -82,17 +93,21 @@ export default function AdminJadwalPage() {
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Hari</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Waktu</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
+                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Coach</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {schedules.map((s) => (
+              {filteredSchedules.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-navy-900">{s.ageGroup}</td>
                   <td className="px-3 py-3 text-gray-500">{s.day}</td>
                   <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
                   <td className="px-3 py-3 text-gray-500">{s.location}</td>
+                  <td className="px-3 py-3">
+                    {s.branch ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-xs text-gray-300">-</span>}
+                  </td>
                   <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
@@ -105,7 +120,7 @@ export default function AdminJadwalPage() {
             </tbody>
           </table>
           </div>
-          {schedules.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada jadwal.</div>}
+          {filteredSchedules.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada jadwal.</div>}
         </div>
       )}
 
@@ -120,36 +135,43 @@ export default function AdminJadwalPage() {
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-                <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+                <select value={form.ageGroup} onChange={(e) => setForm((f) => ({ ...f, ageGroup: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
                   {AGE_GROUPS.map((ag) => <option key={ag} value={ag}>{ag}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Hari</label>
-                <input required placeholder="mis. Senin & Rabu" value={form.day} onChange={(e) => setForm((f) => ({ ...f, day: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                <input required placeholder="mis. Senin & Rabu" value={form.day} onChange={(e) => setForm((f) => ({ ...f, day: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Mulai</label>
-                  <input required placeholder="16.00" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                  <input required placeholder="16.00" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Selesai</label>
-                  <input required placeholder="18.00" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                  <input required placeholder="18.00" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Lokasi</label>
-                <input required value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm" />
+                <input required value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Coach</label>
-                <select value={form.coachId} onChange={(e) => setForm((f) => ({ ...f, coachId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm">
+                <select value={form.coachId} onChange={(e) => setForm((f) => ({ ...f, coachId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
                   <option value="">- Belum ditentukan -</option>
                   {coaches.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.role === 'head_coach' ? 'Head Coach' : 'Coach'})</option>)}
                 </select>
               </div>
-              <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-xl disabled:opacity-50">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+                <select value={form.branchId} onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
+                  <option value="">- Belum ditentukan -</option>
+                  {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+                </select>
+              </div>
+              <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan
               </button>
             </form>

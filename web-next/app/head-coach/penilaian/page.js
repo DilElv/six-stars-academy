@@ -5,6 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import { Save, Loader2, FileText, Download } from 'lucide-react'
 import * as api from '@/lib/api'
 import { ASSESSMENT_CATEGORIES, scoreCategory } from '@/lib/assessmentFields'
+import SkillRadar from '@/components/charts/SkillRadar'
+
+function categoryAvg(scores, fields) {
+  const values = fields.map(([key]) => Number(scores[key])).filter((v) => !isNaN(v) && v > 0)
+  if (values.length === 0) return 0
+  return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+}
 
 const MONTHS = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 const now = new Date()
@@ -49,15 +56,22 @@ function PenilaianContent() {
     api.getReport(studentId, month, year).then(setReport).catch(() => setReport(null))
   }, [studentId, month, year])
 
+  const liveAssessment = useMemo(() => {
+    const teknikAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[0].fields)
+    const attackingAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[1].fields)
+    const defendingAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[2].fields)
+    const fisikAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[3].fields)
+    const mentalAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[4].fields)
+    const taktikParts = [attackingAvg, defendingAvg].filter((v) => v > 0)
+    const taktikAvg = taktikParts.length ? Math.round((taktikParts.reduce((a, b) => a + b, 0) / taktikParts.length) * 10) / 10 : 0
+    return { teknikAvg, taktikAvg, fisikAvg, mentalAvg }
+  }, [scores])
+
   const overallPreview = useMemo(() => {
-    const catAverages = []
-    for (const cat of ASSESSMENT_CATEGORIES) {
-      const values = cat.fields.map(([key]) => Number(scores[key])).filter((v) => !isNaN(v) && v > 0)
-      if (values.length) catAverages.push(values.reduce((a, b) => a + b, 0) / values.length)
-    }
+    const catAverages = [liveAssessment.teknikAvg, liveAssessment.taktikAvg, liveAssessment.fisikAvg, liveAssessment.mentalAvg].filter((v) => v > 0)
     if (catAverages.length === 0) return null
     return Math.round((catAverages.reduce((a, b) => a + b, 0) / catAverages.length) * 10) / 10
-  }, [scores])
+  }, [liveAssessment])
 
   async function handleSave() {
     setSaving(true)
@@ -100,26 +114,26 @@ function PenilaianContent() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Penilaian</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium min-w-[200px]">
+          <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm font-medium min-w-[200px]">
             <option value="">Pilih Siswa</option>
             {students.map((s) => <option key={s.id} value={s.id}>{s.fullName} ({s.studentId})</option>)}
           </select>
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
             {MONTHS.slice(1).map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
           </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="px-3 py-2 bg-white border border-gray-200 rounded-2xl text-sm">
             {[year - 1, year, year + 1].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
 
       {!studentId ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
           Pilih siswa dulu untuk mulai menilai.
         </div>
       ) : loading ? null : (
         <>
-          <div className="bg-navy-900 text-white rounded-2xl p-5 flex items-center justify-between">
+          <div className="bg-navy-900 text-white rounded-3xl p-5 flex items-center justify-between">
             <div>
               <div className="font-bold">{selectedStudent?.fullName}</div>
               <div className="text-xs text-gray-300">{MONTHS[month]} {year} · {selectedStudent?.position} · {selectedStudent?.ageGroup}</div>
@@ -130,10 +144,15 @@ function PenilaianContent() {
             </div>
           </div>
 
-          {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl px-3 py-2">{message}</div>}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-gray-500 mb-2">Preview Radar Skill</h2>
+            <SkillRadar assessment={liveAssessment} height={240} />
+          </div>
+
+          {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
           {ASSESSMENT_CATEGORIES.map((cat) => (
-            <div key={cat.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div key={cat.key} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
               <h2 className="font-semibold text-navy-900 text-sm mb-4">{cat.title}</h2>
               <div className="grid sm:grid-cols-2 gap-3">
                 {cat.fields.map(([key, label]) => {
@@ -160,13 +179,13 @@ function PenilaianContent() {
             </div>
           ))}
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
             />
           </div>
 
@@ -174,7 +193,7 @@ function PenilaianContent() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold px-5 py-2.5 rounded-xl disabled:opacity-50"
+              className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold px-5 py-2.5 rounded-2xl disabled:opacity-50"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               Simpan Penilaian
@@ -184,7 +203,7 @@ function PenilaianContent() {
               <button
                 onClick={handleGenerateReport}
                 disabled={generating}
-                className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold px-5 py-2.5 rounded-xl disabled:opacity-50"
+                className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold px-5 py-2.5 rounded-2xl disabled:opacity-50"
               >
                 {generating ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                 {report ? 'Buat Ulang Rapor PDF' : 'Generate Rapor PDF'}

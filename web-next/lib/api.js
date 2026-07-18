@@ -67,8 +67,12 @@ export async function getMyChild() {
   return request('/students/me')
 }
 
-export async function getSchedules(ageGroup) {
-  return request(`/schedules${ageGroup ? `?ageGroup=${encodeURIComponent(ageGroup)}` : ''}`)
+export async function getSchedules(ageGroup, branchId) {
+  const params = new URLSearchParams()
+  if (ageGroup) params.set('ageGroup', ageGroup)
+  if (branchId) params.set('branchId', branchId)
+  const qs = params.toString()
+  return request(`/schedules${qs ? `?${qs}` : ''}`)
 }
 
 export async function getMyPayments() {
@@ -83,14 +87,19 @@ export async function updateMe(payload) {
   return request('/auth/me', { method: 'PUT', body: JSON.stringify(payload) })
 }
 
-export async function getStudents(ageGroup) {
-  return request(`/students${ageGroup ? `?ageGroup=${encodeURIComponent(ageGroup)}` : ''}`)
+export async function getStudents(ageGroup, branchId) {
+  const params = new URLSearchParams()
+  if (ageGroup) params.set('ageGroup', ageGroup)
+  if (branchId) params.set('branchId', branchId)
+  const qs = params.toString()
+  return request(`/students${qs ? `?${qs}` : ''}`)
 }
 
-export async function getAttendance(date, ageGroup) {
+export async function getAttendance(date, ageGroup, branchId) {
   const params = new URLSearchParams()
   if (date) params.set('date', date)
   if (ageGroup) params.set('ageGroup', ageGroup)
+  if (branchId) params.set('branchId', branchId)
   return request(`/attendance?${params.toString()}`)
 }
 
@@ -170,8 +179,12 @@ export async function getAdminStats() {
   return request('/admin/stats')
 }
 
-export async function getUsers(role) {
-  return request(`/admin/users${role ? `?role=${role}` : ''}`)
+export async function getUsers(role, branchId) {
+  const params = new URLSearchParams()
+  if (role) params.set('role', role)
+  if (branchId) params.set('branchId', branchId)
+  const qs = params.toString()
+  return request(`/admin/users${qs ? `?${qs}` : ''}`)
 }
 
 export async function createUser(payload) {
@@ -220,6 +233,37 @@ export async function getSettings() {
 
 export async function updateSettings(payload) {
   return request('/settings', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function getBranches() {
+  return request('/branches')
+}
+
+export async function createBranch(payload) {
+  return request('/branches', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateBranch(id, payload) {
+  return request(`/branches/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deleteBranch(id) {
+  return request(`/branches/${id}`, { method: 'DELETE' })
+}
+
+export async function checkinStaff() {
+  return request('/staff-attendance/checkin', { method: 'POST' })
+}
+
+export async function getMyStaffAttendance(date) {
+  return request(`/staff-attendance/me${date ? `?date=${date}` : ''}`)
+}
+
+export async function getStaffAttendance(date, branchId) {
+  const params = new URLSearchParams()
+  if (date) params.set('date', date)
+  if (branchId) params.set('branchId', branchId)
+  return request(`/staff-attendance?${params.toString()}`)
 }
 
 export async function uploadFile(file) {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Check, ChevronRight, ChevronLeft, Loader2, Upload, PartyPopper } from 'lucide-react'
 import * as api from '@/lib/api'
+import AuthBackground from '@/components/AuthBackground'
 
 const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'CM', 'CAM', 'LW', 'RW', 'ST']
 const AGE_GROUP_BRACKETS = [
@@ -48,8 +49,9 @@ function DaftarWizard() {
   const [packages, setPackages] = useState([])
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [registrationFee, setRegistrationFee] = useState(750000)
+  const [branches, setBranches] = useState([])
   const [form, setForm] = useState({
-    fullName: '', dateOfBirth: '', position: 'CM', photo: '',
+    fullName: '', dateOfBirth: '', position: 'CM', photo: '', branchId: '',
     parentName: '', parentPhone: '', address: '', email: '', password: '',
   })
   const [uploading, setUploading] = useState(false)
@@ -67,6 +69,10 @@ function DaftarWizard() {
       }
     })
     api.getSettings().then((s) => setRegistrationFee(s.registrationFee))
+    api.getBranches().then((data) => {
+      setBranches(data)
+      if (data.length) setForm((f) => ({ ...f, branchId: f.branchId || data[0].id }))
+    })
   }, [searchParams])
 
   const grouped = groupPackages(packages)
@@ -90,7 +96,7 @@ function DaftarWizard() {
     setError('')
     if (step === 1 && !selectedPackage) return setError('Pilih paket terlebih dahulu')
     if (step === 2) {
-      if (!form.fullName || !form.dateOfBirth || !form.parentName || !form.parentPhone || !form.address || !form.email || !form.password) {
+      if (!form.fullName || !form.dateOfBirth || !form.branchId || !form.parentName || !form.parentPhone || !form.address || !form.email || !form.password) {
         return setError('Lengkapi semua field yang wajib diisi')
       }
     }
@@ -112,6 +118,7 @@ function DaftarWizard() {
         dateOfBirth: form.dateOfBirth,
         position: form.position,
         photo: form.photo || null,
+        branchId: form.branchId,
         parentName: form.parentName,
         parentPhone: form.parentPhone,
         address: form.address,
@@ -130,23 +137,23 @@ function DaftarWizard() {
   const totalAmount = selectedPackage ? selectedPackage.price + registrationFee : 0
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
+    <AuthBackground className="py-10 px-4">
       <div className="max-w-xl mx-auto">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold-400 to-gold-600" />
-            <span className="font-bold text-navy-900">SixStars Academy</span>
+            <span className="font-bold text-white">SixStars Academy</span>
           </Link>
           {step <= 5 && (
             <div className="flex items-center justify-center gap-1.5">
               {[1, 2, 3, 4, 5].map((n) => (
-                <div key={n} className={`h-1.5 w-8 rounded-full ${n <= step ? 'bg-gold-400' : 'bg-gray-200'}`} />
+                <div key={n} className={`h-1.5 w-8 rounded-full ${n <= step ? 'bg-gold-400' : 'bg-white/15'}`} />
               ))}
             </div>
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 sm:p-8">
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6 sm:p-8">
           {error && (
             <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
           )}
@@ -157,7 +164,7 @@ function DaftarWizard() {
               <p className="text-sm text-gray-400 mb-6">Langkah 1 dari 5</p>
               <div className="space-y-3">
                 {grouped.map((g) => (
-                  <div key={g.name} className="border border-gray-200 rounded-xl p-4">
+                  <div key={g.name} className="border border-gray-200 rounded-2xl p-4">
                     <div className="font-semibold text-navy-900 mb-2">{g.name}</div>
                     <div className="grid grid-cols-2 gap-2">
                       {[g.opt1, g.opt2].filter(Boolean).map((opt) => (
@@ -201,7 +208,7 @@ function DaftarWizard() {
                     <select
                       value={form.position}
                       onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
                     >
                       {POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
@@ -210,6 +217,17 @@ function DaftarWizard() {
                 {agePreview && (
                   <div className="text-xs text-gray-400">Umur {agePreview.age} tahun → Kelompok umur <b className="text-navy-700">{agePreview.label}</b></div>
                 )}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+                  <select
+                    value={form.branchId}
+                    onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
+                    required
+                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                  >
+                    {branches.map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+                  </select>
+                </div>
                 <Field label="Nama Orang Tua" value={form.parentName} onChange={(v) => setForm((f) => ({ ...f, parentName: v }))} required />
                 <Field label="No. Telepon Orang Tua" value={form.parentPhone} onChange={(v) => setForm((f) => ({ ...f, parentPhone: v }))} required />
                 <Field label="Alamat Lengkap" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} required />
@@ -228,6 +246,7 @@ function DaftarWizard() {
                 <Row label="Tanggal Lahir" value={form.dateOfBirth} />
                 <Row label="Posisi" value={form.position} />
                 <Row label="Kelompok Umur" value={agePreview?.label} />
+                <Row label="Cabang" value={branches.find((b) => b.id === form.branchId)?.name} />
                 <Row label="Nama Orang Tua" value={form.parentName} />
                 <Row label="Telepon" value={form.parentPhone} />
                 <Row label="Email" value={form.email} />
@@ -244,7 +263,7 @@ function DaftarWizard() {
                 <Row label={`Paket ${selectedPackage?.name} (${selectedPackage?.sessionsPerWeek}x/minggu)`} value={formatRupiah(selectedPackage?.price)} />
                 <Row label="Biaya Pendaftaran (Jersey 2 set, kaos kaki, 1 bola)" value={formatRupiah(registrationFee)} />
               </dl>
-              <div className="flex justify-between items-center bg-navy-900 text-white rounded-xl px-4 py-3">
+              <div className="flex justify-between items-center bg-navy-900 text-white rounded-2xl px-4 py-3">
                 <span className="text-sm font-medium">Total Tagihan</span>
                 <span className="font-bold text-gold-400">{formatRupiah(totalAmount)}</span>
               </div>
@@ -260,7 +279,7 @@ function DaftarWizard() {
               <button
                 onClick={handleConfirm}
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-xl disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-2xl disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 Daftar Sekarang
@@ -280,7 +299,7 @@ function DaftarWizard() {
               </p>
               <button
                 onClick={() => router.push('/dashboard')}
-                className="w-full bg-navy-900 hover:bg-navy-800 text-white font-bold py-3 rounded-xl"
+                className="w-full bg-navy-900 hover:bg-navy-800 text-white font-bold py-3 rounded-2xl"
               >
                 Ke Dashboard
               </button>
@@ -309,7 +328,7 @@ function DaftarWizard() {
           Sudah punya akun? <Link href="/login" className="text-gold-500 font-semibold">Masuk</Link>
         </p>
       </div>
-    </div>
+    </AuthBackground>
   )
 }
 
@@ -322,7 +341,7 @@ function Field({ label, value, onChange, type = 'text', required }) {
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gold-400"
+        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-gold-400"
       />
     </div>
   )

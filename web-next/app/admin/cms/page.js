@@ -62,11 +62,11 @@ export default function AdminCmsPage() {
       <h1 className="font-bold text-navy-900 text-lg">CMS Landing Page</h1>
 
       {message && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700">{message}</div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-sm text-emerald-700">{message}</div>
       )}
 
       {SECTIONS.map((s) => (
-        <div key={s.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div key={s.key} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-navy-900 text-sm">{s.label}</h2>
             <button
@@ -82,7 +82,7 @@ export default function AdminCmsPage() {
             value={drafts[s.key] ?? ''}
             onChange={(e) => setDrafts((d) => ({ ...d, [s.key]: e.target.value }))}
             rows={8}
-            className="w-full font-mono text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:border-gold-400"
+            className="w-full font-mono text-xs bg-gray-50 border border-gray-200 rounded-2xl p-3 focus:outline-none focus:border-gold-400"
           />
           {errors[s.key] && <p className="text-xs text-red-500 mt-1">{errors[s.key]}</p>}
         </div>

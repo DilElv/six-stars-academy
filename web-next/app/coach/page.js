@@ -27,7 +27,7 @@ export default function CoachDasborPage() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy-900 to-navy-800 p-6">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-navy-900 to-navy-800 p-6">
         <div aria-hidden="true" className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-gold-400/15 blur-[70px]" />
         <div className="relative">
           <h1 className="font-bold text-white text-lg">Dasbor Coach</h1>
@@ -43,9 +43,9 @@ export default function CoachDasborPage() {
       <div className="grid sm:grid-cols-2 gap-3">
         <Link
           href="/coach/absensi"
-          className="group flex items-center gap-4 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
-          <div className="w-11 h-11 rounded-xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
             <ClipboardList size={19} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
           </div>
           <div className="flex-1">
@@ -56,9 +56,9 @@ export default function CoachDasborPage() {
         </Link>
         <Link
           href="/coach/topik-latihan"
-          className="group flex items-center gap-4 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+          className="group flex items-center gap-4 bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
-          <div className="w-11 h-11 rounded-xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-navy-50 group-hover:bg-navy-900 flex items-center justify-center transition-colors duration-200 shrink-0">
             <BookOpen size={19} className="text-navy-700 group-hover:text-gold-400 transition-colors duration-200" />
           </div>
           <div className="flex-1">
@@ -79,7 +79,7 @@ export default function CoachDasborPage() {
               <Link
                 key={ag}
                 href={`/coach/absensi?ageGroup=${ag}`}
-                className="group relative overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                className="group relative overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-sm p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
               >
                 <span
                   aria-hidden="true"
@@ -89,7 +89,7 @@ export default function CoachDasborPage() {
                 </span>
                 <div className="relative">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-xl bg-navy-50 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-2xl bg-navy-50 flex items-center justify-center">
                       <Users size={16} className="text-navy-700" />
                     </div>
                     <div className="font-bold text-navy-900">{ag}</div>

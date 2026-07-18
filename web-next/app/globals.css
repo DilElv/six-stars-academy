@@ -20,11 +20,20 @@ body {
 
 @keyframes fadeUp {
   0% { opacity: 0; transform: translateY(18px); }
-  100% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 1; transform: none; }
 }
 @keyframes drawLine {
   0% { stroke-dashoffset: 440; }
   100% { stroke-dashoffset: 0; }
+}
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+/* opacity-only: never sets a transform, so it can never create a
+   containing block for position:fixed descendants (e.g. modals) */
+.page-fade-in {
+  animation: fadeIn 0.35s ease-out both;
 }
 
 .reveal {
@@ -34,7 +43,7 @@ body {
 }
 .reveal.in-view {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 .reveal-group.in-view > * {
   animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
