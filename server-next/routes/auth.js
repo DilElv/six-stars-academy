@@ -64,6 +64,13 @@ router.post('/register', async (req, res) => {
   } = req.body
 
   try {
+    if (!email || !email.toLowerCase().endsWith('@sixstars.id')) {
+      return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password minimal 6 karakter' })
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) return res.status(400).json({ error: 'Email sudah terdaftar' })
 

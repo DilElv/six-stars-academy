@@ -45,10 +45,7 @@ export default function PublicFooter({ settings }) {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 pb-10 border-b border-white/10">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2.5 mb-3">
-              <svg viewBox="0 0 40 40" className="w-8 h-8" aria-hidden="true">
-                <path d="M20 2 L36 8 V19 C36 28.5 29.5 35.5 20 38 C10.5 35.5 4 28.5 4 19 V8 Z" fill="#d4af37" />
-                <text x="20" y="25" textAnchor="middle" fontSize="15" fontWeight="700" fill="#0a1628" fontFamily="var(--font-oswald), sans-serif">6</text>
-              </svg>
+              <img src="/logo.png" alt={name} className="h-11 w-auto object-contain shrink-0" />
               <span className="font-heading font-semibold text-white text-lg uppercase tracking-wide">{name}</span>
             </div>
             <p className="text-sm text-gray-400 max-w-sm leading-relaxed">

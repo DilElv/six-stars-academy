@@ -1,0 +1,12 @@
+{
+  "name": "six-stars-academy",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n web,server -c blue,yellow \"npm run dev --prefix web-next\" \"npm run dev --prefix server-next\"",
+    "install:all": "npm install --prefix web-next && npm install --prefix server-next"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

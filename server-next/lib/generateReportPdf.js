@@ -1,5 +1,10 @@
 import PDFDocument from 'pdfkit'
+import { fileURLToPath } from 'url'
+import path from 'path'
 import { ASSESSMENT_CATEGORIES, scoreCategory, MONTHS } from './assessmentFields.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png')
 
 export function generateReportPdf({ student, assessment, month, year, settings, headCoachName }) {
   return new Promise((resolve, reject) => {
@@ -10,10 +15,17 @@ export function generateReportPdf({ student, assessment, month, year, settings, 
     doc.on('error', reject)
 
     // Header
-    doc.fontSize(16).fillColor('#0a1628').font('Helvetica-Bold').text(settings.ssbName || 'SixStars Academy Indonesia', { align: 'center' })
+    try {
+      doc.image(LOGO_PATH, 40, 30, { width: 42 })
+    } catch {
+      // logo optional, continue without it
+    }
+    doc.fontSize(16).fillColor('#0a1628').font('Helvetica-Bold').text(settings.ssbName || 'SixStars Academy Indonesia', 90, 35, { align: 'center', width: 425 })
     doc.fontSize(9).fillColor('#666').font('Helvetica')
     const contactLine = [settings.ssbAddress, settings.ssbPhone, settings.ssbEmail].filter(Boolean).join(' | ')
-    if (contactLine) doc.text(contactLine, { align: 'center' })
+    if (contactLine) doc.text(contactLine, 90, doc.y, { align: 'center', width: 425 })
+    doc.y = Math.max(doc.y, 80)
+    doc.x = 40
     doc.moveDown(0.5)
     doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#d4a843').lineWidth(2).stroke()
     doc.moveDown(0.5)

@@ -39,7 +39,7 @@ export default function LoginPage() {
     <AuthBackground className="flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8">
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-3" />
+          <img src="/logo.png" alt="SixStars Academy" className="h-20 w-auto object-contain mx-auto mb-3" />
           <h1 className="font-bold text-navy-900 text-lg">Masuk ke SixStars Academy</h1>
         </div>
 

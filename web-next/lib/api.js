@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:3002/api'
+const API_URL = typeof window !== 'undefined'
+  ? `http://${window.location.hostname}:3002/api`
+  : 'http://localhost:3002/api'
 
 function getToken() {
   if (typeof window === 'undefined') return null

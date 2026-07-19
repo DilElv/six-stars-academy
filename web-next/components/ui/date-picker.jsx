@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', className, max, min }) {
   const [open, setOpen] = useState(false)
   const dateValue = value ? new Date(`${value}T00:00:00`) : undefined
+  const maxDate = max ? new Date(`${max}T23:59:59`) : new Date()
+  const minDate = min ? new Date(`${min}T00:00:00`) : new Date(maxDate.getFullYear() - 25, 0, 1)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -27,8 +29,11 @@ export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', cla
         <Calendar
           mode="single"
           locale={localeId}
+          captionLayout="dropdown"
+          startMonth={minDate}
+          endMonth={maxDate}
           selected={dateValue}
-          defaultMonth={dateValue}
+          defaultMonth={dateValue || maxDate}
           onSelect={(d) => {
             if (!d) return
             onChange(format(d, 'yyyy-MM-dd'))

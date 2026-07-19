@@ -3,41 +3,19 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, ChevronRight } from 'lucide-react'
+import {
+  Menu, X, ChevronRight, Home, Dumbbell, CalendarDays,
+  Image as ImageIcon, Award, Ticket, LogIn, UserPlus,
+} from 'lucide-react'
 
 const navLinks = [
-  { href: '/', label: 'Beranda' },
-  { href: '/program', label: 'Program' },
-  { href: '/jadwal', label: 'Jadwal' },
-  { href: '/galeri', label: 'Galeri' },
-  { href: '/sponsor', label: 'Sponsor' },
-  { href: '/paket', label: 'Paket' },
+  { href: '/', label: 'Beranda', icon: Home },
+  { href: '/program', label: 'Program', icon: Dumbbell },
+  { href: '/jadwal', label: 'Jadwal', icon: CalendarDays },
+  { href: '/galeri', label: 'Galeri', icon: ImageIcon },
+  { href: '/sponsor', label: 'Sponsor', icon: Award },
+  { href: '/paket', label: 'Paket', icon: Ticket },
 ]
-
-function LogoMark({ className }) {
-  return (
-    <svg viewBox="0 0 40 40" className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#f0d078" />
-          <stop offset="100%" stopColor="#a8812a" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M20 2 L36 8 V19 C36 28.5 29.5 35.5 20 38 C10.5 35.5 4 28.5 4 19 V8 Z"
-        fill="url(#logoGrad)"
-      />
-      <path
-        d="M20 2 L36 8 V19 C36 28.5 29.5 35.5 20 38 C10.5 35.5 4 28.5 4 19 V8 Z"
-        fill="none"
-        stroke="#0a1628"
-        strokeOpacity="0.15"
-        strokeWidth="1"
-      />
-      <text x="20" y="25" textAnchor="middle" fontSize="15" fontWeight="700" fill="#0a1628" fontFamily="var(--font-oswald), sans-serif">6</text>
-    </svg>
-  )
-}
 
 export default function PublicNav() {
   const pathname = usePathname()
@@ -57,6 +35,13 @@ export default function PublicNav() {
     setMobileOpen(false)
   }, [pathname])
 
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileOpen])
+
   return (
     <nav
       className={`sticky top-0 z-40 transition-all duration-300 bg-navy-950 ${
@@ -65,7 +50,11 @@ export default function PublicNav() {
     >
       <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between transition-all duration-300 ${scrolled ? 'h-16' : 'h-20'}`}>
         <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-          <LogoMark className="w-9 h-9 transition-transform duration-300 group-hover:scale-105" />
+          <img
+            src="/logo.png"
+            alt="SixStars Academy Indonesia"
+            className="h-12 sm:h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-105 shrink-0"
+          />
           <div className="leading-none">
             <div className="font-heading font-semibold text-white text-[15px] sm:text-base tracking-wide uppercase">SixStars Academy</div>
             <div className="text-[10px] text-gold-400/80 tracking-[0.25em] uppercase">Indonesia</div>
@@ -110,28 +99,87 @@ export default function PublicNav() {
         </button>
       </div>
 
+      {/* Mobile fullscreen menu */}
       <div
-        className={`lg:hidden overflow-hidden transition-all duration-300 ${mobileOpen ? 'max-h-[26rem]' : 'max-h-0'}`}
+        className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${
+          mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        role="dialog"
+        aria-modal="true"
       >
-        <div className="px-4 sm:px-6 pb-5 pt-1 flex flex-col gap-1 bg-navy-950 border-b border-white/10">
-          {navLinks.map((l) => {
-            const active = pathname === l.href
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`px-3 py-3 rounded-xl text-sm font-semibold transition-colors ${active ? 'bg-gold-400/10 text-gold-400' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
-              >
-                {l.label}
-              </Link>
-            )
-          })}
-          <div className="flex items-center gap-3 mt-2 pt-3 border-t border-white/10">
-            <Link href="/login" className="flex-1 text-center text-sm font-semibold text-white bg-white/5 hover:bg-white/10 px-4 py-2.5 rounded-xl transition-colors">
-              Masuk
+        <div className="absolute inset-0 bg-navy-950/98 backdrop-blur-xl" onClick={() => setMobileOpen(false)} />
+        <div aria-hidden="true" className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gold-400/15 blur-[100px]" />
+        <div aria-hidden="true" className="absolute -bottom-28 -left-24 w-72 h-72 rounded-full bg-gold-300/10 blur-[100px]" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute right-[-2rem] top-1/3 -translate-y-1/2 font-extrabold leading-none text-[14rem] text-white/[0.03]"
+        >
+          6
+        </div>
+
+        <div className="relative h-full flex flex-col">
+          <div className="flex items-center justify-between px-4 sm:px-6 h-20 shrink-0">
+            <Link href="/" className="flex items-center gap-2.5" onClick={() => setMobileOpen(false)}>
+              <img src="/logo.png" alt="SixStars Academy Indonesia" className="h-12 w-auto object-contain" />
             </Link>
-            <Link href="/daftar" className="flex-1 text-center text-sm font-semibold bg-gold-400 hover:bg-gold-300 text-navy-900 px-4 py-2.5 rounded-xl transition-colors">
-              Daftar
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="text-white p-2 -mr-2 rounded-full hover:bg-white/10 transition-colors"
+              aria-label="Tutup menu"
+            >
+              <X size={22} />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
+            {navLinks.map((l, i) => {
+              const active = pathname === l.href
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMobileOpen(false)}
+                  style={{ transitionDelay: mobileOpen ? `${90 + i * 55}ms` : '0ms' }}
+                  className={`group flex items-center gap-4 px-3.5 py-3.5 rounded-2xl transition-all duration-300 ease-out ${
+                    mobileOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-6'
+                  } ${active ? 'bg-gold-400/10 ring-1 ring-gold-400/30' : 'hover:bg-white/5'}`}
+                >
+                  <span
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      active ? 'bg-gold-400 text-navy-900' : 'bg-white/5 text-gold-400 group-hover:bg-white/10'
+                    }`}
+                  >
+                    <l.icon size={18} />
+                  </span>
+                  <span className={`text-lg font-semibold tracking-tight ${active ? 'text-gold-300' : 'text-white'}`}>{l.label}</span>
+                  <ChevronRight
+                    size={16}
+                    className={`ml-auto transition-transform duration-200 ${active ? 'text-gold-400' : 'text-gray-500 group-hover:translate-x-1'}`}
+                  />
+                </Link>
+              )
+            })}
+          </nav>
+
+          <div
+            className={`px-4 sm:px-6 pb-8 pt-4 border-t border-white/10 flex items-center gap-3 shrink-0 transition-all duration-300 ${
+              mobileOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+            style={{ transitionDelay: mobileOpen ? '420ms' : '0ms' }}
+          >
+            <Link
+              href="/login"
+              onClick={() => setMobileOpen(false)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-3 rounded-2xl transition-colors"
+            >
+              <LogIn size={15} /> Masuk
+            </Link>
+            <Link
+              href="/daftar"
+              onClick={() => setMobileOpen(false)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 px-4 py-3 rounded-2xl shadow-[0_0_24px_2px_rgba(212,175,55,0.35)] transition-colors"
+            >
+              <UserPlus size={15} /> Daftar
             </Link>
           </div>
         </div>

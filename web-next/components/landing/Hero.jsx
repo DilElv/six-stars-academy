@@ -1,5 +1,41 @@
+'use client'
+
 import Link from 'next/link'
 import { ChevronRight, ChevronDown, Star } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+const HERO_PHOTOS = [
+  { src: 'https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?auto=format&fit=crop&w=900&q=80', alt: 'Pemain muda beraksi merebut bola saat pertandingan sepak bola' },
+  { src: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?auto=format&fit=crop&w=900&q=80', alt: 'Pemain muda berlatih menggiring bola di lapangan' },
+  { src: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?auto=format&fit=crop&w=900&q=80', alt: 'Tim sepak bola muda berlatih bersama' },
+  { src: 'https://images.unsplash.com/photo-1551958219-acbc608c6377?auto=format&fit=crop&w=900&q=80', alt: 'Pemain sepak bola muda menendang bola' },
+]
+
+function HeroPhotoSlideshow() {
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % HERO_PHOTOS.length)
+    }, 4500)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <>
+      {HERO_PHOTOS.map((photo, i) => (
+        <img
+          key={photo.src}
+          src={photo.src}
+          alt={photo.alt}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-[1400ms] ease-in-out ${
+            i === index ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      ))}
+    </>
+  )
+}
 
 export default function Hero() {
   return (
@@ -77,11 +113,7 @@ export default function Hero() {
           {/* Action photo panel */}
           <div className="animate-fade-up [animation-delay:180ms] relative hidden lg:block">
             <div className="relative rounded-[2rem] overflow-hidden aspect-[4/5] shadow-2xl ring-1 ring-white/10">
-              <img
-                src="https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?auto=format&fit=crop&w=900&q=80"
-                alt="Pemain muda beraksi merebut bola saat pertandingan sepak bola"
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+              <HeroPhotoSlideshow />
               <div className="absolute inset-0 bg-gradient-to-t from-navy-950/80 via-navy-950/10 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-br from-gold-400/10 via-transparent to-navy-950/30 mix-blend-overlay" />
             </div>

@@ -1,6 +1,17 @@
+import Link from 'next/link'
+import { Home } from 'lucide-react'
+
 export default function AuthBackground({ children, className = '' }) {
   return (
     <div className={`relative min-h-screen overflow-hidden bg-gradient-to-b from-navy-950 via-navy-900 to-navy-950 ${className}`}>
+      <Link
+        href="/"
+        className="fixed top-4 left-4 sm:top-6 sm:left-6 z-20 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3.5 py-2 rounded-full border border-white/15 transition-colors duration-150"
+      >
+        <Home size={14} />
+        Beranda
+      </Link>
+
       {/* Floodlight glows */}
       <div aria-hidden="true" className="absolute -top-20 -left-20 w-96 h-96 rounded-full bg-gold-400/15 blur-[110px] animate-floodlight" />
       <div

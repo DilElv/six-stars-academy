@@ -9,7 +9,6 @@ import AuthBackground from '@/components/AuthBackground'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
 
-const POSITIONS = ['GK', 'CB', 'LB', 'RB', 'CM', 'CAM', 'LW', 'RW', 'ST']
 const AGE_GROUP_BRACKETS = [
   { label: 'U-8', min: 0, max: 8 },
   { label: 'U-10', min: 9, max: 10 },
@@ -54,7 +53,7 @@ function DaftarWizard() {
   const [branches, setBranches] = useState([])
   const [form, setForm] = useState({
     fullName: '', dateOfBirth: '', position: 'CM', photo: '', branchId: '',
-    parentName: '', parentPhone: '', address: '', email: '', password: '',
+    parentName: '', parentPhone: '', address: '', email: '', password: '', confirmPassword: '',
   })
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -98,8 +97,17 @@ function DaftarWizard() {
     setError('')
     if (step === 1 && !selectedPackage) return setError('Pilih paket terlebih dahulu')
     if (step === 2) {
-      if (!form.fullName || !form.dateOfBirth || !form.branchId || !form.parentName || !form.parentPhone || !form.address || !form.email || !form.password) {
+      if (!form.fullName || !form.dateOfBirth || !form.branchId || !form.parentName || !form.parentPhone || !form.address || !form.email || !form.password || !form.confirmPassword) {
         return setError('Lengkapi semua field yang wajib diisi')
+      }
+      if (!form.email.toLowerCase().endsWith('@sixstars.id')) {
+        return setError('Email untuk login harus menggunakan domain @sixstars.id')
+      }
+      if (form.password.length < 6) {
+        return setError('Password minimal 6 karakter')
+      }
+      if (form.password !== form.confirmPassword) {
+        return setError('Konfirmasi password tidak cocok')
       }
     }
     setStep((s) => s + 1)
@@ -143,7 +151,7 @@ function DaftarWizard() {
       <div className="max-w-xl mx-auto">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gold-400 to-gold-600" />
+            <img src="/logo.png" alt="SixStars Academy" className="h-14 w-auto object-contain" />
             <span className="font-bold text-white">SixStars Academy</span>
           </Link>
           {step <= 5 && (
@@ -203,15 +211,9 @@ function DaftarWizard() {
                   </label>
                 </div>
                 <Field label="Nama Lengkap Anak" value={form.fullName} onChange={(v) => setForm((f) => ({ ...f, fullName: v }))} required />
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
-                    <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} max={new Date().toISOString().slice(0, 10)} className="w-full" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
-                    <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
+                  <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} max={new Date().toISOString().slice(0, 10)} className="w-full" />
                 </div>
                 {agePreview && (
                   <div className="text-xs text-gray-400">Umur {agePreview.age} tahun → Kelompok umur <b className="text-navy-700">{agePreview.label}</b></div>
@@ -230,8 +232,17 @@ function DaftarWizard() {
                 <Field label="Nama Orang Tua" value={form.parentName} onChange={(v) => setForm((f) => ({ ...f, parentName: v }))} required />
                 <Field label="No. Telepon Orang Tua" value={form.parentPhone} onChange={(v) => setForm((f) => ({ ...f, parentPhone: v }))} required />
                 <Field label="Alamat Lengkap" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} required />
-                <Field type="email" label="Email (untuk akun login)" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} required />
+                <div>
+                  <Field type="email" label="Email (untuk akun login)" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} required />
+                  <p className="text-[11px] text-gray-400 mt-1">Wajib menggunakan domain <b className="text-navy-600">@sixstars.id</b></p>
+                </div>
                 <Field type="password" label="Password" value={form.password} onChange={(v) => setForm((f) => ({ ...f, password: v }))} required />
+                <div>
+                  <Field type="password" label="Konfirmasi Password" value={form.confirmPassword} onChange={(v) => setForm((f) => ({ ...f, confirmPassword: v }))} required />
+                  {form.confirmPassword && form.confirmPassword !== form.password && (
+                    <p className="text-[11px] text-red-500 mt-1">Password tidak cocok</p>
+                  )}
+                </div>
               </div>
             </>
           )}
@@ -243,7 +254,6 @@ function DaftarWizard() {
               <dl className="text-sm divide-y divide-gray-100">
                 <Row label="Nama Anak" value={form.fullName} />
                 <Row label="Tanggal Lahir" value={form.dateOfBirth} />
-                <Row label="Posisi" value={form.position} />
                 <Row label="Kelompok Umur" value={agePreview?.label} />
                 <Row label="Cabang" value={branches.find((b) => b.id === form.branchId)?.name} />
                 <Row label="Nama Orang Tua" value={form.parentName} />
