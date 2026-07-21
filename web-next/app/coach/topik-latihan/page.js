@@ -7,11 +7,12 @@ import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
 
-const emptyForm = { ageGroup: AGE_GROUPS[0], date: new Date().toISOString().slice(0, 10), topicTitle: '', topicDescription: '', objective: '', duration: '', equipment: '' }
+const emptyForm = { ageGroup: AGE_GROUPS[0], date: new Date().toISOString().slice(0, 10), topicTitle: '', topicDescription: '', objective: '', duration: '', equipment: '', fieldId: '' }
 
 export default function TopikLatihanPage() {
   const [ageGroup, setAgeGroup] = useState(AGE_GROUPS[0])
   const [sessions, setSessions] = useState([])
+  const [fields, setFields] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -23,12 +24,18 @@ export default function TopikLatihanPage() {
 
   useEffect(() => { load(ageGroup) }, [ageGroup])
 
+  useEffect(() => {
+    api.getMe().then((user) => {
+      if (user.branchId) api.getFields(user.branchId).then(setFields)
+    })
+  }, [])
+
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await api.createTrainingSession({ ...form, ageGroup })
+      await api.createTrainingSession({ ...form, ageGroup, fieldId: form.fieldId || undefined })
       setForm({ ...emptyForm, ageGroup })
       setShowForm(false)
       load(ageGroup)
@@ -66,6 +73,17 @@ export default function TopikLatihanPage() {
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Judul Topik" value={form.topicTitle} onChange={(v) => setForm((f) => ({ ...f, topicTitle: v }))} required />
             <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Lapangan</label>
+              <AppSelect
+                value={form.fieldId}
+                onChange={(v) => setForm((f) => ({ ...f, fieldId: v }))}
+                className="w-full"
+                allLabel="Pilih Lapangan"
+                placeholder="Pilih Lapangan"
+                options={fields.map((f) => ({ value: f.id, label: f.name }))}
+              />
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal</label>
               <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} className="w-full" />
             </div>
@@ -98,6 +116,7 @@ export default function TopikLatihanPage() {
                 <div className="text-xs text-gray-400 mb-1">{new Date(s.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
                 <div className="font-bold text-navy-900 mb-1">{s.topicTitle}</div>
                 {s.topicDescription && <p className="text-sm text-gray-500 mb-1">{s.topicDescription}</p>}
+                {s.field?.name && <div className="text-xs text-gold-600 font-semibold mb-1">📍 {s.field.name}</div>}
                 <div className="flex flex-wrap gap-3 text-xs text-gray-400">
                   {s.objective && <span>Tujuan: {s.objective}</span>}
                   {s.duration && <span>Durasi: {s.duration}</span>}

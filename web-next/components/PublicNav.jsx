@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Menu, X, ChevronRight, Home, Dumbbell, CalendarDays,
-  Image as ImageIcon, Award, Ticket, LogIn, UserPlus,
+  Image as ImageIcon, Award, Info, LogIn, UserPlus,
 } from 'lucide-react'
 
 const navLinks = [
@@ -14,7 +14,7 @@ const navLinks = [
   { href: '/jadwal', label: 'Jadwal', icon: CalendarDays },
   { href: '/galeri', label: 'Galeri', icon: ImageIcon },
   { href: '/sponsor', label: 'Sponsor', icon: Award },
-  { href: '/paket', label: 'Paket', icon: Ticket },
+  { href: '/paket', label: 'Informasi', icon: Info },
 ]
 
 export default function PublicNav() {

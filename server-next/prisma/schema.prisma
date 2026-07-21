@@ -51,6 +51,8 @@ model Branch {
   students         Student[]
   schedules        Schedule[]
   staffAttendances StaffAttendance[]
+  fields           Field[]
+  trainingSessions TrainingSession[]
 
   @@map("branches")
 }
@@ -69,6 +71,18 @@ model StaffAttendance {
 
   @@unique([userId, date])
   @@map("staff_attendances")
+}
+
+model Field {
+  id        String   @id @default(cuid())
+  name      String
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  trainingSessions TrainingSession[]
+
+  @@map("fields")
 }
 
 model Notification {
@@ -179,6 +193,10 @@ model TrainingSession {
   coach             User     @relation(fields: [coachId], references: [id])
   ageGroup          String
   date              DateTime
+  branchId          String?
+  branch            Branch?  @relation(fields: [branchId], references: [id])
+  fieldId           String?
+  field             Field?   @relation(fields: [fieldId], references: [id])
   topicTitle        String
   topicDescription  String?
   objective         String?

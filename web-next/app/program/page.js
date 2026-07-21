@@ -9,12 +9,17 @@ import { getLandingData, programDetails } from '@/lib/landingData'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 
 const AGE_GROUP_INFO = {
-  'U-8': 'Pengenalan bola & koordinasi dasar',
-  'U-10': 'Teknik individu & permainan kecil',
-  'U-12': 'Dasar taktik & kerja sama tim',
-  'U-14': 'Taktik menyerang & bertahan',
-  'U-16': 'Fisik & mental level kompetitif',
-  'U-18': 'Persiapan seleksi & jenjang klub',
+  'U-6': 'Pengenalan bola & koordinasi dasar',
+  'U-7': 'Kontrol bola & gerak dasar',
+  'U-8': 'Teknik individu & permainan kecil',
+  'U-9': 'Dasar taktik & kerja sama tim',
+  'U-10': 'Teknik lanjutan & posisi bermain',
+  'U-11': 'Taktik menyerang & bertahan',
+  'U-12': 'Transisi & pengambilan keputusan',
+  'U-13': 'Fisik & mental level kompetitif',
+  'U-14': 'Taktik tim & strategi pertandingan',
+  'U-15': 'Kesiapan seleksi klub',
+  'U-16': 'Jenjang kompetitif lanjutan',
 }
 
 const METHOD_PILLARS = [
@@ -77,7 +82,7 @@ export default async function ProgramPage() {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-12">
             <Reveal className="max-w-2xl">
               <span className="text-xs font-bold tracking-[0.2em] text-gold-400 uppercase">Semua Kelompok Umur</span>
-              <h2 className="font-heading font-bold text-3xl mt-3 mb-3 text-white tracking-tight">Dari U-8 Hingga U-18</h2>
+              <h2 className="font-heading font-bold text-3xl mt-3 mb-3 text-white tracking-tight">Dari U-6 Hingga U-16</h2>
               <p className="text-gray-400">Setiap kelompok umur punya jadwal dan penekanan kurikulum masing-masing.</p>
             </Reveal>
             <Reveal>

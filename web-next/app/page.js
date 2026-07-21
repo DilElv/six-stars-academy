@@ -78,7 +78,7 @@ export default async function Home() {
           <SectionTeaserHeader
             eyebrow="Fixtures"
             title="Jadwal Latihan Mingguan"
-            desc="Sesi latihan rutin per kelompok umur, dikelola langsung oleh tim pelatih."
+            desc="Tersebar di beberapa cabang (BSD, Jakarta) — pilih cabang terdekat saat mendaftar."
             href="/jadwal"
             cta="Lihat Semua Jadwal"
           />
@@ -139,29 +139,6 @@ export default async function Home() {
           <Reveal className="text-center">
             <Link href="/sponsor" className="group inline-flex items-center gap-1.5 font-semibold text-sm text-gold-400 hover:text-gold-300 transition-colors duration-200">
               Lihat Semua Mitra
-              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
-            </Link>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* PAKET CTA */}
-      <section className="relative py-24 sm:py-28 bg-navy-900 overflow-hidden">
-        <div aria-hidden="true" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] rounded-full bg-gold-400/[0.06] blur-[100px]" />
-        <FootballIcon className="absolute top-10 left-[8%] w-16 h-16 text-white/[0.04] hidden md:block" />
-        <FootballIcon className="absolute bottom-10 right-[10%] w-24 h-24 text-white/[0.03] hidden md:block" />
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <Reveal>
-            <span className="text-xs font-bold tracking-[0.2em] text-gold-400 uppercase">Bergabung</span>
-            <h2 className="font-heading font-bold text-3xl sm:text-4xl text-white mt-3 mb-4 text-balance tracking-tight">Siap Cetak Bintang Baru?</h2>
-            <p className="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">
-              Lihat pilihan paket latihan dan mulai perjalanan si kecil bersama SixStars Academy.
-            </p>
-            <Link
-              href="/paket"
-              className="group inline-flex items-center gap-2 bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 font-bold px-8 py-3.5 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-            >
-              Lihat Paket Latihan
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
           </Reveal>

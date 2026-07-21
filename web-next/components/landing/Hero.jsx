@@ -118,21 +118,6 @@ export default function Hero() {
               <div className="absolute inset-0 bg-gradient-to-br from-gold-400/10 via-transparent to-navy-950/30 mix-blend-overlay" />
             </div>
 
-            {/* Floating glass stat badges */}
-            <div className="absolute -left-6 bottom-10 flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl">
-              <div className="flex items-center gap-0.5" aria-hidden="true">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Star key={i} className="w-3 h-3 fill-gold-400 text-gold-400" />
-                ))}
-              </div>
-              <div>
-                <div className="text-white font-bold text-sm leading-none">500+ Siswa</div>
-                <div className="text-gray-300 text-[11px] mt-0.5">bergabung &amp; berkembang</div>
-              </div>
-            </div>
-            <div className="absolute -right-4 -top-4 px-4 py-2.5 rounded-2xl bg-gold-400 text-navy-900 font-bold text-sm shadow-xl rotate-3">
-              Sejak 2018 ⚽
-            </div>
           </div>
         </div>
       </div>

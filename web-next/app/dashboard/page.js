@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon } from 'lucide-react'
+import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin } from 'lucide-react'
 import * as api from '@/lib/api'
 import OvrGauge from '@/components/charts/OvrGauge'
 import SkillRadar from '@/components/charts/SkillRadar'
@@ -26,12 +26,20 @@ export default function ParentDasborPage() {
   const [student, setStudent] = useState(null)
   const [payments, setPayments] = useState([])
   const [reports, setReports] = useState([])
+  const [trainingSessions, setTrainingSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports()])
-      .then(([s, p, r]) => { setStudent(s); setPayments(p); setReports(r) })
+      .then(([s, p, r]) => {
+        setStudent(s)
+        setPayments(p)
+        setReports(r)
+        if (s?.ageGroup && s?.branchId) {
+          api.getTrainingSessions(s.ageGroup, s.branchId).then(setTrainingSessions)
+        }
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
@@ -95,6 +103,36 @@ export default function ParentDasborPage() {
           </Link>
         ))}
       </div>
+
+      {trainingSessions.length > 0 && (
+        <div>
+          <h2 className="font-semibold text-navy-900 text-sm mb-3 flex items-center gap-1.5">
+            <Calendar size={15} /> Jadwal Latihan
+          </h2>
+          <div className="space-y-2">
+            {trainingSessions.slice(0, 5).map((s) => (
+              <div key={s.id} className="glass-card rounded-2xl p-3.5 flex items-center gap-3">
+                <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-900 font-bold text-xs">
+                  {new Date(s.date).getDate()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-navy-900 text-sm truncate">{s.topicTitle}</div>
+                  <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                    <span>{new Date(s.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                    {s.field?.name && (
+                      <>
+                        <span>·</span>
+                        <MapPin size={11} className="shrink-0" />
+                        <span>{s.field.name}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">

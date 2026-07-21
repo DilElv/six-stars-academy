@@ -11,12 +11,12 @@ const INFO_CARDS = [
   {
     icon: MapPin,
     title: 'Lokasi Latihan',
-    desc: 'Tersebar di beberapa cabang (Tangerang, Bogor, Jakarta) — pilih cabang terdekat saat mendaftar.',
+    desc: 'Tersebar di beberapa cabang (BSD, Jakarta) — pilih cabang terdekat saat mendaftar.',
   },
   {
     icon: ShieldCheck,
     title: 'Perlengkapan Wajib',
-    desc: 'Sepatu bola/futsal, kaos kaki panjang, shin guard, dan botol minum. Jersey latihan didapat saat pendaftaran.',
+    desc: 'Sepatu bola, kaos kaki panjang, shin guard, dan botol minum. Jersey latihan didapat saat pendaftaran.',
   },
   {
     icon: QrCode,

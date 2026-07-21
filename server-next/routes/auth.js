@@ -61,6 +61,7 @@ router.post('/register', async (req, res) => {
   const {
     packageId, fullName, dateOfBirth, position, photo,
     parentName, parentPhone, address, email, password, branchId,
+    amount, registrationFee: regFeeOverride,
   } = req.body
 
   try {
@@ -79,7 +80,8 @@ router.post('/register', async (req, res) => {
 
     const ageGroup = assignAgeGroup(dateOfBirth)
     const hashed = await bcrypt.hash(password, 10)
-    const registrationFee = await getRegistrationFee()
+    const registrationFee = regFeeOverride ?? await getRegistrationFee()
+    const pkgAmount = amount ?? pkg.price
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -113,12 +115,12 @@ router.post('/register', async (req, res) => {
         },
       })
 
-      const totalAmount = pkg.price + registrationFee
+      const totalAmount = pkgAmount + registrationFee
       const payment = await tx.payment.create({
         data: {
           studentId: student.id,
           packageId: pkg.id,
-          amount: pkg.price,
+          amount: pkgAmount,
           registrationFee,
           totalAmount,
           paymentType: 'registration',

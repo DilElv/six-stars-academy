@@ -118,8 +118,12 @@ export async function submitAttendance(date, records) {
   return request('/attendance', { method: 'POST', body: JSON.stringify({ date, records }) })
 }
 
-export async function getTrainingSessions(ageGroup) {
-  return request(`/training-sessions${ageGroup ? `?ageGroup=${encodeURIComponent(ageGroup)}` : ''}`)
+export async function getTrainingSessions(ageGroup, branchId) {
+  const params = new URLSearchParams()
+  if (ageGroup) params.set('ageGroup', ageGroup)
+  if (branchId) params.set('branchId', branchId)
+  const qs = params.toString()
+  return request(`/training-sessions${qs ? `?${qs}` : ''}`)
 }
 
 export async function createTrainingSession(payload) {
@@ -248,6 +252,10 @@ export async function getSettings() {
 
 export async function updateSettings(payload) {
   return request('/settings', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function getFields(branchId) {
+  return request(`/fields${branchId ? `?branchId=${branchId}` : ''}`)
 }
 
 export async function getBranches() {

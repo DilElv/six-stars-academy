@@ -50,6 +50,13 @@ router.post('/scan', authenticate, authorize('coach', 'head_coach', 'admin'), as
     const card = await prisma.studentCard.findUnique({ where: { qrCode }, include: { student: true } })
     if (!card || card.status !== 'active') return res.status(404).json({ error: 'Kartu tidak dikenali' })
 
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      if (coach?.branchId && card.student.branchId && coach.branchId !== card.student.branchId) {
+        return res.status(403).json({ error: 'Siswa ini bukan dari cabang Anda' })
+      }
+    }
+
     const day = startOfDay()
     const now = new Date()
     const attendance = await prisma.attendance.upsert({
@@ -70,6 +77,21 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
   if (!Array.isArray(records)) return res.status(400).json({ error: 'records harus array' })
   try {
     const day = startOfDay(date)
+
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      if (coach?.branchId) {
+        const students = await prisma.student.findMany({
+          where: { id: { in: records.map((r) => r.studentId) } },
+          select: { id: true, branchId: true },
+        })
+        const wrong = students.find((s) => s.branchId && s.branchId !== coach.branchId)
+        if (wrong) {
+          return res.status(403).json({ error: 'Salah satu siswa bukan dari cabang Anda' })
+        }
+      }
+    }
+
     const results = []
     for (const r of records) {
       const row = await prisma.attendance.upsert({

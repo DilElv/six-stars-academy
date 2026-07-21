@@ -16,6 +16,7 @@ import adminRoutes from './routes/admin.js'
 import settingsRoutes from './routes/settings.js'
 import notificationsRoutes from './routes/notifications.js'
 import branchesRoutes from './routes/branches.js'
+import fieldsRoutes from './routes/fields.js'
 import staffAttendanceRoutes from './routes/staffAttendance.js'
 
 const app = express()
@@ -40,6 +41,7 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/branches', branchesRoutes)
+app.use('/api/fields', fieldsRoutes)
 app.use('/api/staff-attendance', staffAttendanceRoutes)
 
 app.use((err, req, res, next) => {

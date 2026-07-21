@@ -33,6 +33,15 @@ function previewAgeGroup(dob) {
   return { age, label: bracket ? bracket.label : 'U-8' }
 }
 
+const CABANG_HARGA = {
+  JKT: {
+    '1-1': 650000, '1-2': 900000,
+    '3-1': 1500000, '3-2': 2150000,
+    '6-1': 2600000, '6-2': 3950000,
+    registrationFee: 950000,
+  },
+}
+
 function groupPackages(packages) {
   const byName = {}
   for (const p of packages) {
@@ -41,6 +50,23 @@ function groupPackages(packages) {
     if (p.sessionsPerWeek === 2) byName[p.name].opt2 = p
   }
   return Object.values(byName).sort((a, b) => a.durationMonths - b.durationMonths)
+}
+
+function getBranchCode(branchId, branches) {
+  return branches.find((b) => b.id === branchId)?.code
+}
+
+function getBranchPrice(pkg, branchCode) {
+  const m = CABANG_HARGA[branchCode]
+  if (m) {
+    const key = `${pkg.durationMonths}-${pkg.sessionsPerWeek}`
+    return m[key] ?? pkg.price
+  }
+  return pkg.price
+}
+
+function getBranchRegFee(branchCode, defaultFee) {
+  return CABANG_HARGA[branchCode]?.registrationFee ?? defaultFee
 }
 
 function DaftarWizard() {
@@ -95,8 +121,7 @@ function DaftarWizard() {
 
   function next() {
     setError('')
-    if (step === 1 && !selectedPackage) return setError('Pilih paket terlebih dahulu')
-    if (step === 2) {
+    if (step === 1) {
       if (!form.fullName || !form.dateOfBirth || !form.branchId || !form.parentName || !form.parentPhone || !form.address || !form.email || !form.password || !form.confirmPassword) {
         return setError('Lengkapi semua field yang wajib diisi')
       }
@@ -110,12 +135,13 @@ function DaftarWizard() {
         return setError('Konfirmasi password tidak cocok')
       }
     }
+    if (step === 3 && !selectedPackage) return setError('Pilih paket terlebih dahulu')
     setStep((s) => s + 1)
   }
 
   function back() {
     setError('')
-    setStep((s) => s - 1)
+    setStep((s) => Math.max(s - 1, 2))
   }
 
   async function handleConfirm() {
@@ -134,6 +160,8 @@ function DaftarWizard() {
         address: form.address,
         email: form.email,
         password: form.password,
+        amount: actualPrice,
+        registrationFee: actualRegFee,
       })
       setResult(data)
       setStep(6)
@@ -144,7 +172,10 @@ function DaftarWizard() {
     }
   }
 
-  const totalAmount = selectedPackage ? selectedPackage.price + registrationFee : 0
+  const branchCode = getBranchCode(form.branchId, branches)
+  const actualPrice = selectedPackage ? getBranchPrice(selectedPackage, branchCode) : 0
+  const actualRegFee = getBranchRegFee(branchCode, registrationFee)
+  const totalAmount = actualPrice + actualRegFee
 
   return (
     <AuthBackground className="py-10 px-4">
@@ -170,36 +201,8 @@ function DaftarWizard() {
 
           {step === 1 && (
             <>
-              <h1 className="font-bold text-navy-900 text-lg mb-1">Pilih Paket Latihan</h1>
-              <p className="text-sm text-gray-400 mb-6">Langkah 1 dari 5</p>
-              <div className="space-y-3">
-                {grouped.map((g) => (
-                  <div key={g.name} className="border border-gray-200 rounded-2xl p-4">
-                    <div className="font-semibold text-navy-900 mb-2">{g.name}</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[g.opt1, g.opt2].filter(Boolean).map((opt) => (
-                        <button
-                          key={opt.id}
-                          onClick={() => setSelectedPackage(opt)}
-                          className={`text-left px-3 py-2 rounded-lg border text-sm ${
-                            selectedPackage?.id === opt.id ? 'border-gold-400 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="text-xs text-gray-400">{opt.sessionsPerWeek} Sesi/Minggu</div>
-                          <div className="font-semibold text-navy-900">{formatRupiah(opt.price)}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <h1 className="font-bold text-navy-900 text-lg mb-1">Form Pendaftaran Anak</h1>
-              <p className="text-sm text-gray-400 mb-6">Langkah 2 dari 5</p>
+              <h1 className="font-bold text-navy-900 text-lg mb-1">Form Pendaftaran</h1>
+              <p className="text-sm text-gray-400 mb-6">Langkah 1 dari 5 — Isi data anak & orang tua</p>
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
@@ -247,10 +250,10 @@ function DaftarWizard() {
             </>
           )}
 
-          {step === 3 && (
+          {step === 2 && (
             <>
               <h1 className="font-bold text-navy-900 text-lg mb-1">Konfirmasi Data</h1>
-              <p className="text-sm text-gray-400 mb-6">Langkah 3 dari 5 — ID Siswa akan dibuat otomatis (format SS-XXXX) saat pendaftaran dikonfirmasi.</p>
+              <p className="text-sm text-gray-400 mb-6">Langkah 2 dari 5 — Periksa kembali data yang diisi</p>
               <dl className="text-sm divide-y divide-gray-100">
                 <Row label="Nama Anak" value={form.fullName} />
                 <Row label="Tanggal Lahir" value={form.dateOfBirth} />
@@ -259,18 +262,45 @@ function DaftarWizard() {
                 <Row label="Nama Orang Tua" value={form.parentName} />
                 <Row label="Telepon" value={form.parentPhone} />
                 <Row label="Email" value={form.email} />
-                <Row label="Paket" value={selectedPackage ? `${selectedPackage.name} · ${selectedPackage.sessionsPerWeek}x/minggu` : '-'} />
               </dl>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <h1 className="font-bold text-navy-900 text-lg mb-1">Pilih Paket Latihan</h1>
+              <p className="text-sm text-gray-400 mb-6">Langkah 3 dari 5</p>
+              <div className="space-y-3">
+                {grouped.map((g) => (
+                  <div key={g.name} className="border border-gray-200 rounded-2xl p-4">
+                    <div className="font-semibold text-navy-900 mb-2">{g.name}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[g.opt1, g.opt2].filter(Boolean).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setSelectedPackage(opt)}
+                          className={`text-left px-3 py-2 rounded-lg border text-sm ${
+                            selectedPackage?.id === opt.id ? 'border-gold-400 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="text-xs text-gray-400">{opt.sessionsPerWeek} Sesi/Minggu</div>
+                          <div className="font-semibold text-navy-900">{formatRupiah(getBranchPrice(opt, branchCode))}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
           {step === 4 && (
             <>
               <h1 className="font-bold text-navy-900 text-lg mb-1">Invoice Pendaftaran</h1>
-              <p className="text-sm text-gray-400 mb-6">Langkah 4 dari 5</p>
+              <p className="text-sm text-gray-400 mb-6">Langkah 4 dari 5 — Rincian biaya pendaftaran</p>
               <dl className="text-sm divide-y divide-gray-100 mb-4">
-                <Row label={`Paket ${selectedPackage?.name} (${selectedPackage?.sessionsPerWeek}x/minggu)`} value={formatRupiah(selectedPackage?.price)} />
-                <Row label="Biaya Pendaftaran (Jersey 2 set, kaos kaki, 1 bola)" value={formatRupiah(registrationFee)} />
+                <Row label={`Paket ${selectedPackage?.name} (${selectedPackage?.sessionsPerWeek}x/minggu)`} value={formatRupiah(actualPrice)} />
+                <Row label="Biaya Pendaftaran (Jersey 2 set, kaos kaki, 1 bola)" value={formatRupiah(actualRegFee)} />
               </dl>
               <div className="flex justify-between items-center bg-navy-900 text-white rounded-2xl px-4 py-3">
                 <span className="text-sm font-medium">Total Tagihan</span>
@@ -285,6 +315,10 @@ function DaftarWizard() {
               <p className="text-sm text-gray-400 mb-6">
                 Langkah 5 dari 5 — Akun akan langsung aktif, status pembayaran <b>menunggu verifikasi Admin</b> (integrasi payment gateway menyusul).
               </p>
+              <div className="text-sm space-y-1 mb-4">
+                <Row label="Paket" value={selectedPackage ? `${selectedPackage.name} · ${selectedPackage.sessionsPerWeek}x/minggu` : '-'} />
+                <Row label="Total Tagihan" value={formatRupiah(totalAmount)} />
+              </div>
               <button
                 onClick={handleConfirm}
                 disabled={submitting}
@@ -319,7 +353,7 @@ function DaftarWizard() {
             <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
               <button
                 onClick={back}
-                disabled={step === 1}
+                disabled={step <= 2}
                 className="flex items-center gap-1 text-sm font-medium text-gray-400 hover:text-navy-700 disabled:opacity-0"
               >
                 <ChevronLeft size={16} /> Kembali

@@ -18,26 +18,36 @@ async function main() {
   await prisma.package.deleteMany()
   await prisma.cmsContent.deleteMany()
   await prisma.user.deleteMany()
+  await prisma.field.deleteMany()
   await prisma.branch.deleteMany()
 
   const branchDefs = [
-    { name: 'Tangerang', code: 'TGR' },
-    { name: 'Bogor', code: 'BGR' },
+    { name: 'BSD', code: 'BSD' },
     { name: 'Jakarta', code: 'JKT' },
   ]
   const branches = []
   for (const def of branchDefs) branches.push(await prisma.branch.create({ data: def }))
-  const [tgr] = branches
-  console.log('  ✓ 3 cabang dibuat (TGR, BGR, JKT)')
+  const [bsd, jkt] = branches
+  console.log('  ✓ 2 cabang dibuat (BSD, JKT)')
+
+  const fieldDefs = [
+    { name: 'KM7 Mini Soccer', branchId: bsd.id },
+    { name: 'Panenka Lakeside Mini Soccer', branchId: bsd.id },
+    { name: 'Centro Mini Soccer Utan Jati', branchId: jkt.id },
+  ]
+  for (const def of fieldDefs) {
+    await prisma.field.create({ data: def })
+  }
+  console.log('  ✓ 3 lapangan dibuat (BSD: KM7, Panenka | JKT: Centro)')
 
   const admin = await prisma.user.create({
     data: { name: 'Admin SixStars', email: 'admin@ssb.com', password: await bcrypt.hash('admin123', 10), role: 'admin' },
   })
   const headCoach = await prisma.user.create({
-    data: { name: 'Budi Santoso', email: 'headcoach@ssb.com', password: await bcrypt.hash('headcoach123', 10), role: 'head_coach', phone: '081234567890', branchId: tgr.id },
+    data: { name: 'Budi Santoso', email: 'headcoach@ssb.com', password: await bcrypt.hash('headcoach123', 10), role: 'head_coach', phone: '081234567890', branchId: bsd.id },
   })
   const coach = await prisma.user.create({
-    data: { name: 'Andi Wijaya', email: 'coach@ssb.com', password: await bcrypt.hash('coach123', 10), role: 'coach', phone: '081234567891', branchId: tgr.id },
+    data: { name: 'Andi Wijaya', email: 'coach@ssb.com', password: await bcrypt.hash('coach123', 10), role: 'coach', phone: '081234567891', branchId: bsd.id },
   })
   const parent = await prisma.user.create({
     data: { name: 'Siti Rahayu', email: 'parent@ssb.com', password: await bcrypt.hash('parent123', 10), role: 'parent', phone: '081234567892' },
@@ -67,23 +77,26 @@ async function main() {
           { label: 'Siswa Aktif', value: '500+', icon: 'Users' },
           { label: 'Pelatih Bersertifikat', value: '15+', icon: 'Award' },
           { label: 'Lapangan Latihan', value: '5+', icon: 'MapPin' },
-          { label: 'Tahun Berdiri', value: 'Sejak 2015', icon: 'Calendar' },
+          { label: 'Tahun Berdiri', value: '2024', icon: 'Calendar' },
         ],
       },
       {
         section: 'programs',
         content: [
-          { title: 'Grassroots (U-8 - U-12)', desc: 'Pengenalan dasar teknik, koordinasi, dan kecintaan pada sepak bola.' },
-          { title: 'Development (U-14 - U-16)', desc: 'Penguatan taktik, fisik, dan mental bertanding.' },
-          { title: 'Elite (U-18)', desc: 'Persiapan jenjang kompetitif dan seleksi klub.' },
+          { title: 'Grassroots (U-6 - U-8)', desc: 'Pengenalan dasar teknik, koordinasi, dan kecintaan pada sepak bola.' },
+          { title: 'Development (U-9 - U-12)', desc: 'Penguatan taktik, fisik, dan mental bertanding.' },
+          { title: 'Elite (U-13 - U-16)', desc: 'Persiapan jenjang untuk kompetitif.' },
         ],
       },
       {
         section: 'schedulePreview',
         content: [
-          { ageGroup: 'U-10', day: 'Selasa & Kamis', time: '16.00 - 18.00 WIB' },
-          { ageGroup: 'U-12', day: 'Senin & Rabu', time: '16.00 - 18.00 WIB' },
-          { ageGroup: 'U-14', day: 'Jumat & Sabtu', time: '15.30 - 17.30 WIB' },
+          { branch: 'Serpong - BSD', ageGroup: 'U-6 - U-8', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+          { branch: 'Serpong - BSD', ageGroup: 'U-9 - U-12', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+          { branch: 'Serpong - BSD', ageGroup: 'U-13 - U-16', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+          { branch: 'Jakarta', ageGroup: 'U-6 - U-8', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
+          { branch: 'Jakarta', ageGroup: 'U-9 - U-12', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
+          { branch: 'Jakarta', ageGroup: 'U-13 - U-16', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
         ],
       },
       { section: 'gallery', content: [] },
@@ -109,7 +122,7 @@ async function main() {
       packageId: pkg.id,
       packageStartDate,
       packageEndDate,
-      branchId: tgr.id,
+      branchId: bsd.id,
     },
   })
   console.log('  ✓ Student demo dibuat untuk akun parent')
@@ -136,12 +149,12 @@ async function main() {
 
   await prisma.schedule.createMany({
     data: [
-      { ageGroup: 'U-8', day: 'Senin & Rabu', startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: coach.id, branchId: tgr.id },
-      { ageGroup: 'U-10', day: 'Selasa & Kamis', startTime: '16.00', endTime: '18.00', location: 'Lapangan A', coachId: coach.id, branchId: tgr.id },
-      { ageGroup: 'U-12', day: 'Senin & Rabu', startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id, branchId: tgr.id },
-      { ageGroup: 'U-14', day: 'Jumat & Sabtu', startTime: '15.30', endTime: '17.30', location: 'Lapangan B', coachId: headCoach.id, branchId: tgr.id },
-      { ageGroup: 'U-16', day: 'Selasa & Jumat', startTime: '16.00', endTime: '18.00', location: 'Lapangan C', coachId: headCoach.id, branchId: tgr.id },
-      { ageGroup: 'U-18', day: 'Senin, Rabu & Jumat', startTime: '17.00', endTime: '19.00', location: 'Lapangan C', coachId: headCoach.id, branchId: tgr.id },
+      { ageGroup: 'U-8', day: 'Senin & Rabu', startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: coach.id, branchId: bsd.id },
+      { ageGroup: 'U-10', day: 'Selasa & Kamis', startTime: '16.00', endTime: '18.00', location: 'Lapangan A', coachId: coach.id, branchId: bsd.id },
+      { ageGroup: 'U-12', day: 'Senin & Rabu', startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id, branchId: bsd.id },
+      { ageGroup: 'U-14', day: 'Jumat & Sabtu', startTime: '15.30', endTime: '17.30', location: 'Lapangan B', coachId: headCoach.id, branchId: bsd.id },
+      { ageGroup: 'U-16', day: 'Selasa & Jumat', startTime: '16.00', endTime: '18.00', location: 'Lapangan C', coachId: headCoach.id, branchId: bsd.id },
+      { ageGroup: 'U-18', day: 'Senin, Rabu & Jumat', startTime: '17.00', endTime: '19.00', location: 'Lapangan C', coachId: headCoach.id, branchId: bsd.id },
     ],
   })
   console.log('  ✓ Jadwal latihan demo dibuat')

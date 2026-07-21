@@ -7,10 +7,16 @@ const router = Router()
 
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   try {
-    const where = req.query.ageGroup ? { ageGroup: req.query.ageGroup } : {}
+    const where = {}
+    if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
+    if (req.query.branchId) where.branchId = req.query.branchId
     const sessions = await prisma.trainingSession.findMany({
       where,
-      include: { coach: { select: { name: true } } },
+      include: {
+        coach: { select: { name: true } },
+        field: { select: { id: true, name: true } },
+        branch: { select: { id: true, name: true, code: true } },
+      },
       orderBy: { date: 'desc' },
     })
     res.json(sessions)
@@ -21,13 +27,37 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
 })
 
 router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment } = req.body
+  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
   try {
+    const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+
+    if (req.user.role === 'coach') {
+      if (!coach?.branchId) {
+        return res.status(403).json({ error: 'Anda belum ditugaskan ke cabang manapun' })
+      }
+      if (fieldId) {
+        const field = await prisma.field.findUnique({ where: { id: fieldId } })
+        if (!field || field.branchId !== coach.branchId) {
+          return res.status(403).json({ error: 'Lapangan tidak sesuai dengan cabang Anda' })
+        }
+      }
+    }
+
     const session = await prisma.trainingSession.create({
-      data: { coachId: req.user.id, ageGroup, date: new Date(date), topicTitle, topicDescription, objective, duration, equipment },
+      data: {
+        coachId: req.user.id,
+        ageGroup,
+        date: new Date(date),
+        topicTitle,
+        topicDescription,
+        objective,
+        duration,
+        equipment,
+        fieldId: fieldId || null,
+        branchId: coach?.branchId || null,
+      },
     })
 
-    const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
     for (const role of ['head_coach', 'admin']) {
       await notifyRole(role, {
         type: 'training_session_created',
@@ -44,11 +74,29 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 })
 
 router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment } = req.body
+  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
   try {
+    const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+    if (req.user.role === 'coach' && fieldId) {
+      const field = await prisma.field.findUnique({ where: { id: fieldId } })
+      if (!field || field.branchId !== coach?.branchId) {
+        return res.status(403).json({ error: 'Lapangan tidak sesuai dengan cabang Anda' })
+      }
+    }
+
     const session = await prisma.trainingSession.update({
       where: { id: req.params.id },
-      data: { ageGroup, date: date ? new Date(date) : undefined, topicTitle, topicDescription, objective, duration, equipment },
+      data: {
+        ageGroup,
+        date: date ? new Date(date) : undefined,
+        topicTitle,
+        topicDescription,
+        objective,
+        duration,
+        equipment,
+        fieldId: fieldId !== undefined ? (fieldId || null) : undefined,
+        branchId: coach?.branchId || undefined,
+      },
     })
     res.json(session)
   } catch (err) {

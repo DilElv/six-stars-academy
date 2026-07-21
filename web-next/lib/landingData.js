@@ -4,13 +4,13 @@ export const defaultStats = [
   { label: 'Siswa Aktif', value: '500+', icon: 'Users' },
   { label: 'Pelatih Bersertifikat', value: '15+', icon: 'Award' },
   { label: 'Lapangan Latihan', value: '5+', icon: 'MapPin' },
-  { label: 'Tahun Berdiri', value: 'Sejak 2015', icon: 'Calendar' },
+  { label: 'Tahun Berdiri', value: '2024', icon: 'Calendar' },
 ]
 
 export const defaultPrograms = [
-  { title: 'Grassroots (U-8 - U-12)', desc: 'Pengenalan dasar teknik, koordinasi, dan kecintaan pada sepak bola.' },
-  { title: 'Development (U-14 - U-16)', desc: 'Penguatan taktik, fisik, dan mental bertanding.' },
-  { title: 'Elite (U-18)', desc: 'Persiapan jenjang kompetitif dan seleksi klub.' },
+  { title: 'Grassroots (U-6 - U-8)', desc: 'Pengenalan dasar teknik, koordinasi, dan kecintaan pada sepak bola.' },
+  { title: 'Development (U-9 - U-12)', desc: 'Penguatan taktik, fisik, dan mental bertanding.' },
+  { title: 'Elite (U-13 - U-16)', desc: 'Persiapan jenjang untuk kompetitif.' },
 ]
 
 // Presentational detail matched by index to defaultPrograms / CMS `programs` —
@@ -18,7 +18,7 @@ export const defaultPrograms = [
 // (see lib/assessmentFields.js), not per-tier editable copy.
 export const programDetails = [
   {
-    ageGroups: ['U-8', 'U-10', 'U-12'],
+    ageGroups: ['U-6', 'U-7', 'U-8'],
     sessionsPerWeek: '1-2x seminggu',
     focus: { teknik: 70, taktik: 15, fisik: 10, mental: 5 },
     highlights: [
@@ -29,7 +29,7 @@ export const programDetails = [
     ],
   },
   {
-    ageGroups: ['U-12', 'U-14', 'U-16'],
+    ageGroups: ['U-9', 'U-10', 'U-11', 'U-12'],
     sessionsPerWeek: '2x seminggu',
     focus: { teknik: 35, taktik: 35, fisik: 20, mental: 10 },
     highlights: [
@@ -40,7 +40,7 @@ export const programDetails = [
     ],
   },
   {
-    ageGroups: ['U-16', 'U-18'],
+    ageGroups: ['U-13', 'U-14', 'U-15', 'U-16'],
     sessionsPerWeek: '2-3x seminggu',
     focus: { teknik: 25, taktik: 30, fisik: 25, mental: 20 },
     highlights: [
@@ -53,12 +53,12 @@ export const programDetails = [
 ]
 
 export const defaultSchedule = [
-  { ageGroup: 'U-8', day: 'Selasa & Kamis', time: '15.30 - 17.00 WIB' },
-  { ageGroup: 'U-10', day: 'Selasa & Kamis', time: '16.00 - 18.00 WIB' },
-  { ageGroup: 'U-12', day: 'Senin & Rabu', time: '16.00 - 18.00 WIB' },
-  { ageGroup: 'U-14', day: 'Jumat & Sabtu', time: '15.30 - 17.30 WIB' },
-  { ageGroup: 'U-16', day: 'Senin & Kamis', time: '17.00 - 19.00 WIB' },
-  { ageGroup: 'U-18', day: 'Rabu & Sabtu', time: '17.00 - 19.30 WIB' },
+  { branch: 'Serpong - BSD', ageGroup: 'U-6 - U-8', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+  { branch: 'Serpong - BSD', ageGroup: 'U-9 - U-12', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+  { branch: 'Serpong - BSD', ageGroup: 'U-13 - U-16', day: 'Kamis & Sabtu', time: '16.00 - 18.00 (Kamis) · 08.00 - 10.00 (Sabtu)', location: 'KM7 Mini Soccer / Panenka Lakeside', mapsUrl: 'https://maps.google.com/?q=KM7+Mini+Soccer+BSD' },
+  { branch: 'Jakarta', ageGroup: 'U-6 - U-8', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
+  { branch: 'Jakarta', ageGroup: 'U-9 - U-12', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
+  { branch: 'Jakarta', ageGroup: 'U-13 - U-16', day: 'Rabu', time: '16.00 - 18.00', location: 'Centro Mini Soccer Utan Jati', mapsUrl: 'https://maps.google.com/?q=Centro+Mini+Soccer+Utan+Jati' },
 ]
 
 export const galleryFallbackPhotos = [
