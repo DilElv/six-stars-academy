@@ -17,7 +17,9 @@ import settingsRoutes from './routes/settings.js'
 import notificationsRoutes from './routes/notifications.js'
 import branchesRoutes from './routes/branches.js'
 import fieldsRoutes from './routes/fields.js'
+import eventsRoutes from './routes/events.js'
 import staffAttendanceRoutes from './routes/staffAttendance.js'
+import passwordResetRoutes from './routes/passwordReset.js'
 
 const app = express()
 
@@ -42,7 +44,9 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/branches', branchesRoutes)
 app.use('/api/fields', fieldsRoutes)
+app.use('/api/events', eventsRoutes)
 app.use('/api/staff-attendance', staffAttendanceRoutes)
+app.use('/api/password-reset', passwordResetRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)

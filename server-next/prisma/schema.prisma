@@ -35,6 +35,8 @@ model User {
   schedules         Schedule[]
   notifications     Notification[]
   staffAttendances  StaffAttendance[]
+  events            Event[]
+  passwordResets    PasswordReset[]
 
   @@map("users")
 }
@@ -53,6 +55,7 @@ model Branch {
   staffAttendances StaffAttendance[]
   fields           Field[]
   trainingSessions TrainingSession[]
+  events           Event[]
 
   @@map("branches")
 }
@@ -127,7 +130,8 @@ model Student {
   attendances  Attendance[]
   assessments  Assessment[]
   reports      Report[]
-  studentCard  StudentCard?
+  studentCard      StudentCard?
+  eventParticipants EventParticipant[]
 
   @@map("students")
 }
@@ -206,6 +210,57 @@ model TrainingSession {
   updatedAt         DateTime @updatedAt
 
   @@map("training_sessions")
+}
+
+model Event {
+  id                   String   @id @default(cuid())
+  title                String
+  description          String?
+  type                 String
+  ageGroup             String?
+  date                 DateTime
+  registrationDeadline DateTime?
+  location             String?
+  fee                  Int      @default(0)
+  status               String   @default("open")
+  branchId             String?
+  branch               Branch?  @relation(fields: [branchId], references: [id])
+  createdById          String
+  createdBy            User     @relation(fields: [createdById], references: [id])
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  participants EventParticipant[]
+
+  @@map("events")
+}
+
+model EventParticipant {
+  id             String   @id @default(cuid())
+  eventId        String
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status         String   @default("recommended")
+  paymentStatus  String   @default("unpaid")
+  notes          String?
+  addedAt        DateTime @default(now())
+
+  @@unique([eventId, studentId])
+  @@map("event_participants")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  token     String   @unique
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("password_resets")
 }
 
 model Assessment {

@@ -12,6 +12,8 @@ async function main() {
   await prisma.attendance.deleteMany()
   await prisma.studentCard.deleteMany()
   await prisma.payment.deleteMany()
+  await prisma.eventParticipant.deleteMany()
+  await prisma.event.deleteMany()
   await prisma.trainingSession.deleteMany()
   await prisma.schedule.deleteMany()
   await prisma.student.deleteMany()

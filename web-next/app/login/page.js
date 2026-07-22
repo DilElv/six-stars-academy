@@ -78,6 +78,10 @@ export default function LoginPage() {
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
             Masuk
           </button>
+
+          <div className="text-center">
+            <Link href="/lupa-password" className="text-xs text-gold-500 font-semibold hover:underline">Lupa Password?</Link>
+          </div>
         </form>
 
         <p className="text-center text-xs text-gray-400 mt-6">

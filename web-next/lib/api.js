@@ -289,6 +289,71 @@ export async function getStaffAttendance(date, branchId) {
   return request(`/staff-attendance?${params.toString()}`)
 }
 
+export async function getEvents(ageGroup, branchId, status) {
+  const params = new URLSearchParams()
+  if (ageGroup) params.set('ageGroup', ageGroup)
+  if (branchId) params.set('branchId', branchId)
+  if (status) params.set('status', status)
+  const qs = params.toString()
+  return request(`/events${qs ? `?${qs}` : ''}`)
+}
+
+export async function getEvent(id) {
+  return request(`/events/${id}`)
+}
+
+export async function createEvent(payload) {
+  return request('/events', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateEvent(id, payload) {
+  return request(`/events/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deleteEvent(id) {
+  return request(`/events/${id}`, { method: 'DELETE' })
+}
+
+export async function addEventParticipant(eventId, studentId) {
+  return request(`/events/${eventId}/participants`, { method: 'POST', body: JSON.stringify({ studentId }) })
+}
+
+export async function removeEventParticipant(eventId, studentId) {
+  return request(`/events/${eventId}/participants/${studentId}`, { method: 'DELETE' })
+}
+
+export async function updateEventParticipant(eventId, studentId, payload) {
+  return request(`/events/${eventId}/participants/${studentId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function getMyEvents() {
+  return request('/events/me')
+}
+
+export async function requestPasswordReset(email) {
+  return request('/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) })
+}
+
+export async function getPasswordResetRequests() {
+  return request('/password-reset')
+}
+
+export async function approvePasswordReset(id) {
+  return request(`/password-reset/${id}/approve`, { method: 'PUT' })
+}
+
+export async function rejectPasswordReset(id) {
+  return request(`/password-reset/${id}/reject`, { method: 'PUT' })
+}
+
+export async function resetPassword(token, password) {
+  return request('/password-reset/reset', { method: 'POST', body: JSON.stringify({ token, password }) })
+}
+
+export async function checkResetToken(token) {
+  return request(`/password-reset/check?token=${token}`)
+}
+
 export async function uploadFile(file) {
   const token = getToken()
   const formData = new FormData()

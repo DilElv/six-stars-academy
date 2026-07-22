@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Eye, Edit3, Trash2, Loader2 } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -12,6 +12,7 @@ function initials(name = '') {
 }
 
 export default function AdminDataAnakPage() {
+  const [tab, setTab] = useState('data-anak')
   const [students, setStudents] = useState([])
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,6 +22,8 @@ export default function AdminDataAnakPage() {
   const [filterBranch, setFilterBranch] = useState('')
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  const [requests, setRequests] = useState([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
 
   function load() {
     setLoading(true)
@@ -28,12 +31,31 @@ export default function AdminDataAnakPage() {
     api.getBranches().then(setBranches)
   }
 
+  const loadRequests = useCallback(() => {
+    setRequestsLoading(true)
+    api.getPasswordResetRequests().then(setRequests).finally(() => setRequestsLoading(false))
+  }, [])
+
   useEffect(load, [])
+  useEffect(() => { if (tab === 'reset-password') loadRequests() }, [tab, loadRequests])
 
   async function handleDelete(id) {
     if (!confirm('Hapus data anak ini beserta seluruh riwayat pembayaran, absensi, dan penilaiannya?')) return
     await api.deleteStudent(id)
     load()
+  }
+
+  async function handleApprove(id) {
+    const result = await api.approvePasswordReset(id)
+    setRequests((prev) => prev.map((r) =>
+      r.id === id ? { ...r, status: 'approved', waLink: result.waLink, resetLink: result.resetLink, phone: result.phone } : r
+    ))
+  }
+
+  async function handleReject(id) {
+    if (!confirm('Tolak permintaan reset password ini?')) return
+    await api.rejectPasswordReset(id)
+    loadRequests()
   }
 
   const filtered = students.filter((s) => {
@@ -46,64 +68,126 @@ export default function AdminDataAnakPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
-          <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
-          <AppSelect
-            value={filterStatus}
-            onChange={setFilterStatus}
-            allLabel="Semua Status"
-            placeholder="Semua Status"
-            options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
-          />
-          <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
-        </div>
+      <div className="flex items-center gap-1 bg-gray-100 rounded-2xl p-1 w-fit">
+        <button onClick={() => setTab('data-anak')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'data-anak' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Data Anak</button>
+        <button onClick={() => setTab('reset-password')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'reset-password' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Reset Password</button>
       </div>
 
-      {loading ? null : filtered.length === 0 ? (
-        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Tidak ada data.</div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-          {filtered.map((s) => (
-            <div key={s.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
-              <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
-                <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-gray-300'}`}>
-                  {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
-                </span>
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden flex items-center justify-center font-bold text-white text-sm">
-                  {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
-                </div>
-                <h3 className="font-heading font-bold text-white text-xs sm:text-sm truncate">{s.fullName}</h3>
-                <p className="text-[10px] sm:text-xs text-gray-300">{s.studentId}</p>
-              </div>
-              <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Posisi</span>
-                  <span className="font-medium text-navy-900">{s.position}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Kelompok</span>
-                  <span className="font-medium text-navy-900">{s.ageGroup}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Cabang</span>
-                  {s.branch ? <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
-                <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
-                <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
-                <button onClick={() => handleDelete(s.id)} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
-              </div>
+      {tab === 'data-anak' ? (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+              <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
+              <AppSelect
+                value={filterStatus}
+                onChange={setFilterStatus}
+                allLabel="Semua Status"
+                placeholder="Semua Status"
+                options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+              />
+              <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
             </div>
-          ))}
+          </div>
+
+          {loading ? null : filtered.length === 0 ? (
+            <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Tidak ada data.</div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+              {filtered.map((s) => (
+                <div key={s.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                  <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
+                    <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-gray-300'}`}>
+                      {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden flex items-center justify-center font-bold text-white text-sm">
+                      {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+                    </div>
+                    <h3 className="font-heading font-bold text-white text-xs sm:text-sm truncate">{s.fullName}</h3>
+                    <p className="text-[10px] sm:text-xs text-gray-300">{s.studentId}</p>
+                  </div>
+                  <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Posisi</span>
+                      <span className="font-medium text-navy-900">{s.position}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Kelompok</span>
+                      <span className="font-medium text-navy-900">{s.ageGroup}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Cabang</span>
+                      {s.branch ? <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
+                    <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
+                    <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
+                    <button onClick={() => handleDelete(s.id)} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
+          {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+        </>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h1 className="font-bold text-navy-900 text-lg">Permintaan Reset Password</h1>
+            <button onClick={loadRequests} disabled={requestsLoading} className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-navy-700">
+              <RefreshCw size={14} className={requestsLoading ? 'animate-spin' : ''} /> Refresh
+            </button>
+          </div>
+
+          {requestsLoading ? (
+            <div className="glass-card rounded-3xl p-10 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gold-500" /></div>
+          ) : requests.length === 0 ? (
+            <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Belum ada permintaan reset password.</div>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((r) => (
+                <div key={r.id} className="glass-card rounded-3xl p-4 flex items-start gap-4">
+                  <div className="shrink-0 w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                    <ShieldAlert size={20} className="text-amber-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-navy-900 text-sm">{r.user?.name || r.email}</div>
+                    <div className="text-xs text-gray-400">{r.email}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{r.user?.role === 'parent' ? 'Orang Tua' : r.user?.role === 'coach' ? 'Coach' : r.user?.role === 'head_coach' ? 'Head Coach' : r.user?.role} · {new Date(r.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                    {r.status === 'pending' && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button onClick={() => handleApprove(r.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100"><Check size={12} /> Setujui</button>
+                        <button onClick={() => handleReject(r.id)} className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-600 rounded-xl hover:bg-red-100"><X size={12} /> Tolak</button>
+                      </div>
+                    )}
+                    {r.status !== 'pending' && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : r.status === 'used' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                          {r.status === 'approved' ? 'Disetujui' : r.status === 'used' ? 'Sudah Digunakan' : 'Ditolak'}
+                        </span>
+                        {r.status === 'approved' && r.waLink && (
+                          <a
+                            href={r.waLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-green-50 text-green-700 rounded-xl hover:bg-green-100"
+                          >
+                            <MessageSquare size={12} /> Kirim WA
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
-      {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
     </div>
   )
 }

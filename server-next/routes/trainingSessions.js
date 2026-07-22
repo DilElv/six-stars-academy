@@ -5,7 +5,7 @@ import { notifyRole } from '../lib/notify.js'
 
 const router = Router()
 
-router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
+router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'), async (req, res) => {
   try {
     const where = {}
     if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
