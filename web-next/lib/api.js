@@ -210,6 +210,10 @@ export async function createUser(payload) {
   return request('/admin/users', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export async function createStudent(payload) {
+  return request('/admin/students', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export async function updateUser(id, payload) {
   return request(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
@@ -352,6 +356,22 @@ export async function resetPassword(token, password) {
 
 export async function checkResetToken(token) {
   return request(`/password-reset/check?token=${token}`)
+}
+
+export async function getBranchPackages(branchId) {
+  return request(`/branch-packages/public${branchId ? `?branchId=${branchId}` : ''}`)
+}
+
+export async function getAllBranchPackages() {
+  return request('/branch-packages')
+}
+
+export async function updateBranchPackage(id, price) {
+  return request(`/branch-packages/${id}`, { method: 'PUT', body: JSON.stringify({ price }) })
+}
+
+export async function createBranchPackage(data) {
+  return request('/branch-packages', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export async function uploadFile(file) {

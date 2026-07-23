@@ -37,6 +37,9 @@ export default function DashboardShell({ role, title, navItems, children }) {
         }
         setUser(profile)
         setLoading(false)
+        if (profile.access === 'payment-only' && pathname !== '/dashboard/pembayaran') {
+          router.replace('/dashboard/pembayaran')
+        }
       })
       .catch(() => router.replace('/login'))
   }, [role, router])

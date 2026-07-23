@@ -28,7 +28,11 @@ router.post('/login', async (req, res) => {
 
 const DEFAULT_REGISTRATION_FEE = 750000
 
-async function getRegistrationFee() {
+async function getRegistrationFee(branchId) {
+  if (branchId) {
+    const branch = await prisma.branch.findUnique({ where: { id: branchId } })
+    if (branch?.registrationFee) return branch.registrationFee
+  }
   const row = await prisma.cmsContent.findFirst({ where: { section: 'settings' } })
   return row?.content?.registrationFee ?? DEFAULT_REGISTRATION_FEE
 }
@@ -80,7 +84,7 @@ router.post('/register', async (req, res) => {
 
     const ageGroup = assignAgeGroup(dateOfBirth)
     const hashed = await bcrypt.hash(password, 10)
-    const registrationFee = regFeeOverride ?? await getRegistrationFee()
+    const registrationFee = regFeeOverride ?? await getRegistrationFee(branchId)
     const pkgAmount = amount ?? pkg.price
 
     const result = await prisma.$transaction(async (tx) => {
@@ -160,7 +164,22 @@ router.get('/me', authenticate, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { branch: true } })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const { password: _pw, ...profile } = user
-    res.json(profile)
+
+    let access = 'full'
+    if (user.role === 'parent') {
+      const student = await prisma.student.findFirst({ where: { userId: user.id }, orderBy: { createdAt: 'asc' } })
+      if (student) {
+        const hasPendingPayment = await prisma.payment.findFirst({
+          where: { studentId: student.id, status: 'pending' },
+        })
+        const expired = student.packageEndDate && new Date(student.packageEndDate) < new Date()
+        if (hasPendingPayment || expired) {
+          access = 'payment-only'
+        }
+      }
+    }
+
+    res.json({ ...profile, access })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -168,11 +187,21 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 router.put('/me', authenticate, async (req, res) => {
-  const { name, phone, photo, bio, branchId } = req.body
+  const { name, phone, photo, bio, branchId, password } = req.body
   try {
+    const data = { name, phone, photo, bio }
+    if (password) {
+      if (password.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
+      data.password = await bcrypt.hash(password, 10)
+    }
+    if (req.user.role === 'coach' || req.user.role === 'head_coach') {
+      data.branchId = undefined
+    } else {
+      data.branchId = branchId !== undefined ? (branchId || null) : undefined
+    }
     const user = await prisma.user.update({
       where: { id: req.user.id },
-      data: { name, phone, photo, bio, branchId: branchId !== undefined ? (branchId || null) : undefined },
+      data,
       include: { branch: true },
     })
     const { password: _pw, ...profile } = user

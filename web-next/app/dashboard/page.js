@@ -28,23 +28,42 @@ export default function ParentDasborPage() {
   const [reports, setReports] = useState([])
   const [trainingSessions, setTrainingSessions] = useState([])
   const [myEvents, setMyEvents] = useState([])
+  const [attendances, setAttendances] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports()])
-      .then(([s, p, r]) => {
+    Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports(), api.getMyAttendance()])
+      .then(([s, p, r, att]) => {
         setStudent(s)
         setPayments(p)
         setReports(r)
+        setAttendances(att)
         if (s?.ageGroup && s?.branchId) {
-          api.getTrainingSessions(s.ageGroup, s.branchId).then(setTrainingSessions)
+          api.getTrainingSessions(s.ageGroup, s.branchId).then((sessions) => {
+            setTrainingSessions(sessions)
+          })
         }
         api.getMyEvents().then(setMyEvents)
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  const attendedDates = new Set(
+    (attendances || [])
+      .filter((a) => a.status === 'hadir')
+      .map((a) => {
+        const d = new Date(a.date)
+        return d.toISOString().slice(0, 10)
+      })
+  )
+
+  const forfeitedSessions = (trainingSessions || []).filter((ts) => {
+    const sDate = new Date(ts.date)
+    sDate.setHours(23, 59, 59, 999)
+    return sDate < new Date() && !attendedDates.has(new Date(ts.date).toISOString().slice(0, 10))
+  })
 
   if (loading) return null
   if (error) return <p className="text-sm text-red-500">{error}</p>
@@ -105,6 +124,37 @@ export default function ParentDasborPage() {
           </Link>
         ))}
       </div>
+
+      {/* Session counter */}
+      {student.totalSessions > 0 && (
+        <div className="glass-card rounded-3xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold text-navy-900">Sesi Latihan</div>
+            <div className="text-xs font-semibold text-navy-700">
+              {student.attendedSessions}/{student.totalSessions}
+            </div>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-gold-400 to-gold-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, (student.attendedSessions / student.totalSessions) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Forfeit warnings */}
+      {forfeitedSessions.length > 0 && (
+        <div className="space-y-2">
+          {forfeitedSessions.map((ts) => (
+            <div key={ts.id} className="bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 text-sm flex items-center gap-2">
+              <span className="font-semibold">Anda tidak hadir, sesi anda hangus</span>
+              <span className="text-red-400">·</span>
+              <span>{new Date(ts.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {trainingSessions.length > 0 && (
         <div>

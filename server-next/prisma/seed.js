@@ -24,8 +24,8 @@ async function main() {
   await prisma.branch.deleteMany()
 
   const branchDefs = [
-    { name: 'BSD', code: 'BSD' },
-    { name: 'Jakarta', code: 'JKT' },
+    { name: 'BSD', code: 'BSD', registrationFee: 750000 },
+    { name: 'Jakarta', code: 'JKT', registrationFee: 950000 },
   ]
   const branches = []
   for (const def of branchDefs) branches.push(await prisma.branch.create({ data: def }))
@@ -160,6 +160,19 @@ async function main() {
     ],
   })
   console.log('  ✓ Jadwal latihan demo dibuat')
+
+  const branchPriceDefs = [
+    { branchId: jkt.id, packageId: packages[0].id, price: 650000 },
+    { branchId: jkt.id, packageId: packages[1].id, price: 900000 },
+    { branchId: jkt.id, packageId: packages[2].id, price: 1500000 },
+    { branchId: jkt.id, packageId: packages[3].id, price: 2150000 },
+    { branchId: jkt.id, packageId: packages[4].id, price: 2600000 },
+    { branchId: jkt.id, packageId: packages[5].id, price: 3950000 },
+  ]
+  for (const def of branchPriceDefs) {
+    await prisma.branchPackage.create({ data: def })
+  }
+  console.log('  ✓ 6 Harga paket JKT disesuaikan (650k–3.95M)')
 
   console.log('Seeding complete!')
 }

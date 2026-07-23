@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Plus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
-import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
 
-const emptyForm = { ageGroup: AGE_GROUPS[0], day: '', startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
+const emptyForm = { day: '', startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
 export default function AdminJadwalPage() {
   const [schedules, setSchedules] = useState([])
@@ -42,7 +41,7 @@ export default function AdminJadwalPage() {
   }
 
   function openEdit(s) {
-    setForm({ ageGroup: s.ageGroup, day: s.day, startTime: s.startTime, endTime: s.endTime, location: s.location, coachId: s.coachId || '', branchId: s.branchId || '' })
+    setForm({ day: s.day, startTime: s.startTime, endTime: s.endTime, location: s.location, coachId: s.coachId || '', branchId: s.branchId || '' })
     setEditSchedule(s)
     setShowForm(true)
   }
@@ -87,8 +86,7 @@ export default function AdminJadwalPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Kelompok</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Hari</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Hari</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Waktu</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
@@ -98,9 +96,8 @@ export default function AdminJadwalPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredSchedules.map((s) => (
-                <tr key={s.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-navy-900">{s.ageGroup}</td>
-                  <td className="px-3 py-3 text-gray-500">{s.day}</td>
+                  <tr key={s.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-500">{s.day}</td>
                   <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
                   <td className="px-3 py-3 text-gray-500">{s.location}</td>
                   <td className="px-3 py-3">
@@ -131,10 +128,6 @@ export default function AdminJadwalPage() {
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-                <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
-              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Hari</label>
                 <input required placeholder="mis. Senin & Rabu" value={form.day} onChange={(e) => setForm((f) => ({ ...f, day: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />

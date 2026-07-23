@@ -42,10 +42,11 @@ model User {
 }
 
 model Branch {
-  id        String   @id @default(cuid())
-  name      String
-  code      String   @unique
-  status    String   @default("active")
+  id               String   @id @default(cuid())
+  name             String
+  code             String   @unique
+  status           String   @default("active")
+  registrationFee  Int      @default(750000)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -56,6 +57,7 @@ model Branch {
   fields           Field[]
   trainingSessions TrainingSession[]
   events           Event[]
+  branchPackages   BranchPackage[]
 
   @@map("branches")
 }
@@ -146,10 +148,25 @@ model Package {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  students Student[]
-  payments Payment[]
+  students        Student[]
+  payments        Payment[]
+  branchPackages  BranchPackage[]
 
   @@map("packages")
+}
+
+model BranchPackage {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  packageId String
+  package   Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  price     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([branchId, packageId])
+  @@map("branch_packages")
 }
 
 model Payment {

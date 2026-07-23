@@ -24,7 +24,7 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
   const { ageGroup, day, startTime, endTime, location, coachId, branchId } = req.body
   try {
-    const schedule = await prisma.schedule.create({ data: { ageGroup, day, startTime, endTime, location, coachId: coachId || null, branchId: branchId || null } })
+    const schedule = await prisma.schedule.create({ data: { ageGroup: ageGroup || '', day, startTime, endTime, location, coachId: coachId || null, branchId: branchId || null } })
     res.status(201).json(schedule)
   } catch (err) {
     console.error(err)
@@ -37,7 +37,7 @@ router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const schedule = await prisma.schedule.update({
       where: { id: req.params.id },
-      data: { ageGroup, day, startTime, endTime, location, coachId: coachId || null, status, branchId: branchId !== undefined ? (branchId || null) : undefined },
+      data: { ageGroup: ageGroup || '', day, startTime, endTime, location, coachId: coachId || null, status, branchId: branchId !== undefined ? (branchId || null) : undefined },
     })
     res.json(schedule)
   } catch (err) {

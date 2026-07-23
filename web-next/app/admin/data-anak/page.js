@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -22,13 +22,16 @@ export default function AdminDataAnakPage() {
   const [filterBranch, setFilterBranch] = useState('')
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [packages, setPackages] = useState([])
   const [requests, setRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
 
   function load() {
     setLoading(true)
-    api.getStudents().then(setStudents).finally(() => setLoading(false))
-    api.getBranches().then(setBranches)
+    api.getStudents().then(setStudents).catch(() => {}).finally(() => setLoading(false))
+    api.getBranches().then(setBranches).catch(() => {})
+    api.getPackages().then(setPackages).catch(() => {})
   }
 
   const loadRequests = useCallback(() => {
@@ -41,8 +44,12 @@ export default function AdminDataAnakPage() {
 
   async function handleDelete(id) {
     if (!confirm('Hapus data anak ini beserta seluruh riwayat pembayaran, absensi, dan penilaiannya?')) return
-    await api.deleteStudent(id)
-    load()
+    try {
+      await api.deleteStudent(id)
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
   }
 
   async function handleApprove(id) {
@@ -76,7 +83,12 @@ export default function AdminDataAnakPage() {
       {tab === 'data-anak' ? (
         <>
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
+              <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-1 bg-gold-400 hover:bg-gold-500 text-navy-900 text-xs font-bold px-3 py-1.5 rounded-xl">
+                <UserPlus size={14} /> Tambah Siswa
+              </button>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
               <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
@@ -133,6 +145,7 @@ export default function AdminDataAnakPage() {
 
           {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
           {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+          {showAddStudent && <AddStudentModal branches={branches} packages={packages} onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
       ) : (
         <div className="space-y-4">
@@ -224,6 +237,131 @@ function ViewModal({ student, onClose }) {
           <Row label="Paket" value={student.package?.name} />
           <Row label="Status" value={student.status} />
         </div>
+      </div>
+    </div>
+  )
+}
+
+function AddStudentModal({ branches, packages, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
+    fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
+    paymentStatus: 'pending',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (form.parentPassword.length < 6) return setError('Password minimal 6 karakter')
+    setSaving(true)
+    setError('')
+    try {
+      await api.createStudent(form)
+      onSaved()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
+          <UserPlus size={24} className="mx-auto text-gold-400 mb-2" />
+          <h3 className="font-bold text-white">Tambah Siswa Baru</h3>
+          <p className="text-xs text-gray-300 mt-1">Buat akun untuk siswa yang sudah ada sebelum aplikasi ini</p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
+
+          <div>
+            <h4 className="text-xs font-bold text-navy-900 mb-2 uppercase tracking-wider">Data Orang Tua</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Orang Tua</label>
+                <input required value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Email (untuk login)</label>
+                <input type="email" required value={form.parentEmail} onChange={(e) => setForm((f) => ({ ...f, parentEmail: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
+                  <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Password</label>
+                  <input type="password" required value={form.parentPassword} onChange={(e) => setForm((f) => ({ ...f, parentPassword: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" minLength={6} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <h4 className="text-xs font-bold text-navy-900 mb-2 uppercase tracking-wider">Data Siswa</h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Lengkap Siswa</label>
+                <input required value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
+                  <input type="date" required value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
+                  <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+                  <AppSelect
+                    value={form.branchId}
+                    onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                    className="w-full"
+                    allLabel="- Pilih -"
+                    placeholder="- Pilih -"
+                    options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
+                  <AppSelect
+                    value={form.packageId}
+                    onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
+                    className="w-full"
+                    allLabel="- Tanpa Paket -"
+                    placeholder="- Tanpa Paket -"
+                    options={packages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg)` }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Status Pembayaran</label>
+                <AppSelect
+                  value={form.paymentStatus}
+                  onChange={(v) => setForm((f) => ({ ...f, paymentStatus: v }))}
+                  className="w-full"
+                  options={[
+                    { value: 'pending', label: 'Pending — menunggu verifikasi' },
+                    { value: 'success', label: 'Lunas — sudah bayar offline' },
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-2.5 rounded-2xl disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />} Buat Akun & Daftarkan Siswa
+          </button>
+        </form>
       </div>
     </div>
   )

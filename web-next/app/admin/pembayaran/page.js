@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Wallet, CheckCircle2, Clock } from 'lucide-react'
+import { Check, Loader2, Wallet, CheckCircle2, Clock, FileSpreadsheet, FileText } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { exportPaymentsToExcel, exportPaymentsToPDF } from '@/lib/export'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -42,17 +43,21 @@ export default function AdminPembayaranPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Pembayaran</h1>
-        <AppSelect
-          value={filterStatus}
-          onChange={setFilterStatus}
-          allLabel="Semua Status"
-          placeholder="Semua Status"
-          options={[
-            { value: 'pending', label: 'Menunggu Verifikasi' },
-            { value: 'success', label: 'Lunas' },
-            { value: 'failed', label: 'Gagal' },
-          ]}
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <AppSelect
+            value={filterStatus}
+            onChange={setFilterStatus}
+            allLabel="Semua Status"
+            placeholder="Semua Status"
+            options={[
+              { value: 'pending', label: 'Menunggu Verifikasi' },
+              { value: 'success', label: 'Lunas' },
+              { value: 'failed', label: 'Gagal' },
+            ]}
+          />
+          <button onClick={() => exportPaymentsToExcel(payments)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl"><FileSpreadsheet size={14} /> Excel</button>
+          <button onClick={() => exportPaymentsToPDF(payments)} className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-xl"><FileText size={14} /> PDF</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">

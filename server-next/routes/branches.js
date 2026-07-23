@@ -27,11 +27,11 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
 })
 
 router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
-  const { name, code, status } = req.body
+  const { name, code, status, registrationFee } = req.body
   try {
     const branch = await prisma.branch.update({
       where: { id: req.params.id },
-      data: { name, code: code ? code.toUpperCase() : undefined, status },
+      data: { name, code: code ? code.toUpperCase() : undefined, status, registrationFee },
     })
     res.json(branch)
   } catch (err) {

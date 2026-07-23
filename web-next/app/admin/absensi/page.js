@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UserCheck } from 'lucide-react'
+import { UserCheck, FileSpreadsheet, FileText } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
+import { exportAttendanceToExcel, exportAttendanceToPDF } from '@/lib/export'
 
 const STATUS_LABEL = { hadir: 'Hadir', izin: 'Izin', sakit: 'Sakit', alfa: 'Alfa' }
 const STATUS_COLOR = {
@@ -56,6 +57,14 @@ export default function AdminAbsensiPage() {
           <DatePicker value={date} max={today} onChange={setDate} />
           <AppSelect value={branchId} onChange={setBranchId} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
           <AppSelect value={ageGroup} onChange={setAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+          <div className="flex items-center gap-1">
+            <button onClick={() => exportAttendanceToExcel(records, 'siswa')} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileSpreadsheet size={12} /> Excel Siswa</button>
+            <button onClick={() => exportAttendanceToPDF(records, 'siswa')} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileText size={12} /> PDF Siswa</button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => exportAttendanceToExcel(staffRecords, 'staff')} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileSpreadsheet size={12} /> Excel Staff</button>
+            <button onClick={() => exportAttendanceToPDF(staffRecords, 'staff')} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileText size={12} /> PDF Staff</button>
+          </div>
         </div>
       </div>
 

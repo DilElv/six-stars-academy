@@ -48,7 +48,22 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
       orderBy: { createdAt: 'asc' },
     })
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
-    res.json(student)
+
+    const totalSessions = student.package
+      ? student.package.sessionsPerWeek * 4 * student.package.durationMonths
+      : 0
+
+    const attendedSessions = student.packageStartDate && student.packageEndDate
+      ? await prisma.attendance.count({
+          where: {
+            studentId: student.id,
+            status: 'hadir',
+            date: { gte: student.packageStartDate, lte: student.packageEndDate },
+          },
+        })
+      : 0
+
+    res.json({ ...student, totalSessions, attendedSessions })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

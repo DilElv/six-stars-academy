@@ -33,15 +33,6 @@ function previewAgeGroup(dob) {
   return { age, label: bracket ? bracket.label : 'U-8' }
 }
 
-const CABANG_HARGA = {
-  JKT: {
-    '1-1': 650000, '1-2': 900000,
-    '3-1': 1500000, '3-2': 2150000,
-    '6-1': 2600000, '6-2': 3950000,
-    registrationFee: 950000,
-  },
-}
-
 function groupPackages(packages) {
   const byName = {}
   for (const p of packages) {
@@ -56,17 +47,28 @@ function getBranchCode(branchId, branches) {
   return branches.find((b) => b.id === branchId)?.code
 }
 
-function getBranchPrice(pkg, branchCode) {
-  const m = CABANG_HARGA[branchCode]
+function buildBranchPriceMap(branchPackages) {
+  const map = {}
+  for (const bp of branchPackages) {
+    const code = bp.branch?.code
+    if (!map[code]) map[code] = { packagePrices: {}, registrationFee: bp.branch?.registrationFee ?? 750000 }
+    const key = `${bp.package.durationMonths}-${bp.package.sessionsPerWeek}`
+    map[code].packagePrices[key] = bp.price
+  }
+  return map
+}
+
+function getBranchPrice(pkg, branchCode, branchPrices) {
+  const m = branchPrices[branchCode]
   if (m) {
     const key = `${pkg.durationMonths}-${pkg.sessionsPerWeek}`
-    return m[key] ?? pkg.price
+    return m.packagePrices[key] ?? pkg.price
   }
   return pkg.price
 }
 
-function getBranchRegFee(branchCode, defaultFee) {
-  return CABANG_HARGA[branchCode]?.registrationFee ?? defaultFee
+function getBranchRegFee(branchCode, branchPrices, defaultFee) {
+  return branchPrices[branchCode]?.registrationFee ?? defaultFee
 }
 
 function DaftarWizard() {
@@ -77,6 +79,7 @@ function DaftarWizard() {
   const [selectedPackage, setSelectedPackage] = useState(null)
   const [registrationFee, setRegistrationFee] = useState(750000)
   const [branches, setBranches] = useState([])
+  const [branchPrices, setBranchPrices] = useState({})
   const [form, setForm] = useState({
     fullName: '', dateOfBirth: '', position: 'CM', photo: '', branchId: '',
     parentName: '', parentPhone: '', address: '', email: '', password: '', confirmPassword: '',
@@ -100,6 +103,7 @@ function DaftarWizard() {
       setBranches(data)
       if (data.length) setForm((f) => ({ ...f, branchId: f.branchId || data[0].id }))
     })
+    api.getBranchPackages().then((data) => setBranchPrices(buildBranchPriceMap(data)))
   }, [searchParams])
 
   const grouped = groupPackages(packages)
@@ -173,8 +177,8 @@ function DaftarWizard() {
   }
 
   const branchCode = getBranchCode(form.branchId, branches)
-  const actualPrice = selectedPackage ? getBranchPrice(selectedPackage, branchCode) : 0
-  const actualRegFee = getBranchRegFee(branchCode, registrationFee)
+  const actualPrice = selectedPackage ? getBranchPrice(selectedPackage, branchCode, branchPrices) : 0
+  const actualRegFee = getBranchRegFee(branchCode, branchPrices, registrationFee)
   const totalAmount = actualPrice + actualRegFee
 
   return (
@@ -284,7 +288,7 @@ function DaftarWizard() {
                           }`}
                         >
                           <div className="text-xs text-gray-400">{opt.sessionsPerWeek} Sesi/Minggu</div>
-                          <div className="font-semibold text-navy-900">{formatRupiah(getBranchPrice(opt, branchCode))}</div>
+                          <div className="font-semibold text-navy-900">{formatRupiah(getBranchPrice(opt, branchCode, branchPrices))}</div>
                         </button>
                       ))}
                     </div>

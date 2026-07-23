@@ -13,15 +13,19 @@ export default function CoachUserManager({ role, label }) {
 
   function load() {
     setLoading(true)
-    api.getUsers(role).then(setUsers).finally(() => setLoading(false))
+    api.getUsers(role).then(setUsers).catch(() => {}).finally(() => setLoading(false))
   }
 
   useEffect(load, [role])
 
   async function handleDelete(id) {
     if (!confirm(`Hapus akun ${label.toLowerCase()} ini?`)) return
-    await api.deleteUser(id)
-    load()
+    try {
+      await api.deleteUser(id)
+      load()
+    } catch (err) {
+      alert(err.message)
+    }
   }
 
   return (
@@ -44,8 +48,9 @@ export default function CoachUserManager({ role, label }) {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Nama</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Email</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Telepon</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Absensi Dibuat</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Topik Dibuat</th>
+                {role !== 'admin' && <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>}
+                {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Absensi Dibuat</th>}
+                {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Topik Dibuat</th>}
                 <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
               </tr>
@@ -56,8 +61,9 @@ export default function CoachUserManager({ role, label }) {
                   <td className="px-4 py-3 font-medium text-navy-900">{u.name}</td>
                   <td className="px-3 py-3 text-gray-500">{u.email}</td>
                   <td className="px-3 py-3 text-gray-500">{u.phone || '-'}</td>
-                  <td className="px-3 py-3 text-center">{u._count?.coachAttendances ?? 0}</td>
-                  <td className="px-3 py-3 text-center">{u._count?.trainingSessions ?? 0}</td>
+                  {role !== 'admin' && <td className="px-3 py-3 text-gray-500">{u.branch?.name || '-'}</td>}
+                  {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.coachAttendances ?? 0}</td>}
+                  {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.trainingSessions ?? 0}</td>}
                   <td className="px-3 py-3 text-center">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                       {u.status === 'active' ? 'Aktif' : 'Nonaktif'}
@@ -84,9 +90,12 @@ export default function CoachUserManager({ role, label }) {
 }
 
 function AddModal({ role, label, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', branchId: '' })
+  const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => { if (role !== 'admin') api.getBranches().then(setBranches) }, [role])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -128,6 +137,18 @@ function AddModal({ role, label, onClose, onSaved }) {
             <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
             <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
+          {role !== 'admin' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+              <AppSelect
+                value={form.branchId}
+                onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                className="w-full"
+                options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                placeholder="Pilih cabang..."
+              />
+            </div>
+          )}
           <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving && <Loader2 size={14} className="animate-spin" />} Buat Akun
           </button>
@@ -138,9 +159,12 @@ function AddModal({ role, label, onClose, onSaved }) {
 }
 
 function EditModal({ user, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: user.name, phone: user.phone || '', status: user.status, password: '' })
+  const [form, setForm] = useState({ name: user.name, phone: user.phone || '', status: user.status, password: '', branchId: user.branchId || '' })
+  const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => { if (user.role !== 'admin') api.getBranches().then(setBranches) }, [user.role])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -184,6 +208,18 @@ function EditModal({ user, onClose, onSaved }) {
               options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
             />
           </div>
+          {user.role !== 'admin' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+              <AppSelect
+                value={form.branchId}
+                onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                className="w-full"
+                options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                placeholder="Pilih cabang..."
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Password baru (kosongkan jika tidak diubah)</label>
             <input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />

@@ -1,6 +1,10 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 import authRoutes from './routes/auth.js'
 import cmsRoutes from './routes/cms.js'
 import packagesRoutes from './routes/packages.js'
@@ -20,12 +24,14 @@ import fieldsRoutes from './routes/fields.js'
 import eventsRoutes from './routes/events.js'
 import staffAttendanceRoutes from './routes/staffAttendance.js'
 import passwordResetRoutes from './routes/passwordReset.js'
+import branchPackagesRoutes from './routes/branchPackages.js'
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
-app.use('/rapor', express.static(new URL('./uploads/rapor', import.meta.url).pathname))
+app.use('/rapor', express.static(path.join(__dirname, 'uploads', 'rapor')))
+app.use('/api/uploads/photos', express.static(path.join(__dirname, 'uploads', 'photos')))
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }))
 app.use('/api/auth', authRoutes)
@@ -47,6 +53,7 @@ app.use('/api/fields', fieldsRoutes)
 app.use('/api/events', eventsRoutes)
 app.use('/api/staff-attendance', staffAttendanceRoutes)
 app.use('/api/password-reset', passwordResetRoutes)
+app.use('/api/branch-packages', branchPackagesRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
