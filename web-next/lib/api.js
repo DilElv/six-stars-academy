@@ -387,3 +387,23 @@ export async function uploadFile(file) {
   if (!res.ok) throw new Error(data.error || 'Upload failed')
   return data.url
 }
+
+export async function createPromoCode(payload) {
+  return request('/promo-codes', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function getPromoCodes() {
+  return request('/promo-codes')
+}
+
+export async function updatePromoCode(id, payload) {
+  return request(`/promo-codes/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deletePromoCode(id) {
+  return request(`/promo-codes/${id}`, { method: 'DELETE' })
+}
+
+export async function validatePromoCode(code, packageId, amount) {
+  return request('/promo-codes/validate', { method: 'POST', body: JSON.stringify({ code, packageId, amount }) })
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -248,8 +248,27 @@ function AddStudentModal({ branches, packages, onClose, onSaved }) {
     fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
     paymentStatus: 'pending',
   })
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoDiscount, setPromoDiscount] = useState(null)
+  const [promoChecking, setPromoChecking] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  async function handleCheckPromo() {
+    if (!promoCodeInput.trim() || !form.packageId) return
+    setPromoChecking(true)
+    setError('')
+    try {
+      const pkg = packages.find((p) => p.id === form.packageId)
+      const result = await api.validatePromoCode(promoCodeInput.trim(), form.packageId, pkg?.price || 0)
+      setPromoDiscount(result)
+    } catch (err) {
+      setPromoDiscount(null)
+      setError(err.message)
+    } finally {
+      setPromoChecking(false)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -257,7 +276,10 @@ function AddStudentModal({ branches, packages, onClose, onSaved }) {
     setSaving(true)
     setError('')
     try {
-      await api.createStudent(form)
+      await api.createStudent({
+        ...form,
+        ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
+      })
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -354,6 +376,30 @@ function AddStudentModal({ branches, packages, onClose, onSaved }) {
                     { value: 'success', label: 'Lunas — sudah bayar offline' },
                   ]}
                 />
+              </div>
+              <div className="pt-3 border-t border-gray-100">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Kode Promo (opsional)</label>
+                <div className="flex gap-2">
+                  <input
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value)}
+                    placeholder="Masukkan kode promo"
+                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase"
+                    disabled={promoDiscount !== null}
+                  />
+                  {promoDiscount ? (
+                    <button type="button" onClick={() => { setPromoDiscount(null); setPromoCodeInput('') }} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
+                  ) : (
+                    <button type="button" onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim() || !form.packageId} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50">
+                      {promoChecking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    </button>
+                  )}
+                </div>
+                {promoDiscount && (
+                  <div className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
+                    Diskon {promoDiscount.discountPercent}% — Hemat Rp{(promoDiscount.discount || 0).toLocaleString('id-ID')}
+                  </div>
+                )}
               </div>
             </div>
           </div>

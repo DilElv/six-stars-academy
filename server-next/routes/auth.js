@@ -65,7 +65,7 @@ router.post('/register', async (req, res) => {
   const {
     packageId, fullName, dateOfBirth, position, photo,
     parentName, parentPhone, address, email, password, branchId,
-    amount, registrationFee: regFeeOverride,
+    amount, registrationFee: regFeeOverride, promoCode,
   } = req.body
 
   try {
@@ -120,17 +120,45 @@ router.post('/register', async (req, res) => {
       })
 
       const totalAmount = pkgAmount + registrationFee
+
+      let discount = 0
+      let promoCodeRecord = null
+      if (promoCode) {
+        promoCodeRecord = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
+        if (!promoCodeRecord) throw new Error('Kode promo tidak ditemukan')
+        if (promoCodeRecord.status !== 'active') throw new Error('Kode promo sudah tidak aktif')
+        if (promoCodeRecord.expiresAt && new Date(promoCodeRecord.expiresAt) < new Date()) throw new Error('Kode promo sudah kadaluarsa')
+        if (promoCodeRecord.usedCount >= promoCodeRecord.maxUses) throw new Error('Kode promo sudah habis dipakai')
+
+        if (!promoCodeRecord.allPackages) {
+          const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
+          if (!valid) throw new Error('Kode promo tidak berlaku untuk paket ini')
+        }
+
+        discount = Math.round(totalAmount * promoCodeRecord.discountPercent / 100)
+      }
+
       const payment = await tx.payment.create({
         data: {
           studentId: student.id,
           packageId: pkg.id,
           amount: pkgAmount,
           registrationFee,
-          totalAmount,
+          totalAmount: totalAmount - discount,
           paymentType: 'registration',
           status: 'pending',
         },
       })
+
+      if (promoCodeRecord) {
+        await tx.promoCode.update({
+          where: { id: promoCodeRecord.id },
+          data: { usedCount: { increment: 1 } },
+        })
+        await tx.promoCodeUsage.create({
+          data: { promoCodeId: promoCodeRecord.id, paymentId: payment.id },
+        })
+      }
 
       const card = await tx.studentCard.create({
         data: {

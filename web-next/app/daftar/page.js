@@ -88,6 +88,9 @@ function DaftarWizard() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoDiscount, setPromoDiscount] = useState(null)
+  const [promoChecking, setPromoChecking] = useState(false)
 
   useEffect(() => {
     api.getPackages().then((data) => {
@@ -97,13 +100,15 @@ function DaftarWizard() {
         const found = data.find((p) => p.id === preId)
         if (found) setSelectedPackage(found)
       }
-    })
-    api.getSettings().then((s) => setRegistrationFee(s.registrationFee))
+    }).catch((err) => setError(err.message))
+    api.getSettings().then((s) => setRegistrationFee(s.registrationFee)).catch(() => {})
     api.getBranches().then((data) => {
       setBranches(data)
       if (data.length) setForm((f) => ({ ...f, branchId: f.branchId || data[0].id }))
+    }).catch((err) => {
+      setError('Gagal memuat data cabang: ' + err.message)
     })
-    api.getBranchPackages().then((data) => setBranchPrices(buildBranchPriceMap(data)))
+    api.getBranchPackages().then((data) => setBranchPrices(buildBranchPriceMap(data))).catch(() => {})
   }, [searchParams])
 
   const grouped = groupPackages(packages)
@@ -166,6 +171,7 @@ function DaftarWizard() {
         password: form.password,
         amount: actualPrice,
         registrationFee: actualRegFee,
+        ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
       })
       setResult(data)
       setStep(6)
@@ -176,10 +182,27 @@ function DaftarWizard() {
     }
   }
 
+  async function handleCheckPromo() {
+    if (!promoCodeInput.trim() || !selectedPackage) return
+    setPromoChecking(true)
+    setError('')
+    try {
+      const result = await api.validatePromoCode(promoCodeInput.trim(), selectedPackage.id, actualPrice)
+      setPromoDiscount(result)
+    } catch (err) {
+      setPromoDiscount(null)
+      setError(err.message)
+    } finally {
+      setPromoChecking(false)
+    }
+  }
+
   const branchCode = getBranchCode(form.branchId, branches)
   const actualPrice = selectedPackage ? getBranchPrice(selectedPackage, branchCode, branchPrices) : 0
   const actualRegFee = getBranchRegFee(branchCode, branchPrices, registrationFee)
   const totalAmount = actualPrice + actualRegFee
+  const discountAmount = promoDiscount?.discount || 0
+  const finalAmount = Math.max(0, totalAmount - discountAmount)
 
   return (
     <AuthBackground className="py-10 px-4">
@@ -306,9 +329,33 @@ function DaftarWizard() {
                 <Row label={`Paket ${selectedPackage?.name} (${selectedPackage?.sessionsPerWeek}x/minggu)`} value={formatRupiah(actualPrice)} />
                 <Row label="Biaya Pendaftaran (Jersey 2 set, kaos kaki, 1 bola)" value={formatRupiah(actualRegFee)} />
               </dl>
+
+              <div className="glass-card rounded-2xl p-4 mb-4 border border-gold-200">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Punya Kode Promo?</label>
+                <div className="flex gap-2">
+                  <input
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value)}
+                    placeholder="Masukkan kode promo"
+                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase"
+                    disabled={promoDiscount !== null}
+                  />
+                  {promoDiscount ? (
+                    <button onClick={() => { setPromoDiscount(null); setPromoCodeInput('') }} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
+                  ) : (
+                    <button onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim()} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50">{promoChecking ? <Loader2 size={14} className="animate-spin" /> : 'Cek'}</button>
+                  )}
+                </div>
+                {promoDiscount && (
+                  <div className="mt-2 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
+                    Diskon {promoDiscount.discountPercent}% — Hemat {formatRupiah(discountAmount)}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-between items-center bg-navy-900 text-white rounded-2xl px-4 py-3">
                 <span className="text-sm font-medium">Total Tagihan</span>
-                <span className="font-bold text-gold-400">{formatRupiah(totalAmount)}</span>
+                <span className="font-bold text-gold-400">{discountAmount > 0 ? <>{formatRupiah(finalAmount)} <span className="text-xs text-gray-400 line-through">{formatRupiah(totalAmount)}</span></> : formatRupiah(totalAmount)}</span>
               </div>
             </>
           )}
@@ -321,7 +368,8 @@ function DaftarWizard() {
               </p>
               <div className="text-sm space-y-1 mb-4">
                 <Row label="Paket" value={selectedPackage ? `${selectedPackage.name} · ${selectedPackage.sessionsPerWeek}x/minggu` : '-'} />
-                <Row label="Total Tagihan" value={formatRupiah(totalAmount)} />
+                {discountAmount > 0 && <Row label="Diskon Promo" value={`-${formatRupiah(discountAmount)}`} />}
+                <Row label="Total Tagihan" value={formatRupiah(finalAmount)} />
               </div>
               <button
                 onClick={handleConfirm}
@@ -342,7 +390,7 @@ function DaftarWizard() {
                 ID Siswa: <b className="text-navy-900">{result.student.studentId}</b>
               </p>
               <p className="text-sm text-gray-500 mb-6">
-                Total tagihan {formatRupiah(result.payment.totalAmount)} berstatus <b>menunggu verifikasi</b>. Login untuk melihat detail.
+                Total tagihan {formatRupiah(result.payment.totalAmount)}{result.payment.totalAmount < (actualPrice + actualRegFee) ? ` (setelah diskon ${formatRupiah((actualPrice + actualRegFee) - result.payment.totalAmount)})` : ''} berstatus <b>menunggu verifikasi</b>. Login untuk melihat detail.
               </p>
               <button
                 onClick={() => router.push('/dashboard')}

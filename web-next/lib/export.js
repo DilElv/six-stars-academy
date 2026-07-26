@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import { jsPDF } from 'jspdf'
+import { autoTable } from 'jspdf-autotable'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -46,7 +46,7 @@ export function exportPaymentsToPDF(payments) {
     new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID'),
   ])
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: 32,
     head: [['Nama Siswa', 'ID', 'Orang Tua', 'Paket', 'Total', 'Status', 'Tanggal']],
     body: rows,
@@ -140,7 +140,7 @@ export function exportAttendanceToPDF(records, type) {
     }
   }
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: 32,
     head,
     body,

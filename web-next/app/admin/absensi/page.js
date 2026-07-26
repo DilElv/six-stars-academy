@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { UserCheck, FileSpreadsheet, FileText } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { UserCheck, FileSpreadsheet, FileText, Download } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
@@ -27,9 +27,19 @@ export default function AdminAbsensiPage() {
   const [records, setRecords] = useState([])
   const [staffRecords, setStaffRecords] = useState([])
   const [loading, setLoading] = useState(true)
+  const [exportOpen, setExportOpen] = useState(false)
+  const exportRef = useRef(null)
 
   useEffect(() => {
     api.getBranches().then(setBranches)
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
   useEffect(() => {
@@ -57,13 +67,19 @@ export default function AdminAbsensiPage() {
           <DatePicker value={date} max={today} onChange={setDate} />
           <AppSelect value={branchId} onChange={setBranchId} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
           <AppSelect value={ageGroup} onChange={setAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
-          <div className="flex items-center gap-1">
-            <button onClick={() => exportAttendanceToExcel(records, 'siswa')} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileSpreadsheet size={12} /> Excel Siswa</button>
-            <button onClick={() => exportAttendanceToPDF(records, 'siswa')} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileText size={12} /> PDF Siswa</button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button onClick={() => exportAttendanceToExcel(staffRecords, 'staff')} className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileSpreadsheet size={12} /> Excel Staff</button>
-            <button onClick={() => exportAttendanceToPDF(staffRecords, 'staff')} className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-2.5 py-1.5 rounded-lg"><FileText size={12} /> PDF Staff</button>
+          <div className="relative" ref={exportRef}>
+            <button onClick={() => setExportOpen(!exportOpen)} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold px-3 py-2 rounded-xl"><Download size={14} /> Export</button>
+            {exportOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 py-1 min-w-[180px] overflow-hidden">
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Absensi Siswa</div>
+                <button onClick={() => { exportAttendanceToExcel(records, 'siswa'); setExportOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><FileSpreadsheet size={14} className="text-emerald-600" /> Excel</button>
+                <button onClick={() => { exportAttendanceToPDF(records, 'siswa'); setExportOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><FileText size={14} className="text-red-600" /> PDF</button>
+                <div className="border-t border-gray-100 my-1" />
+                <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Absensi Staff</div>
+                <button onClick={() => { exportAttendanceToExcel(staffRecords, 'staff'); setExportOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><FileSpreadsheet size={14} className="text-emerald-600" /> Excel</button>
+                <button onClick={() => { exportAttendanceToPDF(staffRecords, 'staff'); setExportOpen(false) }} className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><FileText size={14} className="text-red-600" /> PDF</button>
+              </div>
+            )}
           </div>
         </div>
       </div>

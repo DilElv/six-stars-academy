@@ -158,7 +158,7 @@ router.post('/students', async (req, res) => {
     parentName, parentEmail, parentPhone, parentPassword,
     fullName, dateOfBirth, position, photo,
     packageId, branchId,
-    paymentStatus, amount, registrationFee,
+    paymentStatus, amount, registrationFee, promoCode,
   } = req.body
 
   try {
@@ -205,18 +205,46 @@ router.post('/students', async (req, res) => {
       if (pkg) {
         const pkgAmount = amount ?? pkg.price
         const regFee = registrationFee ?? 750000
-        await tx.payment.create({
+        let totalAmount = pkgAmount + regFee
+
+        let discount = 0
+        if (promoCode) {
+          const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
+          if (!promo) throw new Error('Kode promo tidak ditemukan')
+          if (promo.status !== 'active') throw new Error('Kode promo sudah tidak aktif')
+          if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) throw new Error('Kode promo sudah kadaluarsa')
+          if (promo.usedCount >= promo.maxUses) throw new Error('Kode promo sudah habis dipakai')
+          if (!promo.allPackages) {
+            const valid = promo.packages.some((p) => p.packageId === pkg.id)
+            if (!valid) throw new Error('Kode promo tidak berlaku untuk paket ini')
+          }
+          discount = Math.round(totalAmount * promo.discountPercent / 100)
+          totalAmount -= discount
+        }
+
+        const payment = await tx.payment.create({
           data: {
             studentId: student.id,
             packageId: pkg.id,
             amount: pkgAmount,
             registrationFee: regFee,
-            totalAmount: pkgAmount + regFee,
+            totalAmount,
             paymentType: 'registration',
             status: paymentStatus || 'pending',
             paidAt: paymentStatus === 'success' ? new Date() : null,
           },
         })
+
+        if (promoCode) {
+          const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() } })
+          await tx.promoCode.update({
+            where: { id: promo.id },
+            data: { usedCount: { increment: 1 } },
+          })
+          await tx.promoCodeUsage.create({
+            data: { promoCodeId: promo.id, paymentId: payment.id },
+          })
+        }
       }
 
       await tx.studentCard.create({

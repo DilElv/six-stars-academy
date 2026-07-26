@@ -25,6 +25,7 @@ import eventsRoutes from './routes/events.js'
 import staffAttendanceRoutes from './routes/staffAttendance.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import branchPackagesRoutes from './routes/branchPackages.js'
+import promoCodesRoutes from './routes/promoCodes.js'
 
 const app = express()
 
@@ -54,6 +55,7 @@ app.use('/api/events', eventsRoutes)
 app.use('/api/staff-attendance', staffAttendanceRoutes)
 app.use('/api/password-reset', passwordResetRoutes)
 app.use('/api/branch-packages', branchPackagesRoutes)
+app.use('/api/promo-codes', promoCodesRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
@@ -61,4 +63,5 @@ app.use((err, req, res, next) => {
 })
 
 const PORT = process.env.PORT || 3002
-app.listen(PORT, () => console.log(`Server-next running on http://localhost:${PORT}`))
+const HOST = process.env.HOST || '0.0.0.0'
+app.listen(PORT, HOST, () => console.log(`Server-next running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
