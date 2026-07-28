@@ -10,6 +10,12 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
     const where = {}
     if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
     if (req.query.branchId) where.branchId = req.query.branchId
+
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      where.branchId = coach?.branchId || '__none__'
+    }
+
     const sessions = await prisma.trainingSession.findMany({
       where,
       include: {

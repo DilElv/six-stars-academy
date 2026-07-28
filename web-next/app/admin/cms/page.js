@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Sparkles, LayoutList, CalendarClock, Images, Handshake } from 'lucide-react'
+import { Sparkles, LayoutList, CalendarClock, Images, Handshake, Award, PackageSearch } from 'lucide-react'
 
 const MENU = [
   { href: '/admin/cms/statistik', label: 'Statistik Beranda', desc: 'Angka-angka di bawah hero landing page (jumlah siswa, pelatih, dst).', icon: Sparkles },
@@ -9,6 +9,9 @@ const MENU = [
   { href: '/admin/cms/jadwal', label: 'Jadwal Latihan', desc: 'Cuplikan jadwal mingguan di halaman /jadwal.', icon: CalendarClock },
   { href: '/admin/cms/galeri', label: 'Galeri Foto', desc: 'Foto-foto momen latihan di halaman /galeri.', icon: Images },
   { href: '/admin/cms/sponsor', label: 'Sponsor & Mitra', desc: 'Daftar nama mitra/sponsor di halaman /sponsor.', icon: Handshake },
+  { href: '/admin/cms/manfaat', label: 'Manfaat Bergabung', desc: 'Daftar benefit yang tampil di halaman pendaftaran.', icon: Award },
+  { href: '/admin/cms/paket-info', label: 'Deskripsi Paket', desc: 'Penjelasan tiap durasi paket di halaman pendaftaran.', icon: PackageSearch },
+  { href: '/admin/cms/jadwal-daftar', label: 'Jadwal per Cabang (Daftar)', desc: 'Jadwal latihan per cabang di halaman pendaftaran.', icon: CalendarClock },
 ]
 
 export default function AdminCmsMenuPage() {

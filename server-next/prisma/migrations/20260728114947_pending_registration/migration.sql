@@ -1,0 +1,31 @@
+-- CreateTable
+CREATE TABLE "pending_registrations" (
+    "id" TEXT NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "dateOfBirth" TIMESTAMP(3) NOT NULL,
+    "position" TEXT NOT NULL,
+    "photo" TEXT,
+    "branchId" TEXT,
+    "parentName" TEXT NOT NULL,
+    "parentPhone" TEXT NOT NULL,
+    "address" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "packageId" TEXT NOT NULL,
+    "amount" INTEGER NOT NULL,
+    "registrationFee" INTEGER NOT NULL,
+    "totalAmount" INTEGER NOT NULL,
+    "promoCode" TEXT,
+    "paymentMethod" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'pending',
+    "transactionId" TEXT,
+    "paymentLink" TEXT,
+    "qrString" TEXT,
+    "failReason" TEXT,
+    "callbackPayload" JSONB,
+    "studentId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "pending_registrations_pkey" PRIMARY KEY ("id")
+);

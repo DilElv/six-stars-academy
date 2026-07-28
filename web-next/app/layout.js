@@ -1,6 +1,7 @@
 import localFont from "next/font/local";
 import { Outfit, Oswald } from "next/font/google";
 import "./globals.css";
+import WhatsAppFloatingButton from "@/components/WhatsAppFloatingButton";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} ${oswald.variable} antialiased`}
       >
         {children}
+        <WhatsAppFloatingButton />
       </body>
     </html>
   );

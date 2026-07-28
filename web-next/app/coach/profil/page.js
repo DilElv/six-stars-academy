@@ -3,19 +3,19 @@
 import { useEffect, useState } from 'react'
 import { Save, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
-import { AppSelect } from '@/components/ui/app-select'
 
 export default function CoachProfilPage() {
   const [form, setForm] = useState(null)
+  const [branchName, setBranchName] = useState('')
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  const [branches, setBranches] = useState([])
-
   useEffect(() => {
-    api.getMe().then((profile) => setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '', branchId: profile.branchId || '' }))
-    api.getBranches().then(setBranches)
+    api.getMe().then((profile) => {
+      setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '' })
+      setBranchName(profile.branch ? `${profile.branch.name} (${profile.branch.code})` : 'Belum ditentukan')
+    })
   }, [])
 
   async function handlePhotoChange(e) {
@@ -81,14 +81,10 @@ export default function CoachProfilPage() {
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-          <AppSelect
-            value={form.branchId}
-            onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-            className="w-full"
-            allLabel="- Belum ditentukan -"
-            placeholder="- Belum ditentukan -"
-            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-          />
+          <div className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-2xl text-sm text-gray-500">
+            {branchName}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1">Cabang ditentukan oleh admin dan tidak bisa diubah sendiri.</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Bio</label>

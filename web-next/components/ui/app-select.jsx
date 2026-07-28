@@ -17,10 +17,12 @@ export function AppSelect({ value, onChange, placeholder, options, className, al
     ...Object.fromEntries(options.map((opt) => [opt.value, opt.label])),
   }
 
+  const isEmpty = value === '' || value === undefined || value === null
+
   return (
     <Select
       items={items}
-      value={value === '' || value === undefined ? EMPTY : value}
+      value={isEmpty ? (allLabel !== undefined ? EMPTY : null) : value}
       onValueChange={(v) => onChange(v === EMPTY ? '' : v)}
     >
       <SelectTrigger className={className}>

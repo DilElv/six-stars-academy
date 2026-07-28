@@ -1,10 +1,9 @@
 import { Router } from 'express'
-import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
-import { notifyUser } from '../lib/notify.js'
+import { createBillingFor } from '../lib/paymentHelpers.js'
 
 const router = Router()
 
@@ -37,35 +36,16 @@ async function getRegistrationFee(branchId) {
   return row?.content?.registrationFee ?? DEFAULT_REGISTRATION_FEE
 }
 
-const AGE_GROUP_BRACKETS = [
-  { label: 'U-8', min: 0, max: 8 },
-  { label: 'U-10', min: 9, max: 10 },
-  { label: 'U-12', min: 11, max: 12 },
-  { label: 'U-14', min: 13, max: 14 },
-  { label: 'U-16', min: 15, max: 16 },
-  { label: 'U-18', min: 17, max: 999 },
-]
 
-function calcAge(dob) {
-  const birth = new Date(dob)
-  const today = new Date()
-  let age = today.getFullYear() - birth.getFullYear()
-  const m = today.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
-  return age
-}
-
-function assignAgeGroup(dob) {
-  const age = calcAge(dob)
-  const bracket = AGE_GROUP_BRACKETS.find((b) => age >= b.min && age <= b.max)
-  return bracket ? bracket.label : AGE_GROUP_BRACKETS[0].label
-}
-
+// No User/Student/Payment is created here. A PendingRegistration row holds the
+// wizard data + billing link; the real account is only created once the
+// Rintisan webhook confirms the payment succeeded (see convertPendingRegistration
+// in lib/paymentHelpers.js, called from routes/payments.js's callback handler).
 router.post('/register', async (req, res) => {
   const {
     packageId, fullName, dateOfBirth, position, photo,
     parentName, parentPhone, address, email, password, branchId,
-    amount, registrationFee: regFeeOverride, promoCode,
+    amount, registrationFee: regFeeOverride, promoCode, paymentMethod,
   } = req.body
 
   try {
@@ -82,105 +62,95 @@ router.post('/register', async (req, res) => {
     const pkg = await prisma.package.findUnique({ where: { id: packageId } })
     if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
 
-    const ageGroup = assignAgeGroup(dateOfBirth)
     const hashed = await bcrypt.hash(password, 10)
     const registrationFee = regFeeOverride ?? await getRegistrationFee(branchId)
     const pkgAmount = amount ?? pkg.price
+    const totalAmount = pkgAmount + registrationFee
 
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { name: parentName, email, password: hashed, role: 'parent', phone: parentPhone },
-      })
-
-      const count = await tx.student.count()
-      const studentId = `SS-${String(count + 1).padStart(4, '0')}`
-
-      const packageStartDate = new Date()
-      const packageEndDate = new Date(packageStartDate)
-      packageEndDate.setMonth(packageEndDate.getMonth() + pkg.durationMonths)
-
-      const student = await tx.student.create({
-        data: {
-          userId: user.id,
-          studentId,
-          fullName,
-          dateOfBirth: new Date(dateOfBirth),
-          position,
-          ageGroup,
-          photo: photo || null,
-          parentName,
-          parentPhone,
-          parentEmail: email,
-          address,
-          packageId: pkg.id,
-          packageStartDate,
-          packageEndDate,
-          branchId: branchId || null,
-        },
-      })
-
-      const totalAmount = pkgAmount + registrationFee
-
-      let discount = 0
-      let promoCodeRecord = null
-      if (promoCode) {
-        promoCodeRecord = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
-        if (!promoCodeRecord) throw new Error('Kode promo tidak ditemukan')
-        if (promoCodeRecord.status !== 'active') throw new Error('Kode promo sudah tidak aktif')
-        if (promoCodeRecord.expiresAt && new Date(promoCodeRecord.expiresAt) < new Date()) throw new Error('Kode promo sudah kadaluarsa')
-        if (promoCodeRecord.usedCount >= promoCodeRecord.maxUses) throw new Error('Kode promo sudah habis dipakai')
-
-        if (!promoCodeRecord.allPackages) {
-          const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
-          if (!valid) throw new Error('Kode promo tidak berlaku untuk paket ini')
-        }
-
-        discount = Math.round(totalAmount * promoCodeRecord.discountPercent / 100)
+    let discount = 0
+    if (promoCode) {
+      const promoCodeRecord = await prisma.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
+      if (!promoCodeRecord) return res.status(400).json({ error: 'Kode promo tidak ditemukan' })
+      if (promoCodeRecord.status !== 'active') return res.status(400).json({ error: 'Kode promo sudah tidak aktif' })
+      if (promoCodeRecord.expiresAt && new Date(promoCodeRecord.expiresAt) < new Date()) return res.status(400).json({ error: 'Kode promo sudah kadaluarsa' })
+      if (promoCodeRecord.usedCount >= promoCodeRecord.maxUses) return res.status(400).json({ error: 'Kode promo sudah habis dipakai' })
+      if (!promoCodeRecord.allPackages) {
+        const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
+        if (!valid) return res.status(400).json({ error: 'Kode promo tidak berlaku untuk paket ini' })
       }
+      discount = Math.round(totalAmount * promoCodeRecord.discountPercent / 100)
+    }
 
-      const payment = await tx.payment.create({
-        data: {
-          studentId: student.id,
-          packageId: pkg.id,
-          amount: pkgAmount,
-          registrationFee,
-          totalAmount: totalAmount - discount,
-          paymentType: 'registration',
-          status: 'pending',
-        },
-      })
-
-      if (promoCodeRecord) {
-        await tx.promoCode.update({
-          where: { id: promoCodeRecord.id },
-          data: { usedCount: { increment: 1 } },
-        })
-        await tx.promoCodeUsage.create({
-          data: { promoCodeId: promoCodeRecord.id, paymentId: payment.id },
-        })
-      }
-
-      const card = await tx.studentCard.create({
-        data: {
-          studentId: student.id,
-          qrCode: crypto.randomBytes(16).toString('hex'),
-          cardNumber: student.studentId,
-        },
-      })
-
-      return { user, student, payment, card }
+    const pending = await prisma.pendingRegistration.create({
+      data: {
+        fullName,
+        dateOfBirth: new Date(dateOfBirth),
+        position,
+        photo: photo || null,
+        branchId: branchId || null,
+        parentName,
+        parentPhone,
+        address,
+        email,
+        passwordHash: hashed,
+        packageId: pkg.id,
+        amount: pkgAmount,
+        registrationFee,
+        totalAmount: totalAmount - discount,
+        promoCode: promoCode || null,
+        paymentMethod: paymentMethod || null,
+      },
     })
 
-    await notifyUser(result.user.id, {
-      type: 'registration_success',
-      title: 'Pendaftaran Berhasil',
-      message: `Selamat datang! ${result.student.fullName} (${result.student.studentId}) berhasil terdaftar.`,
-      link: '/dashboard',
-    })
+    let rintisan = null
+    if (paymentMethod) {
+      try {
+        const result = await createBillingFor({
+          id: pending.id,
+          totalAmount: pending.totalAmount,
+          paymentMethod,
+          toName: parentName,
+          toEmail: email,
+          toPhone: parentPhone,
+          toAddress: address,
+          note: `Pendaftaran ${fullName}`,
+        })
+        await prisma.pendingRegistration.update({
+          where: { id: pending.id },
+          data: {
+            transactionId: result.trx_id || null,
+            paymentLink: result.rintisan_billing_link || result.payment_link || null,
+            qrString: result.qr_string || null,
+          },
+        })
+        rintisan = result
+      } catch (err) {
+        console.error('Rintisan checkout error saat registrasi:', err.message)
+        // Pending registration tetap tersimpan; parent bisa coba lagi (belum ada akun/token untuk itu saat ini).
+      }
+    }
 
-    const token = jwt.sign({ id: result.user.id, email: result.user.email, role: result.user.role }, process.env.JWT_SECRET, { expiresIn: '7d' })
-    const { password: _pw, ...profile } = result.user
-    res.status(201).json({ token, profile, student: result.student, payment: result.payment })
+    res.status(201).json({ pendingRegistrationId: pending.id, totalAmount: pending.totalAmount, rintisan })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Public: registration wizard polls this to know when the first payment has
+// gone through and the real account/student has been created.
+router.get('/pending-registration/:id', async (req, res) => {
+  try {
+    const pending = await prisma.pendingRegistration.findUnique({ where: { id: req.params.id } })
+    if (!pending) return res.status(404).json({ error: 'Pendaftaran tidak ditemukan' })
+    res.json({
+      status: pending.status,
+      paymentLink: pending.paymentLink,
+      qrString: pending.qrString,
+      paymentMethod: pending.paymentMethod,
+      totalAmount: pending.totalAmount,
+      failReason: pending.failReason,
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
@@ -9,8 +10,9 @@ import { DatePicker } from '@/components/ui/date-picker'
 
 const emptyForm = { ageGroup: AGE_GROUPS[0], date: new Date().toISOString().slice(0, 10), topicTitle: '', topicDescription: '', objective: '', duration: '', equipment: '', fieldId: '' }
 
-export default function TopikLatihanPage() {
-  const [ageGroup, setAgeGroup] = useState(AGE_GROUPS[0])
+function TopikLatihanContent() {
+  const searchParams = useSearchParams()
+  const [ageGroup, setAgeGroup] = useState(searchParams.get('ageGroup') || AGE_GROUPS[0])
   const [sessions, setSessions] = useState([])
   const [fields, setFields] = useState([])
   const [form, setForm] = useState(emptyForm)
@@ -131,6 +133,14 @@ export default function TopikLatihanPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function TopikLatihanPage() {
+  return (
+    <Suspense fallback={null}>
+      <TopikLatihanContent />
+    </Suspense>
   )
 }
 

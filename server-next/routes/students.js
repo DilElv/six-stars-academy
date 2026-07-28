@@ -28,6 +28,12 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
     const where = {}
     if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
     if (req.query.branchId) where.branchId = req.query.branchId
+
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      where.branchId = coach?.branchId || '__none__'
+    }
+
     const students = await prisma.student.findMany({
       where,
       include: { package: true, branch: true },

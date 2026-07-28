@@ -3,11 +3,22 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Check, ChevronRight, ChevronLeft, Loader2, Upload, PartyPopper } from 'lucide-react'
+import { Check, ChevronRight, ChevronLeft, Loader2, Upload, PartyPopper, ExternalLink, Clock, MapPin } from 'lucide-react'
 import * as api from '@/lib/api'
+import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import AuthBackground from '@/components/AuthBackground'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
+
+const FALLBACK_PAYMENT_METHODS = [
+  { value: 'QRIS', label: 'QRIS' },
+  { value: 'VAMANDIRI', label: 'Virtual Account Mandiri' },
+  { value: 'VABNI', label: 'Virtual Account BNI' },
+  { value: 'VABRI', label: 'Virtual Account BRI' },
+  { value: 'TOKOPEDIA CC', label: 'Kartu Kredit (Tokopedia)' },
+  { value: 'TOKOPEDIA NON CC', label: 'Tokopedia (Non Kartu Kredit)' },
+  { value: 'BLIBLI CC', label: 'Kartu Kredit (Blibli)' },
+]
 
 const AGE_GROUP_BRACKETS = [
   { label: 'U-8', min: 0, max: 8 },
@@ -51,7 +62,7 @@ function buildBranchPriceMap(branchPackages) {
   const map = {}
   for (const bp of branchPackages) {
     const code = bp.branch?.code
-    if (!map[code]) map[code] = { packagePrices: {}, registrationFee: bp.branch?.registrationFee ?? 750000 }
+    if (!map[code]) map[code] = { packagePrices: {} }
     const key = `${bp.package.durationMonths}-${bp.package.sessionsPerWeek}`
     map[code].packagePrices[key] = bp.price
   }
@@ -67,8 +78,8 @@ function getBranchPrice(pkg, branchCode, branchPrices) {
   return pkg.price
 }
 
-function getBranchRegFee(branchCode, branchPrices, defaultFee) {
-  return branchPrices[branchCode]?.registrationFee ?? defaultFee
+function getBranchRegFee(branchId, branches, defaultFee) {
+  return branches.find((b) => b.id === branchId)?.registrationFee ?? defaultFee
 }
 
 function DaftarWizard() {
@@ -91,6 +102,13 @@ function DaftarWizard() {
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [promoDiscount, setPromoDiscount] = useState(null)
   const [promoChecking, setPromoChecking] = useState(false)
+  const [paymentMethods, setPaymentMethods] = useState(FALLBACK_PAYMENT_METHODS)
+  const [paymentMethod, setPaymentMethod] = useState('QRIS')
+  const [benefits, setBenefits] = useState([])
+  const [packageInfo, setPackageInfo] = useState([])
+  const [registrationSchedule, setRegistrationSchedule] = useState([])
+  const [regStatus, setRegStatus] = useState(null)
+  const [checkingStatus, setCheckingStatus] = useState(false)
 
   useEffect(() => {
     api.getPackages().then((data) => {
@@ -109,6 +127,10 @@ function DaftarWizard() {
       setError('Gagal memuat data cabang: ' + err.message)
     })
     api.getBranchPackages().then((data) => setBranchPrices(buildBranchPriceMap(data))).catch(() => {})
+    api.getPaymentMethods().then((m) => { if (m?.length) setPaymentMethods(m) }).catch(() => {})
+    api.getCmsSection('benefits').then((data) => setBenefits(Array.isArray(data) ? data : [])).catch(() => {})
+    api.getCmsSection('packageInfo').then((data) => setPackageInfo(Array.isArray(data) ? data : [])).catch(() => {})
+    api.getCmsSection('registrationSchedule').then((data) => setRegistrationSchedule(Array.isArray(data) ? data : [])).catch(() => {})
   }, [searchParams])
 
   const grouped = groupPackages(packages)
@@ -171,6 +193,7 @@ function DaftarWizard() {
         password: form.password,
         amount: actualPrice,
         registrationFee: actualRegFee,
+        paymentMethod,
         ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
       })
       setResult(data)
@@ -181,6 +204,27 @@ function DaftarWizard() {
       setSubmitting(false)
     }
   }
+
+  async function checkRegistrationStatus(silent) {
+    if (!result?.pendingRegistrationId) return
+    if (!silent) setCheckingStatus(true)
+    try {
+      const data = await api.getPendingRegistration(result.pendingRegistrationId)
+      setRegStatus(data)
+    } catch {
+      // ignore transient errors, next poll will retry
+    } finally {
+      if (!silent) setCheckingStatus(false)
+    }
+  }
+
+  useEffect(() => {
+    if (step !== 6 || !result?.pendingRegistrationId) return
+    if (regStatus?.status === 'success' || regStatus?.status === 'failed') return
+    checkRegistrationStatus(true)
+    const interval = setInterval(() => checkRegistrationStatus(true), 5000)
+    return () => clearInterval(interval)
+  }, [step, result, regStatus?.status])
 
   async function handleCheckPromo() {
     if (!promoCodeInput.trim() || !selectedPackage) return
@@ -199,7 +243,7 @@ function DaftarWizard() {
 
   const branchCode = getBranchCode(form.branchId, branches)
   const actualPrice = selectedPackage ? getBranchPrice(selectedPackage, branchCode, branchPrices) : 0
-  const actualRegFee = getBranchRegFee(branchCode, branchPrices, registrationFee)
+  const actualRegFee = getBranchRegFee(form.branchId, branches, registrationFee)
   const totalAmount = actualPrice + actualRegFee
   const discountAmount = promoDiscount?.discount || 0
   const finalAmount = Math.max(0, totalAmount - discountAmount)
@@ -298,26 +342,63 @@ function DaftarWizard() {
               <h1 className="font-bold text-navy-900 text-lg mb-1">Pilih Paket Latihan</h1>
               <p className="text-sm text-gray-400 mb-6">Langkah 3 dari 5</p>
               <div className="space-y-3">
-                {grouped.map((g) => (
-                  <div key={g.name} className="border border-gray-200 rounded-2xl p-4">
-                    <div className="font-semibold text-navy-900 mb-2">{g.name}</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[g.opt1, g.opt2].filter(Boolean).map((opt) => (
-                        <button
-                          key={opt.id}
-                          onClick={() => setSelectedPackage(opt)}
-                          className={`text-left px-3 py-2 rounded-lg border text-sm ${
-                            selectedPackage?.id === opt.id ? 'border-gold-400 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="text-xs text-gray-400">{opt.sessionsPerWeek} Sesi/Minggu</div>
-                          <div className="font-semibold text-navy-900">{formatRupiah(getBranchPrice(opt, branchCode, branchPrices))}</div>
-                        </button>
-                      ))}
+                {grouped.map((g) => {
+                  const info = packageInfo.find((p) => String(p.durationMonths) === String(g.durationMonths))
+                  return (
+                    <div key={g.name} className="border border-gray-200 rounded-2xl p-4">
+                      <div className="font-semibold text-navy-900 mb-1">{g.name}</div>
+                      {info?.description && (
+                        <p className="text-xs text-gray-500 mb-3 leading-relaxed">{info.description}</p>
+                      )}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[g.opt1, g.opt2].filter(Boolean).map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => setSelectedPackage(opt)}
+                            className={`text-left px-3 py-2 rounded-lg border text-sm ${
+                              selectedPackage?.id === opt.id ? 'border-gold-400 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <div className="text-xs text-gray-400">{opt.sessionsPerWeek} Sesi/Minggu</div>
+                            <div className="font-semibold text-navy-900">{formatRupiah(getBranchPrice(opt, branchCode, branchPrices))}</div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
+
+              {registrationSchedule.filter((s) => s.branchCode === branchCode).length > 0 && (
+                <div className="mt-5">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Jadwal Latihan di Cabang Ini</div>
+                  <div className="space-y-2">
+                    {registrationSchedule.filter((s) => s.branchCode === branchCode).map((s, i) => (
+                      <div key={i} className="flex items-start gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-3.5 py-2.5">
+                        <div className="text-sm font-semibold text-navy-900 shrink-0 w-16">{s.day}</div>
+                        <div className="text-xs text-gray-500 space-y-0.5">
+                          <div className="flex items-center gap-1.5"><Clock size={12} /> {s.time}</div>
+                          <div className="flex items-center gap-1.5"><MapPin size={12} /> {s.location}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {benefits.length > 0 && (
+                <div className="mt-5">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">Manfaat yang Kamu Dapatkan</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                    {benefits.map((b, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                        <Check size={13} className="text-gold-500 shrink-0 mt-0.5" />
+                        <span>{b}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -362,42 +443,104 @@ function DaftarWizard() {
 
           {step === 5 && (
             <>
-              <h1 className="font-bold text-navy-900 text-lg mb-1">Konfirmasi Pendaftaran</h1>
+              <h1 className="font-bold text-navy-900 text-lg mb-1">Konfirmasi & Pembayaran</h1>
               <p className="text-sm text-gray-400 mb-6">
-                Langkah 5 dari 5 — Akun akan langsung aktif, status pembayaran <b>menunggu verifikasi Admin</b> (integrasi payment gateway menyusul).
+                Langkah 5 dari 5 — Akun akan langsung aktif, selesaikan pembayaran untuk mengaktifkan akses penuh.
               </p>
               <div className="text-sm space-y-1 mb-4">
                 <Row label="Paket" value={selectedPackage ? `${selectedPackage.name} · ${selectedPackage.sessionsPerWeek}x/minggu` : '-'} />
                 {discountAmount > 0 && <Row label="Diskon Promo" value={`-${formatRupiah(discountAmount)}`} />}
                 <Row label="Total Tagihan" value={formatRupiah(finalAmount)} />
               </div>
+
+              <label className="block text-xs font-semibold text-gray-500 mb-2">Pilih Metode Pembayaran</label>
+              <div className="grid grid-cols-2 gap-2 mb-5">
+                {paymentMethods.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(m.value)}
+                    className={`flex items-center gap-2 text-left px-3.5 py-2.5 rounded-2xl border text-xs font-medium transition-colors duration-150 ${
+                      paymentMethod === m.value
+                        ? 'border-gold-400 bg-gold-50 text-navy-900'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {PAYMENT_METHOD_LOGOS[m.value] && (
+                      <img src={PAYMENT_METHOD_LOGOS[m.value]} alt="" className="h-6 w-9 object-contain shrink-0" />
+                    )}
+                    <span className="min-w-0">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+
               <button
                 onClick={handleConfirm}
                 disabled={submitting}
                 className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-2xl disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                Daftar Sekarang
+                Daftar & Buat Tagihan
               </button>
             </>
           )}
 
           {step === 6 && result && (
             <div className="text-center py-4">
-              <PartyPopper className="w-10 h-10 text-gold-400 mx-auto mb-3" />
-              <h1 className="font-bold text-navy-900 text-lg mb-1">Pendaftaran Berhasil!</h1>
-              <p className="text-sm text-gray-500 mb-4">
-                ID Siswa: <b className="text-navy-900">{result.student.studentId}</b>
-              </p>
-              <p className="text-sm text-gray-500 mb-6">
-                Total tagihan {formatRupiah(result.payment.totalAmount)}{result.payment.totalAmount < (actualPrice + actualRegFee) ? ` (setelah diskon ${formatRupiah((actualPrice + actualRegFee) - result.payment.totalAmount)})` : ''} berstatus <b>menunggu verifikasi</b>. Login untuk melihat detail.
-              </p>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="w-full bg-navy-900 hover:bg-navy-800 text-white font-bold py-3 rounded-2xl"
-              >
-                Ke Dashboard
-              </button>
+              {regStatus?.status === 'success' ? (
+                <>
+                  <PartyPopper className="w-10 h-10 text-gold-400 mx-auto mb-3" />
+                  <h1 className="font-bold text-navy-900 text-lg mb-1">Pembayaran Berhasil!</h1>
+                  <p className="text-sm text-gray-500 mb-6">
+                    Akun sudah aktif. Silakan login untuk mengakses dashboard.
+                  </p>
+                  <button
+                    onClick={() => router.push('/login')}
+                    className="w-full bg-navy-900 hover:bg-navy-800 text-white font-bold py-3 rounded-2xl"
+                  >
+                    Ke Halaman Login
+                  </button>
+                </>
+              ) : regStatus?.status === 'failed' ? (
+                <>
+                  <h1 className="font-bold text-navy-900 text-lg mb-1">Pembayaran Gagal</h1>
+                  <p className="text-sm text-gray-500 mb-6">
+                    {regStatus.failReason || 'Pembayaran tidak berhasil.'} Akun belum dibuat karena pembayaran belum lunas. Silakan hubungi admin untuk bantuan.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="w-10 h-10 text-gold-400 mx-auto mb-3 animate-spin" />
+                  <h1 className="font-bold text-navy-900 text-lg mb-1">Menunggu Pembayaran</h1>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Total tagihan <b className="text-navy-900">{formatRupiah(result.totalAmount)}</b>. Akun & data anak baru akan aktif setelah pembayaran ini dikonfirmasi.
+                  </p>
+
+                  {(regStatus?.paymentLink || result.rintisan?.rintisan_billing_link || result.rintisan?.payment_link) ? (
+                    <a
+                      href={regStatus?.paymentLink || result.rintisan?.rintisan_billing_link || result.rintisan?.payment_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-2xl mb-3"
+                    >
+                      <ExternalLink size={16} /> Bayar Sekarang
+                    </a>
+                  ) : (
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3">
+                      Link pembayaran belum tersedia. Silakan hubungi admin.
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => checkRegistrationStatus()}
+                    disabled={checkingStatus}
+                    className="w-full flex items-center justify-center gap-2 border border-gray-200 text-navy-900 font-semibold py-3 rounded-2xl disabled:opacity-50"
+                  >
+                    {checkingStatus && <Loader2 size={15} className="animate-spin" />} Cek Status Pembayaran
+                  </button>
+                  <p className="text-[11px] text-gray-400 mt-3">Halaman ini otomatis mengecek status setiap beberapa detik.</p>
+                </>
+              )}
             </div>
           )}
 

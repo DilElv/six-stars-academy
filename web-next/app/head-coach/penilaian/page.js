@@ -2,11 +2,16 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Save, Loader2, FileText, Download, ChevronDown } from 'lucide-react'
+import { Save, Loader2, FileText, Download, ChevronDown, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { ASSESSMENT_CATEGORIES, scoreCategory } from '@/lib/assessmentFields'
+import { AGE_GROUPS } from '@/lib/ageGroups'
 import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
+
+function initials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
 
 function categoryAvg(scores, fields) {
   const values = fields.map(([key]) => Number(scores[key])).filter((v) => !isNaN(v) && v > 0)
@@ -20,7 +25,11 @@ const now = new Date()
 function PenilaianContent() {
   const searchParams = useSearchParams()
   const [students, setStudents] = useState([])
+  const [branches, setBranches] = useState([])
   const [studentId, setStudentId] = useState(searchParams.get('studentId') || '')
+  const [filterBranch, setFilterBranch] = useState('')
+  const [filterAgeGroup, setFilterAgeGroup] = useState('')
+  const [search, setSearch] = useState('')
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
   const [scores, setScores] = useState({})
@@ -35,7 +44,18 @@ function PenilaianContent() {
 
   useEffect(() => {
     api.getStudents().then(setStudents)
+    api.getBranches().then(setBranches)
   }, [])
+
+  const filteredStudents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return students.filter((s) => {
+      if (filterBranch && s.branchId !== filterBranch) return false
+      if (filterAgeGroup && s.ageGroup !== filterAgeGroup) return false
+      if (q && !s.fullName.toLowerCase().includes(q) && !s.studentId.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [students, filterBranch, filterAgeGroup, search])
 
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
@@ -117,14 +137,6 @@ function PenilaianContent() {
         <h1 className="font-bold text-navy-900 text-lg">Penilaian</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <AppSelect
-            value={studentId}
-            onChange={setStudentId}
-            allLabel="Pilih Siswa"
-            placeholder="Pilih Siswa"
-            className="min-w-[200px]"
-            options={students.map((s) => ({ value: s.id, label: `${s.fullName} (${s.studentId})` }))}
-          />
-          <AppSelect
             value={String(month)}
             onChange={(v) => setMonth(Number(v))}
             options={MONTHS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))}
@@ -134,6 +146,63 @@ function PenilaianContent() {
             onChange={(v) => setYear(Number(v))}
             options={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))}
           />
+        </div>
+      </div>
+
+      <div className="glass-card rounded-3xl p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nama atau ID siswa..."
+              className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-gold-400"
+            />
+          </div>
+          <AppSelect
+            value={filterBranch}
+            onChange={setFilterBranch}
+            allLabel="Semua Cabang"
+            placeholder="Semua Cabang"
+            className="min-w-[160px]"
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+          />
+          <AppSelect
+            value={filterAgeGroup}
+            onChange={setFilterAgeGroup}
+            allLabel="Semua Kelompok Umur"
+            placeholder="Semua Kelompok Umur"
+            className="min-w-[180px]"
+            options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
+          />
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {filteredStudents.length === 0 && (
+            <div className="text-sm text-gray-400 py-3 px-1">Tidak ada siswa yang cocok.</div>
+          )}
+          {filteredStudents.map((s) => {
+            const active = s.id === studentId
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setStudentId(s.id)}
+                className={`flex items-center gap-2 shrink-0 pl-2 pr-3.5 py-2 rounded-2xl border text-left transition-colors duration-150 ${
+                  active ? 'border-gold-400 bg-gold-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-full bg-navy-900 text-white text-[10px] font-bold flex items-center justify-center overflow-hidden shrink-0">
+                  {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-navy-900 truncate max-w-[140px]">{s.fullName}</div>
+                  <div className="text-[10px] text-gray-400">{s.studentId} · {s.ageGroup}</div>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
 

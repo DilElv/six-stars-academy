@@ -44,13 +44,18 @@ export function logout() {
   clearToken()
 }
 
+// No account/token is created here anymore — registration only creates a
+// PendingRegistration + Rintisan billing link. The real account (and login)
+// only exist once the payment webhook confirms success.
 export async function register(payload) {
-  const data = await request('/auth/register', {
+  return request('/auth/register', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  setToken(data.token)
-  return data
+}
+
+export async function getPendingRegistration(id) {
+  return request(`/auth/pending-registration/${id}`)
 }
 
 export async function getCmsContent() {
@@ -86,6 +91,18 @@ export async function getMyPayments() {
   return request('/payments/me')
 }
 
+export async function getPaymentMethods() {
+  return request('/payments/methods')
+}
+
+export async function createRenewalPayment(payload) {
+  return request('/payments/renewal', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function createEventPayment(payload) {
+  return request('/payments/event', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export async function getMyReports() {
   return request('/reports/me')
 }
@@ -112,6 +129,10 @@ export async function getAttendance(date, ageGroup, branchId) {
 
 export async function getMyAttendance() {
   return request('/attendance/me')
+}
+
+export async function getAttendanceSummary() {
+  return request('/attendance/summary')
 }
 
 export async function submitAttendance(date, records) {
@@ -278,8 +299,16 @@ export async function deleteBranch(id) {
   return request(`/branches/${id}`, { method: 'DELETE' })
 }
 
-export async function checkinStaff() {
-  return request('/staff-attendance/checkin', { method: 'POST' })
+export async function checkinStaff(payload) {
+  return request('/staff-attendance/checkin', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function approveStaffAttendance(id) {
+  return request(`/staff-attendance/${id}/approve`, { method: 'PUT' })
+}
+
+export async function rejectStaffAttendance(id, reason) {
+  return request(`/staff-attendance/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) })
 }
 
 export async function getMyStaffAttendance(date) {

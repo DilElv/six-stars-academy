@@ -11,6 +11,79 @@ function startOfDay(dateStr) {
   return d
 }
 
+// Any attendance status (hadir/izin/sakit/alfa) consumes one session from the
+// student's package quota. Only counts once per calendar day — editing an
+// already-recorded day's status does not consume another session.
+async function upsertAttendanceAndConsumeSession(studentId, date, data) {
+  const existing = await prisma.attendance.findUnique({ where: { studentId_date: { studentId, date } } })
+  const row = await prisma.attendance.upsert({
+    where: { studentId_date: { studentId, date } },
+    update: data,
+    create: { studentId, date, ...data },
+  })
+  if (!existing) {
+    await prisma.student.update({ where: { id: studentId }, data: { sessionsUsed: { increment: 1 } } })
+  }
+  return row
+}
+
+router.get('/summary', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
+  try {
+    let branchId = req.query.branchId || undefined
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      branchId = coach?.branchId || '__none__'
+    }
+
+    const studentWhere = branchId ? { branchId } : {}
+    const totalStudents = await prisma.student.count({ where: studentWhere })
+
+    const days = 7
+    const from = startOfDay()
+    from.setDate(from.getDate() - (days - 1))
+
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        date: { gte: from },
+        student: branchId ? { branchId } : undefined,
+      },
+      select: { date: true, status: true },
+    })
+
+    const trend = []
+    for (let i = 0; i < days; i++) {
+      const d = new Date(from)
+      d.setDate(d.getDate() + i)
+      const key = d.toISOString().slice(0, 10)
+      const dayRows = attendances.filter((a) => a.date.toISOString().slice(0, 10) === key)
+      trend.push({
+        date: key,
+        label: d.toLocaleDateString('id-ID', { weekday: 'short' }),
+        hadir: dayRows.filter((a) => a.status === 'hadir').length,
+        izin: dayRows.filter((a) => a.status === 'izin').length,
+        sakit: dayRows.filter((a) => a.status === 'sakit').length,
+        alfa: dayRows.filter((a) => a.status === 'alfa').length,
+      })
+    }
+
+    const todayKey = startOfDay().toISOString().slice(0, 10)
+    const todayRow = trend.find((t) => t.date === todayKey) || { hadir: 0, izin: 0, sakit: 0, alfa: 0 }
+    const todaySubmitted = todayRow.hadir + todayRow.izin + todayRow.sakit + todayRow.alfa
+    const today = {
+      hadir: todayRow.hadir,
+      izin: todayRow.izin,
+      sakit: todayRow.sakit,
+      alfa: todayRow.alfa,
+      belum: Math.max(0, totalStudents - todaySubmitted),
+    }
+
+    res.json({ totalStudents, trend, today })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   try {
     const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
@@ -30,11 +103,16 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
   try {
     const date = startOfDay(req.query.date)
     const where = { date }
-    if (req.query.ageGroup || req.query.branchId) {
-      where.student = {}
-      if (req.query.ageGroup) where.student.ageGroup = req.query.ageGroup
-      if (req.query.branchId) where.student.branchId = req.query.branchId
+    where.student = {}
+    if (req.query.ageGroup) where.student.ageGroup = req.query.ageGroup
+    if (req.query.branchId) where.student.branchId = req.query.branchId
+
+    if (req.user.role === 'coach') {
+      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+      where.student.branchId = coach?.branchId || '__none__'
     }
+
+    if (Object.keys(where.student).length === 0) delete where.student
     const attendances = await prisma.attendance.findMany({ where, include: { student: { include: { branch: true } }, coach: { select: { name: true } } } })
     res.json(attendances)
   } catch (err) {
@@ -59,10 +137,8 @@ router.post('/scan', authenticate, authorize('coach', 'head_coach', 'admin'), as
 
     const day = startOfDay()
     const now = new Date()
-    const attendance = await prisma.attendance.upsert({
-      where: { studentId_date: { studentId: card.studentId, date: day } },
-      update: { status: 'hadir', coachId: req.user.id, method: 'qr_scan', checkInTime: now, submittedAt: now },
-      create: { studentId: card.studentId, date: day, status: 'hadir', coachId: req.user.id, method: 'qr_scan', checkInTime: now, submittedAt: now },
+    const attendance = await upsertAttendanceAndConsumeSession(card.studentId, day, {
+      status: 'hadir', coachId: req.user.id, method: 'qr_scan', checkInTime: now, submittedAt: now,
     })
 
     res.json({ student: card.student, attendance })
@@ -94,10 +170,8 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 
     const results = []
     for (const r of records) {
-      const row = await prisma.attendance.upsert({
-        where: { studentId_date: { studentId: r.studentId, date: day } },
-        update: { status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date() },
-        create: { studentId: r.studentId, date: day, status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date() },
+      const row = await upsertAttendanceAndConsumeSession(r.studentId, day, {
+        status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date(),
       })
       results.push(row)
     }

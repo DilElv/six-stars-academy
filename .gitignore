@@ -24,3 +24,13 @@ dist-ssr
 *.sw?
 
 .env*
+!.env.example
+!*/.env.example
+
+# Local uploads (foto sekarang disimpan di Cloudinary, PDF rapor lokal per-server)
+server-next/uploads/photos/
+server-next/uploads/rapor/
+
+# DB dumps / backups
+backup/
+*.dump

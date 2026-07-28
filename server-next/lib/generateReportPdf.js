@@ -6,89 +6,264 @@ import { ASSESSMENT_CATEGORIES, scoreCategory, MONTHS } from './assessmentFields
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png')
 
-export function generateReportPdf({ student, assessment, month, year, settings, headCoachName }) {
+const PAGE_MARGIN = 40
+const CONTENT_X = 40
+const CONTENT_WIDTH = 515
+const PAGE_BOTTOM = 780
+
+const NAVY = '#0a1628'
+const GOLD = '#d4a843'
+const GRAY_TEXT = '#333333'
+const GRAY_LINE = '#e2e2e2'
+const ROW_SHADE = '#f7f7f7'
+
+async function fetchImageBuffer(url) {
+  if (!url) return null
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const arrayBuffer = await res.arrayBuffer()
+    return Buffer.from(arrayBuffer)
+  } catch {
+    return null
+  }
+}
+
+export async function generateReportPdf({ student, assessment, month, year, settings, headCoachName, attendanceSummary }) {
+  const photoBuffer = await fetchImageBuffer(student.photo)
+
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: 'A4', margin: 40 })
+    const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
     const chunks = []
     doc.on('data', (c) => chunks.push(c))
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    // Header
-    try {
-      doc.image(LOGO_PATH, 40, 30, { width: 42 })
-    } catch {
-      // logo optional, continue without it
-    }
-    doc.fontSize(16).fillColor('#0a1628').font('Helvetica-Bold').text(settings.ssbName || 'SixStars Academy Indonesia', 90, 35, { align: 'center', width: 425 })
-    doc.fontSize(9).fillColor('#666').font('Helvetica')
-    const contactLine = [settings.ssbAddress, settings.ssbPhone, settings.ssbEmail].filter(Boolean).join(' | ')
-    if (contactLine) doc.text(contactLine, 90, doc.y, { align: 'center', width: 425 })
-    doc.y = Math.max(doc.y, 80)
-    doc.x = 40
-    doc.moveDown(0.5)
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#d4a843').lineWidth(2).stroke()
-    doc.moveDown(0.5)
-
-    doc.fontSize(14).fillColor('#0a1628').font('Helvetica-Bold').text(`RAPOR BULANAN — ${MONTHS[month]} ${year}`, { align: 'center' })
-    doc.moveDown(1)
-
-    // Profil Anak
-    doc.fontSize(11).font('Helvetica-Bold').fillColor('#0a1628').text('PROFIL ANAK')
-    doc.moveDown(0.3)
-    doc.fontSize(9).font('Helvetica').fillColor('#333')
-    const age = Math.floor((Date.now() - new Date(student.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-    profileRow(doc, 'Nama', student.fullName)
-    profileRow(doc, 'ID Siswa', student.studentId)
-    profileRow(doc, 'Kelompok Umur', student.ageGroup)
-    profileRow(doc, 'Posisi', student.position)
-    profileRow(doc, 'Umur', `${age} tahun`)
-    doc.moveDown(0.8)
+    drawHeader(doc, settings, month, year)
+    drawProfileAndPhoto(doc, student, photoBuffer)
+    if (attendanceSummary) drawAttendanceSummary(doc, attendanceSummary)
 
     for (const cat of ASSESSMENT_CATEGORIES) {
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#0a1628').text(cat.title)
-      doc.moveDown(0.2)
-      for (const [key, label] of cat.fields) {
-        const val = assessment[key]
-        const catInfo = val !== null && val !== undefined ? scoreCategory(val) : null
-        const y = doc.y
-        doc.fontSize(9).font('Helvetica').fillColor('#333').text(label, 50, y, { continued: false, width: 300 })
-        doc.text(val ?? '-', 380, y, { width: 40, align: 'right' })
-        if (catInfo) doc.fillColor(`#${catInfo.color}`).text(catInfo.label, 430, y, { width: 100 })
-        doc.fillColor('#333')
-      }
-      doc.moveDown(0.2)
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0a1628').text(`Rata-rata: ${assessment[cat.avgKey] ?? '-'}`, { align: 'right' })
-      doc.moveDown(0.6)
-      if (doc.y > 700) doc.addPage()
+      drawAssessmentTable(doc, cat, assessment)
     }
 
     if (assessment.taktikAvg !== null && assessment.taktikAvg !== undefined) {
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#0a1628').text(`Rata-rata Taktik (Attacking + Defending): ${assessment.taktikAvg}`, { align: 'right' })
+      ensureSpace(doc, 20)
+      doc.fontSize(9).font('Helvetica-Bold').fillColor(NAVY)
+        .text(`Rata-rata Taktik (Attacking + Defending): ${formatScore(assessment.taktikAvg)}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
       doc.moveDown(0.6)
     }
 
-    doc.moveDown(0.3)
-    doc.rect(40, doc.y, 515, 40).fill('#0a1628')
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#d4a843').text(`RATA-RATA KESELURUHAN (OVR): ${assessment.overallAvg ?? '-'}`, 50, doc.y - 30)
-    doc.moveDown(1.5)
-
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#0a1628').text('PESAN COACH:')
-    doc.fontSize(9).font('Helvetica').fillColor('#333').text(assessment.coachComment || '-', { width: 515 })
-    doc.moveDown(1.5)
-
-    doc.fontSize(8).fillColor('#666')
-    doc.text(`Dibuat: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`)
-    if (headCoachName) doc.text(`Head Coach: ${headCoachName}`)
-    doc.moveDown(2)
-    doc.text('Tanda Tangan: _____________________')
+    drawOverallBox(doc, assessment)
+    drawComment(doc, assessment)
+    drawFooter(doc, headCoachName)
 
     doc.end()
   })
 }
 
-function profileRow(doc, label, value) {
-  const y = doc.y
-  doc.font('Helvetica-Bold').text(`${label}:`, 50, y, { continued: false, width: 100 })
-  doc.font('Helvetica').text(value || '-', 150, y)
+function ensureSpace(doc, height) {
+  if (doc.y + height > PAGE_BOTTOM) {
+    doc.addPage()
+    doc.y = PAGE_MARGIN
+  }
+}
+
+function formatScore(v) {
+  return v === null || v === undefined ? '-' : Number(v).toFixed(1)
+}
+
+function drawHeader(doc, settings, month, year) {
+  try {
+    doc.image(LOGO_PATH, CONTENT_X, 30, { width: 42 })
+  } catch {
+    // logo optional, continue without it
+  }
+  doc.fontSize(16).fillColor(NAVY).font('Helvetica-Bold')
+    .text(settings.ssbName || 'SixStars Academy Indonesia', 90, 34, { align: 'center', width: 425 })
+  doc.fontSize(9).fillColor('#666666').font('Helvetica')
+  const contactLine = [settings.ssbAddress, settings.ssbPhone, settings.ssbEmail].filter(Boolean).join(' | ')
+  if (contactLine) doc.text(contactLine, 90, doc.y, { align: 'center', width: 425 })
+
+  doc.y = Math.max(doc.y, 80)
+  doc.x = CONTENT_X
+  doc.moveDown(0.4)
+  doc.moveTo(CONTENT_X, doc.y).lineTo(CONTENT_X + CONTENT_WIDTH, doc.y).strokeColor(GOLD).lineWidth(2).stroke()
+  doc.moveDown(0.5)
+
+  doc.fontSize(14).fillColor(NAVY).font('Helvetica-Bold')
+    .text(`RAPOR BULANAN — ${MONTHS[month]} ${year}`, CONTENT_X, doc.y, { align: 'center', width: CONTENT_WIDTH })
+  doc.moveDown(0.8)
+}
+
+function drawProfileAndPhoto(doc, student, photoBuffer) {
+  const top = doc.y
+  const photoBoxW = 90
+  const photoBoxH = 110
+  const photoX = CONTENT_X + CONTENT_WIDTH - photoBoxW
+  const infoW = CONTENT_WIDTH - photoBoxW - 16
+
+  // Photo box (right side)
+  doc.rect(photoX, top, photoBoxW, photoBoxH).lineWidth(1).strokeColor(GRAY_LINE).stroke()
+  if (photoBuffer) {
+    try {
+      doc.image(photoBuffer, photoX + 4, top + 4, { fit: [photoBoxW - 8, photoBoxH - 8], align: 'center', valign: 'center' })
+    } catch {
+      doc.fontSize(8).fillColor('#999999').text('Foto tidak tersedia', photoX, top + photoBoxH / 2 - 6, { width: photoBoxW, align: 'center' })
+    }
+  } else {
+    doc.fontSize(8).fillColor('#999999').text('Tanpa Foto', photoX, top + photoBoxH / 2 - 6, { width: photoBoxW, align: 'center' })
+  }
+
+  // Profile info (left side)
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(NAVY).text('PROFIL ANAK', CONTENT_X, top, { width: infoW })
+  doc.moveDown(0.3)
+  doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
+
+  const age = student.dateOfBirth
+    ? Math.floor((Date.now() - new Date(student.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+    : null
+
+  const rows = [
+    ['Nama', student.fullName],
+    ['ID Siswa', student.studentId],
+    ['Kelompok Umur', student.ageGroup],
+    ['Posisi', student.position],
+    ['Umur', age !== null ? `${age} tahun` : null],
+  ]
+  for (const [label, value] of rows) {
+    const y = doc.y
+    doc.font('Helvetica-Bold').fillColor(GRAY_TEXT).text(`${label}:`, CONTENT_X, y, { width: 100 })
+    doc.font('Helvetica').fillColor(GRAY_TEXT).text(value || '-', CONTENT_X + 100, y, { width: infoW - 100 })
+  }
+
+  doc.y = Math.max(doc.y, top + photoBoxH) + 12
+  doc.x = CONTENT_X
+}
+
+function drawAttendanceSummary(doc, summary) {
+  ensureSpace(doc, 60)
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(NAVY).text('RINGKASAN ABSENSI', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.moveDown(0.3)
+
+  const cols = [
+    { label: 'Hadir', value: summary.hadir, color: '#10b981' },
+    { label: 'Izin', value: summary.izin, color: '#2563eb' },
+    { label: 'Sakit', value: summary.sakit, color: '#d97706' },
+    { label: 'Alfa', value: summary.alfa, color: '#dc2626' },
+    { label: 'Total', value: summary.total, color: NAVY },
+  ]
+  const colWidth = CONTENT_WIDTH / cols.length
+  const top = doc.y
+  const boxHeight = 44
+
+  cols.forEach((c, i) => {
+    const x = CONTENT_X + i * colWidth
+    doc.rect(x + 2, top, colWidth - 4, boxHeight).fillAndStroke(ROW_SHADE, GRAY_LINE)
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(c.color).text(String(c.value), x, top + 8, { width: colWidth, align: 'center' })
+    doc.fontSize(8).font('Helvetica').fillColor('#666666').text(c.label, x, top + 27, { width: colWidth, align: 'center' })
+  })
+
+  doc.y = top + boxHeight + 12
+  doc.x = CONTENT_X
+}
+
+// [title/aspek column width ratio, nilai, keterangan]
+const TABLE_COLS = [0.6, 0.15, 0.25]
+const ROW_HEIGHT = 18
+const HEADER_HEIGHT = 20
+
+function tableColX() {
+  const w1 = CONTENT_WIDTH * TABLE_COLS[0]
+  const w2 = CONTENT_WIDTH * TABLE_COLS[1]
+  const w3 = CONTENT_WIDTH * TABLE_COLS[2]
+  return { x0: CONTENT_X, x1: CONTENT_X + w1, x2: CONTENT_X + w1 + w2, w1, w2, w3 }
+}
+
+function drawTableHeaderRow(doc, y) {
+  const { x0, x1, x2, w1, w2, w3 } = tableColX()
+  doc.rect(x0, y, CONTENT_WIDTH, HEADER_HEIGHT).fill(NAVY)
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
+  doc.text('Aspek', x0 + 6, y + 6, { width: w1 - 12 })
+  doc.text('Nilai', x1, y + 6, { width: w2, align: 'center' })
+  doc.text('Keterangan', x2, y + 6, { width: w3 - 6, align: 'center' })
+  return y + HEADER_HEIGHT
+}
+
+function drawAssessmentTable(doc, category, assessment) {
+  ensureSpace(doc, HEADER_HEIGHT + ROW_HEIGHT * 2)
+
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(NAVY).text(category.title, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.moveDown(0.25)
+
+  const { x0, x1, x2, w1, w2, w3 } = tableColX()
+  let y = drawTableHeaderRow(doc, doc.y)
+
+  category.fields.forEach(([key, label], idx) => {
+    if (y + ROW_HEIGHT > PAGE_BOTTOM) {
+      doc.addPage()
+      y = drawTableHeaderRow(doc, PAGE_MARGIN)
+    }
+    if (idx % 2 === 1) doc.rect(x0, y, CONTENT_WIDTH, ROW_HEIGHT).fill(ROW_SHADE)
+
+    const val = assessment[key]
+    const info = val !== null && val !== undefined ? scoreCategory(val) : null
+
+    doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
+    doc.text(label, x0 + 6, y + 5, { width: w1 - 12 })
+    doc.text(val ?? '-', x1, y + 5, { width: w2, align: 'center' })
+    if (info) {
+      doc.fillColor(info.color.startsWith('#') ? info.color : `#${info.color}`)
+        .text(info.label, x2, y + 5, { width: w3 - 6, align: 'center' })
+    } else {
+      doc.fillColor('#999999').text('-', x2, y + 5, { width: w3 - 6, align: 'center' })
+    }
+
+    doc.strokeColor(GRAY_LINE).lineWidth(0.5)
+    doc.rect(x0, y, w1, ROW_HEIGHT).stroke()
+    doc.rect(x1, y, w2, ROW_HEIGHT).stroke()
+    doc.rect(x2, y, w3, ROW_HEIGHT).stroke()
+
+    y += ROW_HEIGHT
+  })
+
+  doc.y = y + 4
+  doc.x = CONTENT_X
+  doc.fontSize(9).font('Helvetica-Bold').fillColor(NAVY)
+    .text(`Rata-rata: ${formatScore(assessment[category.avgKey])}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
+  doc.moveDown(0.7)
+}
+
+function drawOverallBox(doc, assessment) {
+  ensureSpace(doc, 56)
+  const top = doc.y
+  const boxHeight = 40
+  doc.rect(CONTENT_X, top, CONTENT_WIDTH, boxHeight).fill(NAVY)
+  doc.fontSize(12).font('Helvetica-Bold').fillColor(GOLD)
+    .text(`RATA-RATA KESELURUHAN (OVR): ${formatScore(assessment.overallAvg)}`, CONTENT_X + 10, top + 13, { width: CONTENT_WIDTH - 20 })
+  doc.y = top + boxHeight + 16
+  doc.x = CONTENT_X
+}
+
+function drawComment(doc, assessment) {
+  ensureSpace(doc, 60)
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(NAVY).text('PESAN COACH:', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.moveDown(0.3)
+  const commentTop = doc.y
+  const text = assessment.coachComment || '-'
+  doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
+  const textHeight = doc.heightOfString(text, { width: CONTENT_WIDTH - 16 })
+  doc.rect(CONTENT_X, commentTop, CONTENT_WIDTH, textHeight + 16).strokeColor(GRAY_LINE).lineWidth(1).stroke()
+  doc.text(text, CONTENT_X + 8, commentTop + 8, { width: CONTENT_WIDTH - 16 })
+  doc.y = commentTop + textHeight + 16 + 12
+  doc.x = CONTENT_X
+}
+
+function drawFooter(doc, headCoachName) {
+  ensureSpace(doc, 60)
+  doc.fontSize(8).fillColor('#666666').font('Helvetica')
+  doc.text(`Dibuat: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  if (headCoachName) doc.text(`Head Coach: ${headCoachName}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.moveDown(2)
+  doc.text('Tanda Tangan: _____________________', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
 }

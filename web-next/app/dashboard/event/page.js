@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Trophy, Calendar, MapPin, Wallet, Users, X, Check, Loader2 } from 'lucide-react'
+import { Trophy, Calendar, MapPin, Wallet, Users, X, Check, Loader2, CreditCard } from 'lucide-react'
 import * as api from '@/lib/api'
+import PaymentMethodModal from '@/components/PaymentMethodModal'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -12,10 +13,13 @@ export default function ParentEventPage() {
   const [events, setEvents] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showPayment, setShowPayment] = useState(false)
 
-  useEffect(() => {
+  function load() {
     api.getMyEvents().then(setEvents).finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(load, [])
 
   if (loading) return <Loader2 className="w-6 h-6 animate-spin mx-auto mt-10 text-gold-500" />
 
@@ -83,16 +87,36 @@ export default function ParentEventPage() {
 
             {selected.event.description && <p className="text-sm text-gray-500 mb-4">{selected.event.description}</p>}
 
-            <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-              <span className="text-xs text-gray-400">Status Pembayaran:</span>
-              {selected.paymentStatus === 'paid' ? (
-                <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600"><Check size={12} /> Lunas</span>
-              ) : (
-                <span className="text-xs text-amber-600 font-semibold">Menunggu konfirmasi admin</span>
+            <div className="pt-3 border-t border-gray-100 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">Status Pembayaran:</span>
+                {selected.paymentStatus === 'paid' ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600"><Check size={12} /> Lunas</span>
+                ) : (
+                  <span className="text-xs text-amber-600 font-semibold">Belum dibayar</span>
+                )}
+              </div>
+              {selected.paymentStatus !== 'paid' && selected.event.fee > 0 && (
+                <button
+                  onClick={() => setShowPayment(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl"
+                >
+                  <CreditCard size={15} /> Bayar Sekarang
+                </button>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {showPayment && selected && (
+        <PaymentMethodModal
+          title={`Bayar Event: ${selected.event.title}`}
+          amount={selected.event.fee}
+          onConfirm={(paymentMethod) => api.createEventPayment({ eventParticipantId: selected.id, paymentMethod })}
+          onClose={() => setShowPayment(false)}
+          onDone={() => { setShowPayment(false); setSelected(null); load() }}
+        />
       )}
     </div>
   )

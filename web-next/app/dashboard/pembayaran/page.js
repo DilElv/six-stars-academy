@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck } from 'lucide-react'
+import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react'
 import * as api from '@/lib/api'
+import RenewalModal from '@/components/RenewalModal'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -23,13 +24,18 @@ function formatRupiah(n) {
 
 export default function PembayaranAnakPage() {
   const [payments, setPayments] = useState(null)
+  const [child, setChild] = useState(null)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('all')
   const [expanded, setExpanded] = useState(null)
+  const [showRenewal, setShowRenewal] = useState(false)
 
-  useEffect(() => {
+  function load() {
     api.getMyPayments().then(setPayments).catch((err) => setError(err.message))
-  }, [])
+    api.getMyChild().then(setChild).catch(() => {})
+  }
+
+  useEffect(load, [])
 
   if (error) return <p className="text-sm text-red-500">{error}</p>
   if (!payments) return null
@@ -39,9 +45,49 @@ export default function PembayaranAnakPage() {
   const jumlahPending = payments.filter((p) => p.status === 'pending').length
   const filtered = filter === 'all' ? payments : payments.filter((p) => p.status === filter)
 
+  const isExpired = child?.packageEndDate && new Date(child.packageEndDate) < new Date()
+  const daysLeft = child?.packageEndDate ? Math.ceil((new Date(child.packageEndDate) - new Date()) / (1000 * 60 * 60 * 24)) : null
+  const nearExpiry = daysLeft != null && daysLeft <= 14 && daysLeft >= 0
+
   return (
     <div className="space-y-6">
       <h1 className="font-bold text-navy-900 text-lg">Riwayat Pembayaran</h1>
+
+      {child && (isExpired || nearExpiry) && (
+        <div className={`flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border ${isExpired ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className={isExpired ? 'text-red-600 shrink-0' : 'text-amber-600 shrink-0'} />
+            <div className={`text-sm ${isExpired ? 'text-red-800' : 'text-amber-800'}`}>
+              {isExpired
+                ? `Paket ${child.fullName} sudah berakhir. Perpanjang sekarang agar bisa tetap ikut latihan.`
+                : `Paket ${child.fullName} akan berakhir dalam ${daysLeft} hari.`}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRenewal(true)}
+            className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
+          >
+            <RefreshCw size={14} /> Perpanjang Paket
+          </button>
+        </div>
+      )}
+
+      {child && !isExpired && !nearExpiry && (
+        <div className="flex items-center justify-between gap-3 flex-wrap glass-card rounded-3xl px-5 py-4">
+          <div className="flex items-center gap-3">
+            <Wallet size={18} className="text-navy-700 shrink-0" />
+            <div className="text-sm text-navy-800">
+              Paket aktif hingga <b>{child.packageEndDate ? new Date(child.packageEndDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</b>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRenewal(true)}
+            className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-navy-900 text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
+          >
+            <RefreshCw size={14} /> Perpanjang Paket
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <div className="glass-card rounded-3xl p-3 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
@@ -100,7 +146,7 @@ export default function PembayaranAnakPage() {
                     <Wallet size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-navy-900 truncate">{p.package?.name || '-'}</div>
+                    <div className="font-semibold text-navy-900 truncate">{p.package?.name || p.eventParticipant?.event?.title || '-'}</div>
                     <div className="text-xs text-gray-400 capitalize">{p.paymentType} · {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</div>
                   </div>
                   <div className="text-right shrink-0">
@@ -154,6 +200,16 @@ export default function PembayaranAnakPage() {
                           </div>
                         )}
                       </div>
+                      {p.status === 'pending' && p.paymentLink && (
+                        <a
+                          href={p.paymentLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl"
+                        >
+                          <ExternalLink size={14} /> Lanjutkan Pembayaran
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
@@ -161,6 +217,13 @@ export default function PembayaranAnakPage() {
             )
           })}
         </div>
+      )}
+
+      {showRenewal && (
+        <RenewalModal
+          onClose={() => setShowRenewal(false)}
+          onDone={() => { setShowRenewal(false); load() }}
+        />
       )}
     </div>
   )

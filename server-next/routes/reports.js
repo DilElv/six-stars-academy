@@ -27,8 +27,22 @@ router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
     if (!assessment) return res.status(400).json({ error: 'Belum ada penilaian untuk bulan ini' })
 
+    const monthStart = new Date(Number(year), Number(month) - 1, 1)
+    const monthEnd = new Date(Number(year), Number(month), 1)
+    const monthAttendances = await prisma.attendance.findMany({
+      where: { studentId, date: { gte: monthStart, lt: monthEnd } },
+      select: { status: true },
+    })
+    const attendanceSummary = {
+      hadir: monthAttendances.filter((a) => a.status === 'hadir').length,
+      izin: monthAttendances.filter((a) => a.status === 'izin').length,
+      sakit: monthAttendances.filter((a) => a.status === 'sakit').length,
+      alfa: monthAttendances.filter((a) => a.status === 'alfa').length,
+      total: monthAttendances.length,
+    }
+
     const settings = { ssbName: 'SixStars Academy Indonesia', ...(settingsRow?.content || {}) }
-    const pdfBuffer = await generateReportPdf({ student, assessment, month: Number(month), year: Number(year), settings, headCoachName: headCoach?.name })
+    const pdfBuffer = await generateReportPdf({ student, assessment, month: Number(month), year: Number(year), settings, headCoachName: headCoach?.name, attendanceSummary })
     const fileName = `${student.studentId}-${year}-${month}.pdf`
     fs.writeFileSync(path.join(REPORTS_DIR, fileName), pdfBuffer)
     const pdfUrl = `${req.protocol}://${req.get('host')}/rapor/${fileName}`

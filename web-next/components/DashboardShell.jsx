@@ -37,12 +37,18 @@ export default function DashboardShell({ role, title, navItems, children }) {
         }
         setUser(profile)
         setLoading(false)
-        if (profile.access === 'payment-only' && pathname !== '/dashboard/pembayaran') {
-          router.replace('/dashboard/pembayaran')
-        }
       })
       .catch(() => router.replace('/login'))
   }, [role, router])
+
+  // Re-checked on every navigation (not just initial load) so a parent with a
+  // pending/expired payment can't reach other dashboard pages by clicking a
+  // nav link after the first redirect.
+  useEffect(() => {
+    if (user?.access === 'payment-only' && pathname !== '/dashboard/pembayaran') {
+      router.replace('/dashboard/pembayaran')
+    }
+  }, [pathname, user, router])
 
   useEffect(() => {
     setMoreOpen(false)

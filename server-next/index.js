@@ -30,7 +30,7 @@ import promoCodesRoutes from './routes/promoCodes.js'
 const app = express()
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf } }))
 app.use('/rapor', express.static(path.join(__dirname, 'uploads', 'rapor')))
 app.use('/api/uploads/photos', express.static(path.join(__dirname, 'uploads', 'photos')))
 
