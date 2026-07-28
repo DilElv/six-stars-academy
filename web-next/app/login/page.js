@@ -89,13 +89,6 @@ export default function LoginPage() {
         <p className="text-center text-xs text-gray-400 mt-6">
           Belum punya akun? <Link href="/daftar" className="text-gold-500 font-semibold">Daftar</Link>
         </p>
-
-        <div className="mt-6 pt-4 border-t border-gray-100 text-[11px] text-gray-400 space-y-0.5">
-          <div>Demo: admin@ssb.com / admin123</div>
-          <div>Demo: headcoach@ssb.com / headcoach123</div>
-          <div>Demo: coach@ssb.com / coach123</div>
-          <div>Demo: parent@ssb.com / parent123</div>
-        </div>
       </div>
     </AuthBackground>
   )
