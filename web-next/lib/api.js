@@ -1,6 +1,9 @@
-const API_URL = typeof window !== 'undefined'
+// In production, NEXT_PUBLIC_API_URL is set to a relative "/api" so requests
+// go through Nginx on the same origin (same HTTP/HTTPS scheme, no exposed
+// backend port). Falls back to the old direct-port behavior for local dev.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined'
   ? `http://${window.location.hostname}:3002/api`
-  : 'http://localhost:3002/api'
+  : 'http://localhost:3002/api')
 
 function getToken() {
   if (typeof window === 'undefined') return null
