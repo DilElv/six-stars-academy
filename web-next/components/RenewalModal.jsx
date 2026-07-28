@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { X, Loader2, RefreshCw, ExternalLink, CheckCircle2, ChevronLeft } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
+import { qrImageUrl } from '@/lib/qrImage'
 
 const FALLBACK_METHODS = [
   { value: 'QRIS', label: 'QRIS' },
@@ -49,6 +50,7 @@ export default function RenewalModal({ onClose, onDone }) {
   }
 
   const paymentLink = result?.rintisan?.rintisan_billing_link || result?.rintisan?.payment_link || result?.payment?.paymentLink
+  const qrString = result?.rintisan?.qr_string || result?.payment?.qrString
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -153,6 +155,11 @@ export default function RenewalModal({ onClose, onDone }) {
               >
                 <ExternalLink size={16} /> Bayar Sekarang
               </a>
+            ) : qrString ? (
+              <div className="text-center">
+                <img src={qrImageUrl(qrString)} alt="QRIS" className="w-52 h-52 mx-auto rounded-2xl border border-gray-200" />
+                <p className="text-xs text-gray-500 mt-2">Scan QRIS ini pakai aplikasi e-wallet/mobile banking kamu.</p>
+              </div>
             ) : (
               <p className="text-sm text-gray-500 text-center">Link pembayaran tidak tersedia, hubungi admin.</p>
             )}

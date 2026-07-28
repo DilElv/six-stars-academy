@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Check, ChevronRight, ChevronLeft, Loader2, Upload, PartyPopper, ExternalLink, Clock, MapPin } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
+import { qrImageUrl } from '@/lib/qrImage'
 import AuthBackground from '@/components/AuthBackground'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -516,20 +517,35 @@ function DaftarWizard() {
                     Total tagihan <b className="text-navy-900">{formatRupiah(result.totalAmount)}</b>. Akun & data anak baru akan aktif setelah pembayaran ini dikonfirmasi.
                   </p>
 
-                  {(regStatus?.paymentLink || result.rintisan?.rintisan_billing_link || result.rintisan?.payment_link) ? (
-                    <a
-                      href={regStatus?.paymentLink || result.rintisan?.rintisan_billing_link || result.rintisan?.payment_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-2xl mb-3"
-                    >
-                      <ExternalLink size={16} /> Bayar Sekarang
-                    </a>
-                  ) : (
-                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3">
-                      Link pembayaran belum tersedia. Silakan hubungi admin.
-                    </p>
-                  )}
+                  {(() => {
+                    const paymentLink = regStatus?.paymentLink || result.rintisan?.rintisan_billing_link || result.rintisan?.payment_link
+                    const qrString = regStatus?.qrString || result.rintisan?.qr_string
+                    if (paymentLink) {
+                      return (
+                        <a
+                          href={paymentLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-3 rounded-2xl mb-3"
+                        >
+                          <ExternalLink size={16} /> Bayar Sekarang
+                        </a>
+                      )
+                    }
+                    if (qrString) {
+                      return (
+                        <div className="mb-3">
+                          <img src={qrImageUrl(qrString)} alt="QRIS" className="w-56 h-56 mx-auto rounded-2xl border border-gray-200" />
+                          <p className="text-xs text-gray-500 mt-2">Scan QRIS ini pakai aplikasi e-wallet/mobile banking kamu.</p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3">
+                        Link pembayaran belum tersedia. Silakan hubungi admin.
+                      </p>
+                    )
+                  })()}
 
                   <button
                     onClick={() => checkRegistrationStatus()}
