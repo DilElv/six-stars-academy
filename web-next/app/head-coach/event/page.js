@@ -356,8 +356,8 @@ function MultiSelect({ value, onChange, options, placeholder }) {
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-2xl shadow-lg p-2 space-y-1">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-2xl shadow-lg p-2 space-y-1">
             {options.map((opt) => {
               const isSelected = selected.includes(opt.value)
               return (

@@ -42,6 +42,7 @@ export default function CoachUserManager({ role, label }) {
 
       {loading ? null : (
         <div className="glass-card rounded-3xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -79,6 +80,7 @@ export default function CoachUserManager({ role, label }) {
               ))}
             </tbody>
           </table>
+          </div>
           {users.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada {label.toLowerCase()}.</div>}
         </div>
       )}
@@ -114,7 +116,7 @@ function AddModal({ role, label, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
           <UserPlus size={24} className="mx-auto text-gold-400 mb-2" />
           <h3 className="font-bold text-white">Tambah {label}</h3>
@@ -185,7 +187,7 @@ function EditModal({ user, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-100">
           <h3 className="font-bold text-navy-900">Edit {user.name}</h3>
         </div>

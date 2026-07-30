@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Loader2, RefreshCw, ExternalLink, CheckCircle2, ChevronLeft } from 'lucide-react'
+import { X, Loader2, RefreshCw, ExternalLink, CheckCircle2, ChevronLeft, Tag } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { qrImageUrl } from '@/lib/qrImage'
@@ -29,17 +29,42 @@ export default function RenewalModal({ onClose, onDone }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [promoCodeInput, setPromoCodeInput] = useState('')
+  const [promoDiscount, setPromoDiscount] = useState(null)
+  const [promoChecking, setPromoChecking] = useState(false)
 
   useEffect(() => {
     api.getPackages().then(setPackages).catch(() => {})
     api.getPaymentMethods().then((m) => { if (m?.length) setMethods(m) }).catch(() => {})
   }, [])
 
+  async function handleCheckPromo() {
+    if (!promoCodeInput.trim() || !selectedPackage) return
+    setPromoChecking(true)
+    setError('')
+    try {
+      const res = await api.validatePromoCode(promoCodeInput.trim(), selectedPackage.id, selectedPackage.price)
+      setPromoDiscount(res)
+    } catch (err) {
+      setPromoDiscount(null)
+      setError(err.message)
+    } finally {
+      setPromoChecking(false)
+    }
+  }
+
+  const discountAmount = promoDiscount?.discount || 0
+  const finalAmount = Math.max(0, (selectedPackage?.price || 0) - discountAmount)
+
   async function handleConfirm() {
     setLoading(true)
     setError('')
     try {
-      const res = await api.createRenewalPayment({ packageId: selectedPackage.id, paymentMethod: method })
+      const res = await api.createRenewalPayment({
+        packageId: selectedPackage.id,
+        paymentMethod: method,
+        ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
+      })
       setResult(res)
       setStep('result')
     } catch (err) {
@@ -55,7 +80,7 @@ export default function RenewalModal({ onClose, onDone }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/60" onClick={loading ? undefined : onClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-5">
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {step === 'method' && (
@@ -109,8 +134,44 @@ export default function RenewalModal({ onClose, onDone }) {
           <>
             <div className="bg-navy-50 rounded-2xl px-4 py-3 mb-4 text-center">
               <div className="text-xs text-gray-500">Total Tagihan</div>
-              <div className="text-lg font-bold text-navy-900">{formatRupiah(selectedPackage?.price)}</div>
+              <div className="text-lg font-bold text-navy-900">
+                {discountAmount > 0 ? (
+                  <>
+                    {formatRupiah(finalAmount)}{' '}
+                    <span className="text-xs text-gray-400 font-normal line-through">{formatRupiah(selectedPackage?.price)}</span>
+                  </>
+                ) : (
+                  formatRupiah(selectedPackage?.price)
+                )}
+              </div>
             </div>
+
+            <label className="block text-xs font-semibold text-gray-500 mb-2">Punya Kode Promo?</label>
+            <div className="flex gap-2 mb-4">
+              <div className="relative flex-1">
+                <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={promoCodeInput}
+                  onChange={(e) => setPromoCodeInput(e.target.value)}
+                  placeholder="Masukkan kode promo"
+                  disabled={promoDiscount !== null}
+                  className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase disabled:opacity-60"
+                />
+              </div>
+              {promoDiscount ? (
+                <button onClick={() => { setPromoDiscount(null); setPromoCodeInput('') }} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100 shrink-0">Hapus</button>
+              ) : (
+                <button onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim()} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50 shrink-0">
+                  {promoChecking ? <Loader2 size={14} className="animate-spin" /> : 'Cek'}
+                </button>
+              )}
+            </div>
+            {promoDiscount && (
+              <div className="text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg mb-4 -mt-2">
+                Diskon {promoDiscount.discountPercent}% — Hemat {formatRupiah(discountAmount)}
+              </div>
+            )}
+
             <label className="block text-xs font-semibold text-gray-500 mb-2">Pilih Metode Pembayaran</label>
             <div className="space-y-2 mb-5 max-h-56 overflow-y-auto pr-1">
               {methods.map((m) => (
