@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Eye, Edit3, Star, Loader2 } from 'lucide-react'
+import { Eye, Edit3, Star, Loader2, UserPlus } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import StudentDetailModal from '@/components/StudentDetailModal'
+import AddStudentModal from '@/components/AddStudentModal'
+import { totalSessionsFor, PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -22,11 +25,14 @@ export default function DataAnakPage() {
   const [filterBranch, setFilterBranch] = useState('')
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  const [showAddStudent, setShowAddStudent] = useState(false)
+  const [packages, setPackages] = useState([])
 
   function load() {
     setLoading(true)
     api.getStudents().then(setStudents).finally(() => setLoading(false))
     api.getBranches().then(setBranches)
+    api.getPackages().then(setPackages)
   }
 
   useEffect(load, [])
@@ -42,7 +48,12 @@ export default function DataAnakPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
+          <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-1 bg-gold-400 hover:bg-gold-500 text-navy-900 text-xs font-bold px-3 py-1.5 rounded-xl">
+            <UserPlus size={14} /> Tambah Anak
+          </button>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
           <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
@@ -86,6 +97,24 @@ export default function DataAnakPage() {
                   <span className="text-gray-400">Cabang</span>
                   {s.branch ? <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Paket</span>
+                  <span className="font-medium text-navy-900 text-right truncate max-w-[60%]">{s.package?.name || '-'}</span>
+                </div>
+                {s.package && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Sesi</span>
+                    <span className="font-medium text-navy-900">{s.sessionsUsed}/{totalSessionsFor(s)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Pembayaran</span>
+                  {s.payments?.[0] ? (
+                    <span className={`text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${PAYMENT_STATUS_BADGE[s.payments[0].status]?.color || 'bg-gray-100 text-gray-500'}`}>
+                      {PAYMENT_STATUS_BADGE[s.payments[0].status]?.label || s.payments[0].status}
+                    </span>
+                  ) : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
+                </div>
               </div>
               <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
                 <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
@@ -97,48 +126,13 @@ export default function DataAnakPage() {
         </div>
       )}
 
-      {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
+      {viewStudent && <StudentDetailModal student={viewStudent} onClose={() => setViewStudent(null)} />}
       {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+      {showAddStudent && <AddStudentModal branches={branches} packages={packages} onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
     </div>
   )
 }
 
-function Row({ label, value }) {
-  return (
-    <div className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-navy-900 text-right">{value || '-'}</span>
-    </div>
-  )
-}
-
-function ViewModal({ student, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
-          <div className="w-16 h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden">
-            {student.photo && <img src={student.photo} alt="" className="w-full h-full object-cover" />}
-          </div>
-          <h3 className="font-heading font-bold text-white">{student.fullName}</h3>
-          <p className="text-xs text-gray-300">{student.studentId}</p>
-        </div>
-        <div className="p-5">
-          <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID')} />
-          <Row label="Posisi" value={student.position} />
-          <Row label="Kelompok Umur" value={student.ageGroup} />
-          <Row label="Cabang" value={student.branch?.name} />
-          <Row label="Nama Orang Tua" value={student.parentName} />
-          <Row label="Telepon" value={student.parentPhone} />
-          <Row label="Alamat" value={student.address} />
-          <Row label="Paket" value={student.package?.name} />
-          <Row label="Status" value={student.status} />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function EditModal({ student, branches, onClose, onSaved }) {
   const [form, setForm] = useState({

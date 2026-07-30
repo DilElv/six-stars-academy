@@ -74,10 +74,17 @@ router.get('/me', authenticate, authorize('coach', 'head_coach'), async (req, re
 
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const day = startOfDay(req.query.date)
-    const where = { date: day }
+    const where = {}
+    if (req.query.month && req.query.year) {
+      const start = new Date(Number(req.query.year), Number(req.query.month) - 1, 1)
+      const end = new Date(Number(req.query.year), Number(req.query.month), 1)
+      where.date = { gte: start, lt: end }
+    } else {
+      where.date = startOfDay(req.query.date)
+    }
     if (req.query.branchId) where.branchId = req.query.branchId
     if (req.query.verifyStatus) where.verifyStatus = req.query.verifyStatus
+    if (req.query.role) where.user = { role: req.query.role }
     const records = await prisma.staffAttendance.findMany({
       where,
       include: {
@@ -85,7 +92,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
         branch: true,
         verifiedBy: { select: { name: true } },
       },
-      orderBy: { checkInTime: 'asc' },
+      orderBy: { checkInTime: 'desc' },
     })
     res.json(records)
   } catch (err) {

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { LogIn, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import AuthBackground from '@/components/AuthBackground'
+import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 
 const roleRedirect = {
   admin: '/admin',
@@ -87,7 +88,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Belum punya akun? <Link href="/daftar" className="text-gold-500 font-semibold">Daftar</Link>
+          Belum punya akun? <a href={REGISTER_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-gold-500 font-semibold">Daftar via WhatsApp</a>
         </p>
       </div>
     </AuthBackground>

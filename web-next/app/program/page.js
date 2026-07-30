@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 import { ArrowRight, Zap, Target, Dumbbell, Brain } from 'lucide-react'
 import PublicNav from '@/components/PublicNav'
 import PublicFooter from '@/components/PublicFooter'
@@ -117,13 +118,15 @@ export default async function ProgramPage() {
           <Reveal>
             <h2 className="font-heading font-bold text-2xl sm:text-3xl text-white mb-4 tracking-tight">Siap tentukan kelompok umur yang tepat?</h2>
             <p className="text-gray-400 mb-8">Daftar sekarang, sistem kami otomatis menempatkan si kecil ke kelompok umur sesuai tanggal lahirnya.</p>
-            <Link
-              href="/daftar"
+            <a
+              href={REGISTER_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="group inline-flex items-center gap-2 bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 font-bold px-8 py-3.5 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
             >
               Daftar Sekarang
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
-            </Link>
+            </a>
           </Reveal>
         </div>
       </section>

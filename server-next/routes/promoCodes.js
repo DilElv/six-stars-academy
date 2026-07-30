@@ -5,7 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.js'
 const router = Router()
 
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
-  const { code, discountPercent, maxUses, allPackages, packageIds, expiresAt, status } = req.body
+  const { code, discountPercent, maxUses, allPackages, packageIds, expiresAt, status, appliesToRegistrationFee } = req.body
   try {
     if (!code || !discountPercent) return res.status(400).json({ error: 'Kode dan persentase diskon wajib diisi' })
     if (![25, 50, 75, 100].includes(discountPercent)) return res.status(400).json({ error: 'Diskon harus 25%, 50%, 75%, atau 100%' })
@@ -16,6 +16,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
         discountPercent,
         maxUses: maxUses || 1,
         allPackages: allPackages || false,
+        appliesToRegistrationFee: appliesToRegistrationFee || false,
         status: status || 'active',
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         packages: allPackages ? undefined : {
@@ -46,7 +47,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
 })
 
 router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
-  const { code, discountPercent, maxUses, allPackages, packageIds, expiresAt, status } = req.body
+  const { code, discountPercent, maxUses, allPackages, packageIds, expiresAt, status, appliesToRegistrationFee } = req.body
   try {
     await prisma.promoCodePackage.deleteMany({ where: { promoCodeId: req.params.id } })
 
@@ -57,6 +58,7 @@ router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
         discountPercent,
         maxUses,
         allPackages: allPackages ?? undefined,
+        appliesToRegistrationFee: appliesToRegistrationFee ?? undefined,
         status,
         expiresAt: expiresAt !== undefined ? (expiresAt ? new Date(expiresAt) : null) : undefined,
         packages: allPackages ? undefined : {
@@ -84,7 +86,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
 })
 
 router.post('/validate', async (req, res) => {
-  const { code, packageId, amount } = req.body
+  const { code, packageId, amount, registrationFee } = req.body
   try {
     if (!code || !packageId) return res.status(400).json({ error: 'Kode promo dan paket wajib diisi' })
 
@@ -103,12 +105,17 @@ router.post('/validate', async (req, res) => {
       if (!valid) return res.status(400).json({ error: 'Kode promo tidak berlaku untuk paket ini' })
     }
 
-    const discount = Math.round((amount || 0) * promo.discountPercent / 100)
+    // Discount base = package price, plus the registration fee too if this
+    // code is marked to also cover it (otherwise registration fee is charged
+    // in full even when a package-only promo is applied).
+    const discountBase = (amount || 0) + (promo.appliesToRegistrationFee ? (registrationFee || 0) : 0)
+    const discount = Math.round(discountBase * promo.discountPercent / 100)
 
     res.json({
       valid: true,
       discountPercent: promo.discountPercent,
       discount,
+      appliesToRegistrationFee: promo.appliesToRegistrationFee,
     })
   } catch (err) {
     console.error(err)

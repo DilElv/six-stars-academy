@@ -26,6 +26,7 @@ import staffAttendanceRoutes from './routes/staffAttendance.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import branchPackagesRoutes from './routes/branchPackages.js'
 import promoCodesRoutes from './routes/promoCodes.js'
+import ledgerRoutes from './routes/ledger.js'
 
 const app = express()
 
@@ -56,6 +57,7 @@ app.use('/api/staff-attendance', staffAttendanceRoutes)
 app.use('/api/password-reset', passwordResetRoutes)
 app.use('/api/branch-packages', branchPackagesRoutes)
 app.use('/api/promo-codes', promoCodesRoutes)
+app.use('/api/ledger', ledgerRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)

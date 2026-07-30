@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { QrCode, Printer } from 'lucide-react'
+import { QrCode, Printer, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import { printStudentCard } from '@/lib/studentCard'
 
 function Row({ label, value }) {
   return (
@@ -17,6 +18,16 @@ export default function ProfilAnakPage() {
   const [student, setStudent] = useState(null)
   const [error, setError] = useState('')
   const [qrUrl, setQrUrl] = useState('')
+  const [printing, setPrinting] = useState(false)
+
+  async function handlePrint() {
+    setPrinting(true)
+    try {
+      await printStudentCard(student, qrUrl)
+    } finally {
+      setPrinting(false)
+    }
+  }
 
   useEffect(() => {
     api.getMyChild().then(setStudent).catch((err) => setError(err.message))
@@ -66,10 +77,11 @@ export default function ProfilAnakPage() {
             <div className="font-bold text-navy-900">{student.studentId}</div>
             <p className="text-xs text-gray-400 mb-4">Tunjukkan kode ini ke Coach untuk absen scan QR.</p>
             <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy-900 hover:bg-navy-800 text-white px-4 py-2 rounded-lg"
+              onClick={handlePrint}
+              disabled={printing}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy-900 hover:bg-navy-800 text-white px-4 py-2 rounded-lg disabled:opacity-50"
             >
-              <Printer size={14} /> Cetak Kartu
+              {printing ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Cetak Kartu
             </button>
           </>
         ) : (

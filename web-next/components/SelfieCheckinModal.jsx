@@ -18,12 +18,29 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
+// Truncates text with an ellipsis so it never draws past the canvas edge —
+// ctx.fillText does not wrap or clip, so long strings (e.g. a verbose
+// reverse-geocoded address) would otherwise bleed off the image.
+function truncateToWidth(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text
+  let lo = 0, hi = text.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    const candidate = text.slice(0, mid) + '…'
+    if (ctx.measureText(candidate).width <= maxWidth) lo = mid
+    else hi = mid - 1
+  }
+  return text.slice(0, lo) + '…'
+}
+
 function drawWatermark(ctx, width, height, { timeText, locationText }) {
-  const padding = 16
+  const padding = 14
+  const maxTextWidth = width - padding * 2
   const lines = [timeText, locationText].filter(Boolean)
-  const fontSize = Math.max(14, Math.round(width / 32))
-  const lineHeight = fontSize * 1.4
-  const boxHeight = lines.length * lineHeight + padding * 1.5 + fontSize * 1.6
+  const fontSize = Math.max(10, Math.min(15, Math.round(width / 48)))
+  const titleFontSize = Math.round(fontSize * 1.1)
+  const lineHeight = fontSize * 1.5
+  const boxHeight = lines.length * lineHeight + padding * 1.5 + titleFontSize * 1.6
 
   const gradient = ctx.createLinearGradient(0, height - boxHeight, 0, height)
   gradient.addColorStop(0, 'rgba(0,0,0,0)')
@@ -33,13 +50,13 @@ function drawWatermark(ctx, width, height, { timeText, locationText }) {
 
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = '#d4a843'
-  ctx.font = `700 ${fontSize * 1.15}px sans-serif`
-  ctx.fillText('SixStars Academy Indonesia', padding, height - boxHeight + padding + fontSize * 1.15)
+  ctx.font = `700 ${titleFontSize}px sans-serif`
+  ctx.fillText(truncateToWidth(ctx, 'SixStars Academy Indonesia', maxTextWidth), padding, height - boxHeight + padding + titleFontSize)
 
   ctx.fillStyle = '#ffffff'
   ctx.font = `600 ${fontSize}px sans-serif`
   lines.forEach((line, i) => {
-    ctx.fillText(line, padding, height - boxHeight + padding + fontSize * 1.6 + lineHeight * (i + 1) - lineHeight * 0.3)
+    ctx.fillText(truncateToWidth(ctx, line, maxTextWidth), padding, height - boxHeight + padding + titleFontSize * 1.6 + lineHeight * (i + 1) - lineHeight * 0.3)
   })
 }
 

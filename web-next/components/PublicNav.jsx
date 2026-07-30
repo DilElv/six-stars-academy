@@ -7,6 +7,7 @@ import {
   Menu, X, ChevronRight, Home, Dumbbell, CalendarDays,
   Image as ImageIcon, Award, Info, LogIn, UserPlus,
 } from 'lucide-react'
+import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 
 const navLinks = [
   { href: '/', label: 'Beranda', icon: Home },
@@ -81,13 +82,15 @@ export default function PublicNav() {
           <Link href="/login" className="text-sm font-semibold text-white hover:text-gold-400 transition-colors">
             Masuk
           </Link>
-          <Link
-            href="/daftar"
+          <a
+            href={REGISTER_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="group inline-flex items-center gap-1 text-sm font-semibold bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 px-4 py-2.5 rounded-full transition-all duration-200 shadow-[0_0_0_0_rgba(212,175,55,0.5)] hover:shadow-[0_0_24px_2px_rgba(212,175,55,0.4)]"
           >
             Daftar
             <ChevronRight size={14} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-          </Link>
+          </a>
         </div>
 
         <button
@@ -174,13 +177,15 @@ export default function PublicNav() {
             >
               <LogIn size={15} /> Masuk
             </Link>
-            <Link
-              href="/daftar"
+            <a
+              href={REGISTER_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={() => setMobileOpen(false)}
               className="flex-1 inline-flex items-center justify-center gap-1.5 text-sm font-bold bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 px-4 py-3 rounded-2xl shadow-[0_0_24px_2px_rgba(212,175,55,0.35)] transition-colors"
             >
               <UserPlus size={15} /> Daftar
-            </Link>
+            </a>
           </div>
         </div>
       </div>

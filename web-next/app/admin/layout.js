@@ -9,7 +9,7 @@ const navItems = [
   { href: '/admin/head-coach', label: 'Data Head Coach', icon: Shield },
   { href: '/admin/coach', label: 'Data Coach', icon: UserCog },
   { href: '/admin/data-admin', label: 'Data Admin', icon: ShieldCheck },
-  { href: '/admin/pembayaran', label: 'Pembayaran', icon: Wallet },
+  { href: '/admin/pembayaran', label: 'Keuangan', icon: Wallet },
   { href: '/admin/absensi', label: 'Absensi', icon: ClipboardList },
   { href: '/admin/jadwal', label: 'Jadwal Latihan', icon: Calendar },
   { href: '/admin/event', label: 'Event', icon: Trophy },

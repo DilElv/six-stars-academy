@@ -3,7 +3,8 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
-import { createBillingFor } from '../lib/paymentHelpers.js'
+import { createBillingFor, convertPendingRegistration, failPendingRegistration } from '../lib/paymentHelpers.js'
+import { queryPayment } from '../lib/rintisan.js'
 
 const router = Router()
 
@@ -78,7 +79,8 @@ router.post('/register', async (req, res) => {
         const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
         if (!valid) return res.status(400).json({ error: 'Kode promo tidak berlaku untuk paket ini' })
       }
-      discount = Math.round(totalAmount * promoCodeRecord.discountPercent / 100)
+      const discountBase = pkgAmount + (promoCodeRecord.appliesToRegistrationFee ? registrationFee : 0)
+      discount = Math.round(discountBase * promoCodeRecord.discountPercent / 100)
     }
 
     const pending = await prisma.pendingRegistration.create({
@@ -141,8 +143,26 @@ router.post('/register', async (req, res) => {
 // gone through and the real account/student has been created.
 router.get('/pending-registration/:id', async (req, res) => {
   try {
-    const pending = await prisma.pendingRegistration.findUnique({ where: { id: req.params.id } })
+    let pending = await prisma.pendingRegistration.findUnique({ where: { id: req.params.id } })
     if (!pending) return res.status(404).json({ error: 'Pendaftaran tidak ditemukan' })
+
+    // Self-heal: don't rely solely on Rintisan's webhook arriving (it can fail
+    // to reach us for reasons outside our control, e.g. a misconfigured
+    // callback URL on their side). Every time the wizard polls this endpoint
+    // while still "pending", ask Rintisan directly whether it's actually paid.
+    if (pending.status === 'pending' && pending.transactionId) {
+      try {
+        const result = await queryPayment(pending.transactionId)
+        if (String(result.response_code) === '200' && result.payment_status === 'PAID') {
+          await convertPendingRegistration(pending)
+          pending = await prisma.pendingRegistration.findUnique({ where: { id: pending.id } })
+        }
+      } catch (err) {
+        console.error('queryPayment self-heal check failed:', err.message)
+        // keep returning the current (still pending) status; next poll retries
+      }
+    }
+
     res.json({
       status: pending.status,
       paymentLink: pending.paymentLink,

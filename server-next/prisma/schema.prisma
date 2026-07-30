@@ -38,6 +38,7 @@ model User {
   verifiedStaffAttendances StaffAttendance[] @relation("StaffAttendanceVerifiedBy")
   events            Event[]
   passwordResets    PasswordReset[]
+  ledgerEntries     LedgerEntry[]
 
   @@map("users")
 }
@@ -59,6 +60,7 @@ model Branch {
   trainingSessions TrainingSession[]
   events           Event[]
   branchPackages   BranchPackage[]
+  ledgerEntries    LedgerEntry[]
 
   @@map("branches")
 }
@@ -433,6 +435,7 @@ model PromoCode {
   maxUses         Int         @default(1)
   usedCount       Int         @default(0)
   allPackages     Boolean     @default(false)
+  appliesToRegistrationFee Boolean @default(false)
   status          String      @default("active")
   expiresAt       DateTime?
   createdAt       DateTime    @default(now())
@@ -498,6 +501,26 @@ model CmsContent {
   updatedAt DateTime @updatedAt
 
   @@map("cms_contents")
+}
+
+// Manual bookkeeping entries logged by admin/head_coach (e.g. ad-hoc training
+// expenses, cash income not tied to a Payment). "Pemasukan" views union
+// LedgerEntry(type=income) with successful Payment rows; "Pengeluaran" is
+// LedgerEntry(type=expense) only, since expenses have no Payment counterpart.
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  type        String   // income | expense
+  description String
+  amount      Int
+  date        DateTime @default(now())
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ledger_entries")
 }
 
 model StudentCard {

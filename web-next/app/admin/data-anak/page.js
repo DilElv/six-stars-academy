@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import StudentDetailModal from '@/components/StudentDetailModal'
+import AddStudentModal from '@/components/AddStudentModal'
+import { totalSessionsFor, PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -86,7 +89,7 @@ export default function AdminDataAnakPage() {
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-navy-900 text-lg">Data Anak</h1>
               <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-1 bg-gold-400 hover:bg-gold-500 text-navy-900 text-xs font-bold px-3 py-1.5 rounded-xl">
-                <UserPlus size={14} /> Tambah Siswa
+                <UserPlus size={14} /> Tambah Anak
               </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -132,6 +135,24 @@ export default function AdminDataAnakPage() {
                       <span className="text-gray-400">Cabang</span>
                       {s.branch ? <span className="text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Paket</span>
+                      <span className="font-medium text-navy-900 text-right truncate max-w-[60%]">{s.package?.name || '-'}</span>
+                    </div>
+                    {s.package && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Sesi</span>
+                        <span className="font-medium text-navy-900">{s.sessionsUsed}/{totalSessionsFor(s)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Pembayaran</span>
+                      {s.payments?.[0] ? (
+                        <span className={`text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${PAYMENT_STATUS_BADGE[s.payments[0].status]?.color || 'bg-gray-100 text-gray-500'}`}>
+                          {PAYMENT_STATUS_BADGE[s.payments[0].status]?.label || s.payments[0].status}
+                        </span>
+                      ) : <span className="text-[10px] sm:text-xs text-gray-300">-</span>}
+                    </div>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
                     <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
@@ -143,7 +164,7 @@ export default function AdminDataAnakPage() {
             </div>
           )}
 
-          {viewStudent && <ViewModal student={viewStudent} onClose={() => setViewStudent(null)} />}
+          {viewStudent && <StudentDetailModal student={viewStudent} onClose={() => setViewStudent(null)} />}
           {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
           {showAddStudent && <AddStudentModal branches={branches} packages={packages} onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
@@ -205,213 +226,6 @@ export default function AdminDataAnakPage() {
   )
 }
 
-function Row({ label, value }) {
-  return (
-    <div className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm">
-      <span className="text-gray-500">{label}</span>
-      <span className="font-medium text-navy-900 text-right">{value || '-'}</span>
-    </div>
-  )
-}
-
-function ViewModal({ student, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
-          <div className="w-16 h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden">
-            {student.photo && <img src={student.photo} alt="" className="w-full h-full object-cover" />}
-          </div>
-          <h3 className="font-heading font-bold text-white">{student.fullName}</h3>
-          <p className="text-xs text-gray-300">{student.studentId}</p>
-        </div>
-        <div className="p-5">
-          <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID')} />
-          <Row label="Posisi" value={student.position} />
-          <Row label="Kelompok Umur" value={student.ageGroup} />
-          <Row label="Cabang" value={student.branch?.name} />
-          <Row label="Nama Orang Tua" value={student.parentName} />
-          <Row label="Telepon" value={student.parentPhone} />
-          <Row label="Alamat" value={student.address} />
-          <Row label="Paket" value={student.package?.name} />
-          <Row label="Status" value={student.status} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AddStudentModal({ branches, packages, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
-    fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
-    paymentStatus: 'pending',
-  })
-  const [promoCodeInput, setPromoCodeInput] = useState('')
-  const [promoDiscount, setPromoDiscount] = useState(null)
-  const [promoChecking, setPromoChecking] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleCheckPromo() {
-    if (!promoCodeInput.trim() || !form.packageId) return
-    setPromoChecking(true)
-    setError('')
-    try {
-      const pkg = packages.find((p) => p.id === form.packageId)
-      const result = await api.validatePromoCode(promoCodeInput.trim(), form.packageId, pkg?.price || 0)
-      setPromoDiscount(result)
-    } catch (err) {
-      setPromoDiscount(null)
-      setError(err.message)
-    } finally {
-      setPromoChecking(false)
-    }
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (form.parentPassword.length < 6) return setError('Password minimal 6 karakter')
-    setSaving(true)
-    setError('')
-    try {
-      await api.createStudent({
-        ...form,
-        ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
-      })
-      onSaved()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
-          <UserPlus size={24} className="mx-auto text-gold-400 mb-2" />
-          <h3 className="font-bold text-white">Tambah Siswa Baru</h3>
-          <p className="text-xs text-gray-300 mt-1">Buat akun untuk siswa yang sudah ada sebelum aplikasi ini</p>
-        </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
-
-          <div>
-            <h4 className="text-xs font-bold text-navy-900 mb-2 uppercase tracking-wider">Data Orang Tua</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Orang Tua</label>
-                <input required value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Email (untuk login)</label>
-                <input type="email" required value={form.parentEmail} onChange={(e) => setForm((f) => ({ ...f, parentEmail: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
-                  <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Password</label>
-                  <input type="password" required value={form.parentPassword} onChange={(e) => setForm((f) => ({ ...f, parentPassword: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" minLength={6} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4">
-            <h4 className="text-xs font-bold text-navy-900 mb-2 uppercase tracking-wider">Data Siswa</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Lengkap Siswa</label>
-                <input required value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
-                  <input type="date" required value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
-                  <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                  <AppSelect
-                    value={form.branchId}
-                    onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-                    className="w-full"
-                    allLabel="- Pilih -"
-                    placeholder="- Pilih -"
-                    options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
-                  <AppSelect
-                    value={form.packageId}
-                    onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
-                    className="w-full"
-                    allLabel="- Tanpa Paket -"
-                    placeholder="- Tanpa Paket -"
-                    options={packages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg)` }))}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Status Pembayaran</label>
-                <AppSelect
-                  value={form.paymentStatus}
-                  onChange={(v) => setForm((f) => ({ ...f, paymentStatus: v }))}
-                  className="w-full"
-                  options={[
-                    { value: 'pending', label: 'Pending — menunggu verifikasi' },
-                    { value: 'success', label: 'Lunas — sudah bayar offline' },
-                  ]}
-                />
-              </div>
-              <div className="pt-3 border-t border-gray-100">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kode Promo (opsional)</label>
-                <div className="flex gap-2">
-                  <input
-                    value={promoCodeInput}
-                    onChange={(e) => setPromoCodeInput(e.target.value)}
-                    placeholder="Masukkan kode promo"
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase"
-                    disabled={promoDiscount !== null}
-                  />
-                  {promoDiscount ? (
-                    <button type="button" onClick={() => { setPromoDiscount(null); setPromoCodeInput('') }} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
-                  ) : (
-                    <button type="button" onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim() || !form.packageId} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50">
-                      {promoChecking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                    </button>
-                  )}
-                </div>
-                {promoDiscount && (
-                  <div className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
-                    Diskon {promoDiscount.discountPercent}% — Hemat Rp{(promoDiscount.discount || 0).toLocaleString('id-ID')}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold py-2.5 rounded-2xl disabled:opacity-50">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />} Buat Akun & Daftarkan Siswa
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 function EditModal({ student, branches, onClose, onSaved }) {
   const [form, setForm] = useState({

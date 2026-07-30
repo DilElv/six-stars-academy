@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { MapPin, Phone, Mail, ChevronRight, ArrowRight } from 'lucide-react'
+import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 
 const navLinks = [
   { href: '/program', label: 'Program' },
@@ -33,13 +34,15 @@ export default function PublicFooter({ settings }) {
             <div className="font-heading font-bold text-white text-xl sm:text-2xl tracking-tight">Siap gabung SixStars Academy?</div>
             <p className="text-gray-400 text-sm mt-1">Daftarkan si kecil sekarang, kuota kelompok umur terbatas.</p>
           </div>
-          <Link
-            href="/daftar"
+          <a
+            href={REGISTER_WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="relative group inline-flex items-center gap-2 shrink-0 bg-gradient-to-r from-gold-400 to-gold-500 hover:from-gold-300 hover:to-gold-400 text-navy-900 font-bold px-6 py-3 rounded-full transition-all duration-200 shadow-[0_0_20px_rgba(212,175,55,0.25)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] hover:-translate-y-0.5"
           >
             Daftar Sekarang
             <ArrowRight size={16} className="transition-transform duration-200 group-hover:translate-x-1" />
-          </Link>
+          </a>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 pb-10 border-b border-white/10">
@@ -85,7 +88,7 @@ export default function PublicFooter({ settings }) {
               )}
               <div className="flex gap-5 pt-2">
                 <Link href="/login" className="text-gray-400 hover:text-gold-400 transition-colors">Masuk</Link>
-                <Link href="/daftar" className="text-gray-400 hover:text-gold-400 transition-colors">Daftar</Link>
+                <a href={REGISTER_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gold-400 transition-colors">Daftar</a>
               </div>
             </div>
           </div>

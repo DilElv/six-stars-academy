@@ -198,6 +198,15 @@ export async function getMyChildQrCodeUrl() {
   return URL.createObjectURL(blob)
 }
 
+// Used by admin/head_coach to show or download any student's QR card.
+export async function getStudentQrCodeUrl(id) {
+  const token = getToken()
+  const res = await fetch(`${API_URL}/students/${id}/qrcode.png`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) throw new Error('Gagal memuat QR code')
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 export async function scanAttendance(qrCode) {
   return request('/attendance/scan', { method: 'POST', body: JSON.stringify({ qrCode }) })
 }
@@ -235,7 +244,7 @@ export async function createUser(payload) {
 }
 
 export async function createStudent(payload) {
-  return request('/admin/students', { method: 'POST', body: JSON.stringify(payload) })
+  return request('/students', { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export async function updateUser(id, payload) {
@@ -318,9 +327,13 @@ export async function getMyStaffAttendance(date) {
   return request(`/staff-attendance/me${date ? `?date=${date}` : ''}`)
 }
 
-export async function getStaffAttendance(date, branchId) {
+export async function getStaffAttendance(filters = {}) {
+  const { date, month, year, role, branchId } = filters
   const params = new URLSearchParams()
   if (date) params.set('date', date)
+  if (month) params.set('month', month)
+  if (year) params.set('year', year)
+  if (role) params.set('role', role)
   if (branchId) params.set('branchId', branchId)
   return request(`/staff-attendance?${params.toString()}`)
 }
@@ -436,6 +449,33 @@ export async function deletePromoCode(id) {
   return request(`/promo-codes/${id}`, { method: 'DELETE' })
 }
 
-export async function validatePromoCode(code, packageId, amount) {
-  return request('/promo-codes/validate', { method: 'POST', body: JSON.stringify({ code, packageId, amount }) })
+export async function validatePromoCode(code, packageId, amount, registrationFee) {
+  return request('/promo-codes/validate', { method: 'POST', body: JSON.stringify({ code, packageId, amount, registrationFee }) })
+}
+
+function buildQuery(filters = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') params.set(k, v) })
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
+}
+
+export async function getPemasukan(filters) {
+  return request(`/ledger/pemasukan${buildQuery(filters)}`)
+}
+
+export async function getPengeluaran(filters) {
+  return request(`/ledger/pengeluaran${buildQuery(filters)}`)
+}
+
+export async function getLaba(filters) {
+  return request(`/ledger/laba${buildQuery(filters)}`)
+}
+
+export async function createLedgerEntry(payload) {
+  return request('/ledger', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function deleteLedgerEntry(id) {
+  return request(`/ledger/${id}`, { method: 'DELETE' })
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight, ChevronDown, Star } from 'lucide-react'
+import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 import { useEffect, useState } from 'react'
 
 const HERO_PHOTOS = [
@@ -94,13 +95,15 @@ export default function Hero() {
             </p>
 
             <div className="animate-fade-up [animation-delay:330ms] flex flex-wrap gap-4">
-              <Link
-                href="/daftar"
+              <a
+                href={REGISTER_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="group inline-flex items-center gap-2 bg-gradient-to-r from-gold-300 to-gold-500 hover:from-gold-200 hover:to-gold-400 text-navy-900 font-bold px-8 py-3.5 rounded-full transition-all duration-200 shadow-[0_0_0_0_rgba(212,168,67,0.5)] hover:shadow-[0_0_32px_4px_rgba(212,168,67,0.35)] hover:-translate-y-0.5"
               >
                 Daftar Sekarang
                 <ChevronRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
-              </Link>
+              </a>
               <Link
                 href="/program"
                 className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white font-semibold px-8 py-3.5 rounded-full border border-white/15 hover:border-white/30 transition-all duration-200"

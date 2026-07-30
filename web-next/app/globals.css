@@ -49,6 +49,29 @@ html {
   0% { opacity: 0; }
   100% { opacity: 1; }
 }
+@keyframes statusCircleDraw {
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes statusMarkDraw {
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes statusPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.status-icon-wrap {
+  animation: statusPop 0.3s cubic-bezier(0.65, 0, 0.45, 1) both;
+}
+.status-icon-circle {
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: statusCircleDraw 0.5s cubic-bezier(0.65, 0, 0.45, 1) 0.1s forwards;
+}
+.status-icon-mark {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: statusMarkDraw 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.55s forwards;
+}
 /* opacity-only: never sets a transform, so it can never create a
    containing block for position:fixed descendants (e.g. modals) */
 .page-fade-in {
