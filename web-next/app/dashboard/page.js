@@ -59,6 +59,9 @@ export default function ParentDasborPage() {
       })
   )
 
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const todaysSessions = (trainingSessions || []).filter((ts) => new Date(ts.date).toISOString().slice(0, 10) === todayKey)
+
   const forfeitedSessions = (trainingSessions || []).filter((ts) => {
     const sDate = new Date(ts.date)
     sDate.setHours(23, 59, 59, 999)
@@ -153,6 +156,23 @@ export default function ParentDasborPage() {
               <span>{new Date(ts.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {todaysSessions.length > 0 && (
+        <div>
+          <h2 className="font-semibold text-navy-900 text-sm mb-3 flex items-center gap-1.5">
+            <Calendar size={15} className="text-gold-500" /> Topik Latihan Hari Ini
+          </h2>
+          <div className="space-y-2">
+            {todaysSessions.map((s) => (
+              <div key={s.id} className="rounded-2xl border-2 border-gold-300 bg-gold-50/50 p-3.5">
+                <div className="font-bold text-navy-900 text-sm">{s.topicTitle}</div>
+                {s.topicDescription && <p className="text-xs text-gray-500 mt-1">{s.topicDescription}</p>}
+                {s.field?.name && <div className="text-xs text-gold-700 font-semibold mt-1 flex items-center gap-1"><MapPin size={11} /> {s.field.name}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

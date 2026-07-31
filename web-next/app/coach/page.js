@@ -110,15 +110,15 @@ export default function CoachDasborPage() {
           <ChevronRight size={16} className="text-gray-300 group-hover:text-gold-500 group-hover:translate-x-1 transition-all duration-200" />
         </Link>
         <Link
-          href="/coach/topik-latihan"
+          href="/coach/jadwal"
           className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
         >
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center transition-shadow duration-200 shrink-0">
-            <BookOpen size={19} className="text-gold-300" />
+            <CalendarClock size={19} className="text-gold-300" />
           </div>
           <div className="flex-1">
-            <div className="font-semibold text-navy-900">Topik Latihan</div>
-            <div className="text-xs text-gray-400">Susun materi sesi latihan</div>
+            <div className="font-semibold text-navy-900">Jadwal</div>
+            <div className="text-xs text-gray-400">Kalender latihan & topik hari ini</div>
           </div>
           <ChevronRight size={16} className="text-gray-300 group-hover:text-gold-500 group-hover:translate-x-1 transition-all duration-200" />
         </Link>
@@ -202,7 +202,7 @@ export default function CoachDasborPage() {
         <div className="glass-card rounded-3xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-500">Topik Latihan Terbaru</h2>
-            <Link href="/coach/topik-latihan" className="text-xs font-semibold text-gold-600 hover:text-gold-700">Lihat semua</Link>
+            <Link href="/coach/jadwal" className="text-xs font-semibold text-gold-600 hover:text-gold-700">Lihat semua</Link>
           </div>
           {sessions === null ? (
             <div className="flex items-center justify-center py-8 text-gray-400 text-sm gap-2">

@@ -8,7 +8,15 @@ const router = Router()
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'), async (req, res) => {
   try {
     const where = {}
-    if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
+    if (req.query.ageGroup) {
+      const ag = req.query.ageGroup
+      where.OR = [
+        { ageGroup: ag },
+        { ageGroup: { startsWith: ag + ',' } },
+        { ageGroup: { endsWith: ',' + ag } },
+        { ageGroup: { contains: ',' + ag + ',' } },
+      ]
+    }
     if (req.query.branchId) where.branchId = req.query.branchId
 
     if (req.user.role === 'coach') {
@@ -33,8 +41,9 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
 })
 
 router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
   try {
+    if (!Array.isArray(ageGroups) || ageGroups.length === 0) return res.status(400).json({ error: 'Pilih minimal satu kelompok umur' })
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
 
     if (req.user.role === 'coach') {
@@ -49,6 +58,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
       }
     }
 
+    const ageGroup = ageGroups.join(',')
     const session = await prisma.trainingSession.create({
       data: {
         coachId: req.user.id,
@@ -80,7 +90,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 })
 
 router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroup, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
   try {
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
     if (req.user.role === 'coach' && fieldId) {
@@ -93,7 +103,7 @@ router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
     const session = await prisma.trainingSession.update({
       where: { id: req.params.id },
       data: {
-        ageGroup,
+        ageGroup: Array.isArray(ageGroups) ? ageGroups.join(',') : undefined,
         date: date ? new Date(date) : undefined,
         topicTitle,
         topicDescription,

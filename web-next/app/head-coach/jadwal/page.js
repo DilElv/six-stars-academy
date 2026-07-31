@@ -7,40 +7,51 @@ import { AppSelect } from '@/components/ui/app-select'
 import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { WEEKDAYS, weekdayLabel } from '@/lib/weekdays'
+import JadwalCalendar from '@/components/JadwalCalendar'
 
 const emptyForm = { weekdays: [], ageGroups: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
-export default function AdminJadwalPage() {
+export default function HeadCoachJadwalPage() {
+  const [tab, setTab] = useState('kalender')
+  const [me, setMe] = useState(null)
+
   const [schedules, setSchedules] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [fields, setFields] = useState([])
   const [coaches, setCoaches] = useState([])
   const [branches, setBranches] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filterBranch, setFilterBranch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editSchedule, setEditSchedule] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function load() {
-    setLoading(true)
-    Promise.all([api.getSchedules(), api.getUsers('coach'), api.getUsers('head_coach'), api.getBranches()])
-      .then(([sched, coach, headCoach, br]) => {
-        setSchedules(sched)
-        setCoaches([...headCoach, ...coach])
-        setBranches(br)
-      })
-      .finally(() => setLoading(false))
+  function load(user) {
+    Promise.all([
+      api.getSchedules(undefined, user.branchId),
+      api.getTrainingSessions(),
+      user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),
+      api.getUsers('coach'),
+      api.getUsers('head_coach'),
+      api.getBranches(),
+    ]).then(([sched, sess, flds, coach, headCoach, br]) => {
+      setSchedules(sched)
+      setSessions(sess)
+      setFields(flds)
+      setCoaches([...headCoach, ...coach])
+      setBranches(br)
+    })
   }
 
-  useEffect(load, [])
-
-  const filteredSchedules = filterBranch ? schedules.filter((s) => s.branchId === filterBranch) : schedules
+  useEffect(() => {
+    api.getMe().then((user) => { setMe(user); load(user) })
+  }, [])
 
   function openAdd() {
-    setForm(emptyForm)
+    setForm({ ...emptyForm, branchId: me?.branchId || '' })
     setEditSchedule(null)
     setShowForm(true)
+    setError('')
   }
 
   function openEdit(s) {
@@ -55,6 +66,7 @@ export default function AdminJadwalPage() {
     })
     setEditSchedule(s)
     setShowForm(true)
+    setError('')
   }
 
   async function handleSubmit(e) {
@@ -68,7 +80,7 @@ export default function AdminJadwalPage() {
         await api.createSchedule(form)
       }
       setShowForm(false)
-      load()
+      load(me)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -79,59 +91,64 @@ export default function AdminJadwalPage() {
   async function handleDelete(id) {
     if (!confirm('Hapus jadwal ini?')) return
     await api.deleteSchedule(id)
-    load()
+    load(me)
   }
+
+  if (!me) return null
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="font-bold text-navy-900 text-lg">Jadwal Latihan</h1>
-        <div className="flex items-center gap-2">
-          <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
-          <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
-            <Plus size={16} /> Tambah Jadwal
-          </button>
+        <h1 className="font-bold text-navy-900 text-lg">Jadwal</h1>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-2xl p-1 w-fit">
+          <button onClick={() => setTab('kalender')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'kalender' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Kalender</button>
+          <button onClick={() => setTab('buat-jadwal')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'buat-jadwal' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Buat Jadwal</button>
         </div>
       </div>
 
-      {loading ? null : (
-        <div className="glass-card rounded-3xl overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Hari</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Waktu</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Umur</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Coach</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filteredSchedules.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-500">{weekdayLabel(s.day)}</td>
-                  <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
-                  <td className="px-3 py-3 text-gray-500">{s.ageGroup}</td>
-                  <td className="px-3 py-3 text-gray-500">{s.location}</td>
-                  <td className="px-3 py-3">
-                    {s.branch ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-xs text-gray-300">-</span>}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEdit(s)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Edit3 size={14} /></button>
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {tab === 'kalender' ? (
+        <JadwalCalendar schedules={schedules} sessions={sessions} fields={fields} canAddTopic onChanged={() => load(me)} />
+      ) : (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
+              <Plus size={16} /> Tambah Jadwal
+            </button>
           </div>
-          {filteredSchedules.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada jadwal.</div>}
+          <div className="glass-card rounded-3xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Hari</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Waktu</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Umur</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Coach</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {schedules.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500">{weekdayLabel(s.day)}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.ageGroup}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.location}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEdit(s)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Edit3 size={14} /></button>
+                          <button onClick={() => handleDelete(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {schedules.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada jadwal untuk cabang Anda.</div>}
+          </div>
         </div>
       )}
 
