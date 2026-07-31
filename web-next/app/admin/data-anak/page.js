@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -177,7 +177,7 @@ export default function AdminDataAnakPage() {
           )}
 
           {viewStudent && <StudentDetailModal student={viewStudent} onClose={() => setViewStudent(null)} />}
-          {editStudent && <EditModal student={editStudent} branches={branches} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+          {editStudent && <EditModal student={editStudent} branches={branches} packages={packages} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
           {showAddStudent && <AddStudentModal branches={branches} packages={packages} onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
       ) : (
@@ -239,9 +239,11 @@ export default function AdminDataAnakPage() {
 }
 
 
-function EditModal({ student, branches, onClose, onSaved }) {
+function EditModal({ student, branches, packages, onClose, onSaved }) {
   const [form, setForm] = useState({
+    photo: student.photo || '',
     fullName: student.fullName,
+    dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().slice(0, 10) : '',
     position: student.position,
     ageGroup: student.ageGroup,
     address: student.address,
@@ -249,16 +251,37 @@ function EditModal({ student, branches, onClose, onSaved }) {
     parentPhone: student.parentPhone,
     status: student.status,
     branchId: student.branchId || '',
+    packageId: student.packageId || '',
+    sessionsUsed: student.sessionsUsed != null ? String(student.sessionsUsed) : '0',
   })
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const selectedPackage = packages?.find((p) => p.id === form.packageId)
+  const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    setError('')
+    try {
+      const url = await api.uploadFile(file)
+      setForm((f) => ({ ...f, photo: url }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await api.updateStudent(student.id, form)
+      await api.updateStudent(student.id, { ...form, sessionsUsed: Number(form.sessionsUsed) || 0 })
       onSaved()
     } catch (err) {
       setError(err.message)
@@ -276,19 +299,32 @@ function EditModal({ student, branches, onClose, onSaved }) {
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
+              {form.photo ? <img src={form.photo} alt="" className="w-full h-full object-cover" /> : <Upload size={18} className="text-gray-300" />}
+            </div>
+            <label className="text-xs font-semibold text-navy-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-100">
+              {uploadingPhoto ? 'Mengunggah...' : 'Ganti Foto Profil'}
+              <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={uploadingPhoto} />
+            </label>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Lengkap</label>
             <input value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
+              <input type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+            </div>
+            <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
               <AppSelect value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} className="w-full" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-              <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
-            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
+            <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Orang Tua</label>
@@ -302,15 +338,42 @@ function EditModal({ student, branches, onClose, onSaved }) {
             <label className="block text-xs font-semibold text-gray-500 mb-1">Alamat</label>
             <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={2} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-            <AppSelect
-              value={form.status}
-              onChange={(v) => setForm((f) => ({ ...f, status: v }))}
-              className="w-full"
-              options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
+              <AppSelect
+                value={form.status}
+                onChange={(v) => setForm((f) => ({ ...f, status: v }))}
+                className="w-full"
+                options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
+              <AppSelect
+                value={form.packageId}
+                onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
+                className="w-full"
+                allLabel="- Tanpa Paket -"
+                placeholder="- Tanpa Paket -"
+                options={(packages || []).map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg)` }))}
+              />
+            </div>
           </div>
+          {form.packageId && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi Terpakai</label>
+              <input
+                type="number"
+                min={0}
+                max={totalSessions || undefined}
+                value={form.sessionsUsed}
+                onChange={(e) => setForm((f) => ({ ...f, sessionsUsed: e.target.value }))}
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Dari total {totalSessions} sesi paket ini.</p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
             <AppSelect

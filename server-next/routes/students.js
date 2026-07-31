@@ -302,16 +302,34 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 })
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId } = req.body
+  const { fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed } = req.body
   try {
-    const student = await prisma.student.update({
-      where: { id: req.params.id },
-      data: {
-        fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-        branchId: branchId !== undefined ? (branchId || null) : undefined,
-      },
-    })
+    const data = {
+      fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      branchId: branchId !== undefined ? (branchId || null) : undefined,
+      sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
+    }
+
+    // Changing the package re-derives the end date from today (same as a
+    // fresh assignment) — this is a correction to what package the student
+    // is on, not a renewal, so it doesn't touch Payment records.
+    if (packageId !== undefined) {
+      if (packageId) {
+        const pkg = await prisma.package.findUnique({ where: { id: packageId } })
+        if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
+        const startDate = new Date()
+        data.packageId = packageId
+        data.packageStartDate = startDate
+        data.packageEndDate = new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000)
+      } else {
+        data.packageId = null
+        data.packageStartDate = null
+        data.packageEndDate = null
+      }
+    }
+
+    const student = await prisma.student.update({ where: { id: req.params.id }, data })
     res.json(student)
   } catch (err) {
     console.error(err)
