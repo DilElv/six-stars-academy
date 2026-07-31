@@ -190,6 +190,11 @@ export async function saveAssessment(payload) {
   return request('/assessments', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export async function getMyAssessment(month, year) {
+  const qs = month && year ? `?month=${month}&year=${year}` : ''
+  return request(`/assessments/me${qs}`)
+}
+
 export async function getMyChildQrCodeUrl() {
   const token = getToken()
   const res = await fetch(`${API_URL}/students/me/qrcode.png`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })

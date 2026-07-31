@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Calendar, Clock, MapPin, Users, Wallet, Check, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -93,7 +94,8 @@ export default function AdminEventDetailPage() {
       </div>
 
       {payingParticipant && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setPayingParticipant(null)}>
+        <ModalPortal>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPayingParticipant(null)}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
@@ -124,6 +126,7 @@ export default function AdminEventDetailPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

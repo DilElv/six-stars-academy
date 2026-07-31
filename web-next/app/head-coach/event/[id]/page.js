@@ -7,6 +7,7 @@ import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
 import { PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -202,7 +203,8 @@ export default function HeadCoachEventDetailPage() {
       </div>
 
       {payingParticipant && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setPayingParticipant(null)}>
+        <ModalPortal>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setPayingParticipant(null)}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
@@ -233,6 +235,7 @@ export default function HeadCoachEventDetailPage() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

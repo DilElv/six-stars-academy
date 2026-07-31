@@ -1,68 +1,106 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { FileText, Download } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { FileText, Download, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
 import SkillRadar from '@/components/charts/SkillRadar'
 import OvrGauge from '@/components/charts/OvrGauge'
+import AssessmentCategories from '@/components/AssessmentCategories'
 
 const MONTHS = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
 export default function RaporAnakPage() {
+  const [assessment, setAssessment] = useState(null)
   const [reports, setReports] = useState(null)
   const [error, setError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback((silent) => {
+    if (!silent) setRefreshing(true)
+    Promise.all([api.getMyAssessment(), api.getMyReports()])
+      .then(([a, r]) => { setAssessment(a); setReports(r) })
+      .catch((err) => setError(err.message))
+      .finally(() => setRefreshing(false))
+  }, [])
 
   useEffect(() => {
-    api.getMyReports().then(setReports).catch((err) => setError(err.message))
-  }, [])
+    load(true)
+    // Real-time-ish: re-fetch whenever the tab regains focus, so a rapor the
+    // head-coach just saved shows up without the parent needing to manually
+    // reload — no websocket infra in this app, so focus-refresh is the
+    // lightweight equivalent.
+    function onFocus() { load(true) }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [load])
 
   if (error) return <p className="text-sm text-red-500">{error}</p>
   if (!reports) return null
 
-  const [latest, ...older] = reports
+  const pdfForLatest = reports.find((r) => assessment && r.month === assessment.month && r.year === assessment.year)
+  const olderReports = reports.filter((r) => !(assessment && r.month === assessment.month && r.year === assessment.year))
 
   return (
     <div className="space-y-6">
-      <h1 className="font-bold text-navy-900 text-lg">Rapor Bulanan</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-bold text-navy-900 text-lg">Rapor Bulanan</h1>
+        <button
+          onClick={() => load(false)}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-navy-700 disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Muat Ulang
+        </button>
+      </div>
 
-      {reports.length === 0 ? (
+      {!assessment ? (
         <div className="glass-card rounded-3xl p-10 text-center">
           <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Belum ada rapor bulanan. Rapor akan muncul setelah Coach/Head Coach menyelesaikan penilaian bulan berjalan.</p>
+          <p className="text-sm text-gray-400">Belum ada penilaian. Rapor akan muncul setelah Head Coach mengisi penilaian bulan berjalan.</p>
         </div>
       ) : (
         <>
-          {latest?.assessment && (
-            <div className="glass-card rounded-3xl p-6">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <div className="text-xs text-gray-400">Rapor Terbaru</div>
-                  <div className="font-bold text-navy-900 text-lg">{MONTHS[latest.month]} {latest.year}</div>
-                </div>
-                <OvrGauge value={latest.assessment.overallAvg ?? 0} size={56} />
-              </div>
-              <SkillRadar assessment={latest.assessment} height={280} />
-              {latest.assessment.coachComment && (
-                <p className="text-sm text-gray-500 italic border-t border-gray-100 pt-4 mt-2">"{latest.assessment.coachComment}"</p>
-              )}
-              {latest.pdfUrl && (
-                <a
-                  href={latest.pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold-600 mt-4"
-                >
-                  <Download size={13} /> Unduh PDF
-                </a>
-              )}
+          <div className="relative overflow-hidden bg-gradient-to-br from-navy-900 via-navy-900 to-navy-800 text-white rounded-3xl p-6 flex items-center justify-between">
+            <div aria-hidden="true" className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-gold-400/15 blur-[80px]" />
+            <div className="relative">
+              <div className="text-xs text-gray-300">Rapor Terbaru</div>
+              <div className="font-bold text-lg">{MONTHS[assessment.month]} {assessment.year}</div>
+            </div>
+            <div className="relative">
+              <OvrGauge value={assessment.overallAvg ?? 0} size={56} />
+            </div>
+          </div>
+
+          <div className="glass-card rounded-3xl p-5">
+            <h2 className="text-sm font-semibold text-gray-500 mb-2">Radar Skill</h2>
+            <SkillRadar assessment={assessment} height={280} />
+          </div>
+
+          <AssessmentCategories scores={assessment} editable={false} />
+
+          {assessment.coachComment && (
+            <div className="glass-card rounded-3xl p-5">
+              <div className="text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</div>
+              <p className="text-sm text-gray-600 italic">&ldquo;{assessment.coachComment}&rdquo;</p>
             </div>
           )}
 
-          {older.length > 0 && (
+          {pdfForLatest?.pdfUrl && (
+            <a
+              href={pdfForLatest.pdfUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold-600"
+            >
+              <Download size={13} /> Unduh PDF
+            </a>
+          )}
+
+          {olderReports.length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-gray-500 mb-3">Riwayat Rapor</h2>
               <div className="grid sm:grid-cols-2 gap-4">
-                {older.map((r) => (
+                {olderReports.map((r) => (
                   <div key={r.id} className="glass-card rounded-3xl p-5">
                     <div className="font-bold text-navy-900 mb-1">{MONTHS[r.month]} {r.year}</div>
                     <div className="text-sm text-gray-500 mb-3">

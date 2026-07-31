@@ -30,6 +30,26 @@ router.get('/', authenticate, authorize('head_coach', 'admin'), async (req, res)
   }
 })
 
+// Parent-facing, read-only. Returns the assessment directly (not gated
+// behind a generated Report/PDF) so the student's Rapor page reflects
+// whatever the head-coach has saved immediately, not only after a PDF has
+// been generated. Defaults to the most recently-scored month.
+router.get('/me', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
+    if (!student) return res.json(null)
+
+    const { month, year } = req.query
+    const assessment = month && year
+      ? await prisma.assessment.findUnique({ where: { studentId_month_year: { studentId: student.id, month: Number(month), year: Number(year) } } })
+      : await prisma.assessment.findFirst({ where: { studentId: student.id }, orderBy: [{ year: 'desc' }, { month: 'desc' }] })
+    res.json(assessment)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   const { studentId, month, year, coachComment, ...scores } = req.body
   if (!studentId || !month || !year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })

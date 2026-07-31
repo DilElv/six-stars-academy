@@ -9,6 +9,7 @@ import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
+import ModalPortal from '@/components/ui/modal-portal'
 
 const emptyForm = {
   title: '', description: '', type: 'tournament', ageGroups: [],
@@ -123,7 +124,8 @@ export default function HeadCoachEventPage() {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+        <ModalPortal>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
@@ -139,12 +141,26 @@ export default function HeadCoachEventPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-                <MultiSelectCheckbox
-                  options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
-                  values={form.ageGroups}
-                  onChange={(vals) => setForm((f) => ({ ...f, ageGroups: vals }))}
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-500">Kelompok Umur</label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.ageGroups.length === 0}
+                      onChange={(e) => setForm((f) => ({ ...f, ageGroups: e.target.checked ? [] : [...AGE_GROUPS] }))}
+                    />
+                    Semua Umur
+                  </label>
+                </div>
+                {form.ageGroups.length === 0 ? (
+                  <p className="text-[11px] text-gray-400">Berlaku untuk semua kelompok umur.</p>
+                ) : (
+                  <MultiSelectCheckbox
+                    options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
+                    values={form.ageGroups}
+                    onChange={(vals) => setForm((f) => ({ ...f, ageGroups: vals }))}
+                  />
+                )}
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -196,6 +212,7 @@ export default function HeadCoachEventPage() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

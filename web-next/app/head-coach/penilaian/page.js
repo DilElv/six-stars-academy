@@ -2,12 +2,13 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Save, Loader2, FileText, Download, ChevronDown, Search } from 'lucide-react'
+import { Save, Loader2, FileText, Download, Search } from 'lucide-react'
 import * as api from '@/lib/api'
-import { ASSESSMENT_CATEGORIES, scoreCategory } from '@/lib/assessmentFields'
+import { ASSESSMENT_CATEGORIES } from '@/lib/assessmentFields'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
+import AssessmentCategories from '@/components/AssessmentCategories'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -40,7 +41,6 @@ function PenilaianContent() {
   const [hasAssessment, setHasAssessment] = useState(false)
   const [report, setReport] = useState(null)
   const [generating, setGenerating] = useState(false)
-  const [openCategory, setOpenCategory] = useState(ASSESSMENT_CATEGORIES[0]?.key)
 
   useEffect(() => {
     api.getStudents().then(setStudents)
@@ -231,49 +231,7 @@ function PenilaianContent() {
 
           {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-          {ASSESSMENT_CATEGORIES.map((cat) => {
-            const isOpen = openCategory === cat.key
-            const avg = categoryAvg(scores, cat.fields)
-            return (
-              <div key={cat.key} className="glass-card rounded-3xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setOpenCategory((k) => (k === cat.key ? null : cat.key))}
-                  className="w-full flex items-center justify-between gap-3 p-5"
-                >
-                  <h2 className="font-semibold text-navy-900 text-sm">{cat.title}</h2>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gold-600 tabular-nums">{avg > 0 ? avg : '-'}</span>
-                    <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </button>
-                {isOpen && (
-                  <div className="px-5 pb-5 grid sm:grid-cols-2 gap-3">
-                    {cat.fields.map(([key, label]) => {
-                      const val = scores[key]
-                      const cat2 = val !== '' && val !== undefined ? scoreCategory(Number(val)) : null
-                      return (
-                        <div key={key} className="flex items-center justify-between gap-3">
-                          <label className="text-sm text-gray-600">{label}</label>
-                          <div className="flex items-center gap-2">
-                            <AppSelect
-                              value={val === undefined || val === '' ? '' : String(val)}
-                              onChange={(v) => setScores((s) => ({ ...s, [key]: v }))}
-                              allLabel="-"
-                              placeholder="-"
-                              className="w-16 py-1.5 px-2.5 justify-center"
-                              options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({ value: String(n), label: String(n) }))}
-                            />
-                            {cat2 && <span className={`text-xs font-semibold w-20 ${cat2.color}`}>{cat2.label}</span>}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          <AssessmentCategories scores={scores} editable onChange={setScores} />
 
           <div className="glass-card rounded-3xl p-5">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>

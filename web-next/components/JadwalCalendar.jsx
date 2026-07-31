@@ -10,6 +10,7 @@ import { AGE_GROUPS } from '@/lib/ageGroups'
 import { WEEKDAYS, weekdayForDate } from '@/lib/weekdays'
 import { id as localeId } from 'date-fns/locale'
 import { format } from 'date-fns'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function dateKey(d) {
   return format(d, 'yyyy-MM-dd')
@@ -243,7 +244,8 @@ export default function JadwalCalendar({
       </div>
 
       {showTopicForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setShowTopicForm(false)}>
+        <ModalPortal>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowTopicForm(false)}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
@@ -299,6 +301,7 @@ export default function JadwalCalendar({
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

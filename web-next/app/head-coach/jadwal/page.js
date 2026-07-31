@@ -8,6 +8,7 @@ import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { WEEKDAYS, weekdayLabel } from '@/lib/weekdays'
 import JadwalCalendar from '@/components/JadwalCalendar'
+import ModalPortal from '@/components/ui/modal-portal'
 
 const emptyForm = { weekdays: [], ageGroups: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
@@ -156,7 +157,8 @@ export default function HeadCoachJadwalPage() {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
+        <ModalPortal>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
@@ -222,6 +224,7 @@ export default function HeadCoachJadwalPage() {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )
