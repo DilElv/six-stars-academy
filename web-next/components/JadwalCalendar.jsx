@@ -34,6 +34,7 @@ export default function JadwalCalendar({
   attendanceByDate,
   attendanceLegend,
   renderDateBadge,
+  onEventClick,
 }) {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showTopicForm, setShowTopicForm] = useState(false)
@@ -179,17 +180,25 @@ export default function JadwalCalendar({
 
           {selectedDayEvents.length > 0 && (
             <div className="space-y-2 mb-4">
-              {selectedDayEvents.map((e) => (
-                <div key={e.id} className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3.5">
-                  <div className="flex items-center gap-1.5 text-blue-700 font-bold text-sm">
-                    <Trophy size={14} /> {e.title}
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-[11px] text-blue-600 mt-1.5">
-                    {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
-                    {e.fee > 0 && <span className="flex items-center gap-1"><Wallet size={11} /> Rp{e.fee.toLocaleString('id-ID')}</span>}
-                  </div>
-                </div>
-              ))}
+              {selectedDayEvents.map((e) => {
+                const Wrapper = onEventClick ? 'button' : 'div'
+                return (
+                  <Wrapper
+                    key={e.id}
+                    type={onEventClick ? 'button' : undefined}
+                    onClick={onEventClick ? () => onEventClick(e) : undefined}
+                    className={`w-full text-left rounded-2xl border border-blue-100 bg-blue-50/50 p-3.5 ${onEventClick ? 'hover:bg-blue-100/60 hover:border-blue-200 transition-colors cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-1.5 text-blue-700 font-bold text-sm">
+                      <Trophy size={14} /> {e.title}
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-blue-600 mt-1.5">
+                      {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
+                      {e.fee > 0 && <span className="flex items-center gap-1"><Wallet size={11} /> Rp{e.fee.toLocaleString('id-ID')}</span>}
+                    </div>
+                  </Wrapper>
+                )
+              })}
             </div>
           )}
 

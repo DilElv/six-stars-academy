@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Loader2, CreditCard, ExternalLink, CheckCircle2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { qrImageUrl } from '@/lib/qrImage'
+import PaymentStatusIcon from './PaymentStatusIcon'
 
 const FALLBACK_METHODS = [
   { value: 'QRIS', label: 'QRIS' },
@@ -24,17 +25,48 @@ function formatRupiah(n) {
  * Reusable "pick a payment method → get a Rintisan billing link" flow.
  * `onConfirm(paymentMethod)` must return `{ payment, rintisan }` (see lib/api.js
  * createRenewalPayment / createEventPayment, or auth register()'s response shape).
+ *
+ * `pollStatus`, if given, is polled every 3s once a billing link/QR is shown:
+ * `async () => ({ status: 'pending'|'success'|'failed', paidAt, paymentMethod })`.
+ * Detecting success/failure here means the parent never has to be manually
+ * refreshed — the Rintisan webhook already updates the DB on its own, this
+ * just picks that change up without the user doing anything.
  */
-export default function PaymentMethodModal({ title, amount, onConfirm, onClose, onDone }) {
+export default function PaymentMethodModal({ title, amount, onConfirm, onClose, onDone, pollStatus }) {
   const [methods, setMethods] = useState(FALLBACK_METHODS)
   const [method, setMethod] = useState('QRIS')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [finalStatus, setFinalStatus] = useState(null)
+  const pollRef = useRef(null)
 
   useEffect(() => {
     api.getPaymentMethods().then((m) => { if (m?.length) setMethods(m) }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!result || !pollStatus || finalStatus) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await pollStatus()
+        if (s?.status === 'success' || s?.status === 'failed') {
+          clearInterval(pollRef.current)
+          setFinalStatus(s)
+        }
+      } catch {
+        // transient network hiccup — keep polling
+      }
+    }, 3000)
+    return () => clearInterval(pollRef.current)
+  }, [result, pollStatus, finalStatus])
+
+  useEffect(() => {
+    if (finalStatus?.status === 'success') {
+      const t = setTimeout(() => onDone?.({ ...result, ...finalStatus }), 1800)
+      return () => clearTimeout(t)
+    }
+  }, [finalStatus, onDone, result])
 
   async function handleConfirm() {
     setLoading(true)
@@ -77,7 +109,32 @@ export default function PaymentMethodModal({ title, amount, onConfirm, onClose, 
 
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</div>}
 
-        {result ? (
+        {finalStatus ? (
+          <div className="text-center py-3">
+            <PaymentStatusIcon status={finalStatus.status} />
+            {finalStatus.status === 'success' ? (
+              <>
+                <div className="font-bold text-navy-900">Pembayaran Berhasil!</div>
+                {finalStatus.paidAt && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {new Date(finalStatus.paidAt).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="font-bold text-navy-900">Pembayaran Gagal</div>
+                <p className="text-xs text-gray-400 mt-1">Silakan coba lagi atau gunakan metode pembayaran lain.</p>
+                <button
+                  onClick={() => { setResult(null); setFinalStatus(null) }}
+                  className="mt-4 w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl"
+                >
+                  Coba Lagi
+                </button>
+              </>
+            )}
+          </div>
+        ) : result ? (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3 text-sm">
               <CheckCircle2 size={16} className="shrink-0" />
@@ -99,6 +156,11 @@ export default function PaymentMethodModal({ title, amount, onConfirm, onClose, 
               </div>
             ) : (
               <p className="text-sm text-gray-500 text-center">Link pembayaran tidak tersedia, hubungi admin.</p>
+            )}
+            {pollStatus && (
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                <Loader2 size={12} className="animate-spin" /> Menunggu konfirmasi pembayaran otomatis...
+              </div>
             )}
             <button
               onClick={() => onDone?.(result)}

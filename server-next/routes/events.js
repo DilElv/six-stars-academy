@@ -69,6 +69,7 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
             createdBy: { select: { name: true } },
           },
         },
+        payment: true,
       },
       orderBy: { event: { date: 'desc' } },
     })

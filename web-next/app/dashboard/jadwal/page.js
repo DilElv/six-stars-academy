@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import * as api from '@/lib/api'
 import JadwalCalendar from '@/components/JadwalCalendar'
 import { format } from 'date-fns'
@@ -19,6 +20,7 @@ function dateKey(d) {
 }
 
 export default function JadwalAnakPage() {
+  const router = useRouter()
   const [student, setStudent] = useState(null)
   const [schedules, setSchedules] = useState([])
   const [sessions, setSessions] = useState([])
@@ -83,6 +85,7 @@ export default function JadwalAnakPage() {
             </span>
           ) : null
         }
+        onEventClick={(e) => router.push(`/dashboard/event?open=${e.id}`)}
       />
     </div>
   )

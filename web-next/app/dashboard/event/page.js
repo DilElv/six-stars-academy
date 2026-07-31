@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Trophy, Calendar, MapPin, Wallet, Users, X, Check, Loader2, CreditCard } from 'lucide-react'
 import * as api from '@/lib/api'
 import PaymentMethodModal from '@/components/PaymentMethodModal'
@@ -9,17 +10,36 @@ function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
 }
 
-export default function ParentEventPage() {
+function ParentEventContent() {
+  const searchParams = useSearchParams()
   const [events, setEvents] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPayment, setShowPayment] = useState(false)
+  const [openedFromQuery, setOpenedFromQuery] = useState(false)
 
   function load() {
-    api.getMyEvents().then(setEvents).finally(() => setLoading(false))
+    return api.getMyEvents()
+      .then((list) => {
+        setEvents(list)
+        setSelected((cur) => (cur ? list.find((p) => p.id === cur.id) || null : cur))
+        return list
+      })
+      .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => { load() }, [])
+
+  // Deep-link from the Jadwal calendar: clicking an event there sends the
+  // student straight here with the matching event pre-opened.
+  useEffect(() => {
+    if (openedFromQuery || events.length === 0) return
+    const eventId = searchParams.get('open')
+    if (!eventId) return
+    const match = events.find((p) => p.event.id === eventId)
+    if (match) setSelected(match)
+    setOpenedFromQuery(true)
+  }, [events, searchParams, openedFromQuery])
 
   if (loading) return <Loader2 className="w-6 h-6 animate-spin mx-auto mt-10 text-gold-500" />
 
@@ -96,6 +116,14 @@ export default function ParentEventPage() {
                   <span className="text-xs text-amber-600 font-semibold">Belum dibayar</span>
                 )}
               </div>
+              {selected.paymentStatus === 'paid' && selected.payment && (
+                <div className="text-xs text-gray-400">
+                  {selected.payment.paymentMethod && <span>via {selected.payment.paymentMethod} · </span>}
+                  {selected.payment.paidAt && (
+                    <span>{new Date(selected.payment.paidAt).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB</span>
+                  )}
+                </div>
+              )}
               {selected.paymentStatus !== 'paid' && selected.event.fee > 0 && (
                 <button
                   onClick={() => setShowPayment(true)}
@@ -115,10 +143,23 @@ export default function ParentEventPage() {
           amount={selected.event.fee}
           onConfirm={(paymentMethod) => api.createEventPayment({ eventParticipantId: selected.id, paymentMethod })}
           onClose={() => setShowPayment(false)}
-          onDone={() => { setShowPayment(false); setSelected(null); load() }}
+          onDone={() => { setShowPayment(false); load() }}
+          pollStatus={async () => {
+            const list = await api.getMyEvents()
+            const p = list.find((x) => x.id === selected.id)
+            return { status: p?.payment?.status || 'pending', paidAt: p?.payment?.paidAt, paymentMethod: p?.payment?.paymentMethod }
+          }}
         />
       )}
     </div>
+  )
+}
+
+export default function ParentEventPage() {
+  return (
+    <Suspense fallback={null}>
+      <ParentEventContent />
+    </Suspense>
   )
 }
 
