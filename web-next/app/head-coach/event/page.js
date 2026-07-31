@@ -275,7 +275,7 @@ export default function HeadCoachEventPage() {
       )}
 
       {showAddStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAddStudent(false)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAddStudent(false)}>
           <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-navy-900">Tambah Peserta</h2>

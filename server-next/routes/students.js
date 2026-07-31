@@ -83,7 +83,16 @@ async function computeSessionStats(student) {
     alfa: attendances.filter((a) => a.status === 'alfa').length,
     total: attendances.length,
   }
-  return { totalSessions, attendedSessions: attendanceSummary.hadir, attendanceSummary }
+  // attendedSessions intentionally reads student.sessionsUsed (a running
+  // counter, incremented on every check-in and resettable/seedable by admin —
+  // e.g. for a kid who already had sessions before being added to the
+  // system) rather than attendanceSummary.hadir (derived from Attendance rows
+  // in this package's date window). The two normally agree since real
+  // check-ins update both, but an admin-seeded starting count only has a
+  // sessionsUsed value and no historical Attendance rows to re-derive from —
+  // using sessionsUsed as the single source of truth keeps every view
+  // (this modal, the Data Anak list cards, the parent dashboard) in sync.
+  return { totalSessions, attendedSessions: student.sessionsUsed, attendanceSummary }
 }
 
 router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
@@ -92,10 +101,13 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     fullName, dateOfBirth, position, photo,
     packageId, branchId,
     paymentStatus, amount, registrationFee, promoCode,
+    sessionsUsed,
   } = req.body
 
   try {
-    if (!parentEmail) return res.status(400).json({ error: 'Email wajib diisi' })
+    if (!parentEmail || !parentEmail.toLowerCase().endsWith('@sixstars.id')) {
+      return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
+    }
     if (!parentPassword || parentPassword.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
 
     const existing = await prisma.user.findUnique({ where: { email: parentEmail } })
@@ -132,6 +144,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           packageStartDate: startDate,
           packageEndDate: endDate,
           branchId: branchId || null,
+          sessionsUsed: sessionsUsed ? Math.max(0, Math.round(Number(sessionsUsed))) : 0,
         },
       })
 
@@ -303,7 +316,20 @@ router.get('/:id/qrcode.png', authenticate, authorize('head_coach', 'admin'), as
 
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
+    const student = await prisma.student.findUnique({ where: { id: req.params.id }, select: { userId: true } })
+    if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
+
     await prisma.student.delete({ where: { id: req.params.id } })
+
+    // A parent User can have multiple Student children sharing one login
+    // (siblings) — only remove the User once it has no students left,
+    // otherwise its email stays orphaned forever and permanently blocks
+    // that address from ever being used again ("Email sudah terdaftar").
+    const remaining = await prisma.student.count({ where: { userId: student.userId } })
+    if (remaining === 0) {
+      await prisma.user.delete({ where: { id: student.userId } })
+    }
+
     res.json({ message: 'Deleted' })
   } catch (err) {
     console.error(err)

@@ -142,9 +142,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
           </div>
         </header>
         <main className="relative flex-1 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8 overflow-hidden">
-          <div aria-hidden="true" className="absolute -top-24 right-[-4rem] w-72 h-72 rounded-full bg-gold-400/20 blur-[100px] pointer-events-none" />
-          <div aria-hidden="true" className="absolute top-[40%] -left-24 w-72 h-72 rounded-full bg-navy-700/15 blur-[100px] pointer-events-none" />
-          <div aria-hidden="true" className="absolute bottom-[-6rem] right-[15%] w-72 h-72 rounded-full bg-emerald-400/15 blur-[100px] pointer-events-none" />
+          <div aria-hidden="true" className="absolute -top-24 right-[-4rem] w-72 h-72 rounded-full bg-gold-400/[0.06] blur-[100px] pointer-events-none" />
           <div key={pathname} className="relative page-fade-in">
             {children}
           </div>

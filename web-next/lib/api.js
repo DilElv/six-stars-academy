@@ -476,6 +476,14 @@ export async function createLedgerEntry(payload) {
   return request('/ledger', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export async function updateLedgerEntry(id, payload) {
+  return request(`/ledger/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
 export async function deleteLedgerEntry(id) {
   return request(`/ledger/${id}`, { method: 'DELETE' })
+}
+
+export async function getLedgerTrend(filters) {
+  return request(`/ledger/trend${buildQuery(filters)}`)
 }

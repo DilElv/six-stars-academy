@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { UserPlus, Loader2, Search } from 'lucide-react'
+import { UserPlus, Loader2, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import { totalSessionsFor } from '@/lib/sessionInfo'
 
 function formatRupiah(n) {
   return `Rp${(n || 0).toLocaleString('id-ID')}`
@@ -14,16 +15,34 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
   const [form, setForm] = useState({
     parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
     fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
+    photo: '', sessionsUsed: '0',
     registrationFee: '750000',
     paymentStatus: 'pending',
   })
   const [promoCodeInput, setPromoCodeInput] = useState('')
   const [promoDiscount, setPromoDiscount] = useState(null)
   const [promoChecking, setPromoChecking] = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingPhoto(true)
+    setError('')
+    try {
+      const url = await api.uploadFile(file)
+      setForm((f) => ({ ...f, photo: url }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
   const selectedPackage = packages.find((p) => p.id === form.packageId)
+  const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
   const pkgAmount = selectedPackage?.price || 0
   const regFee = Number(form.registrationFee) || 0
   const subtotal = pkgAmount + regFee
@@ -54,6 +73,7 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
       await api.createStudent({
         ...form,
         registrationFee: regFee,
+        sessionsUsed: Number(form.sessionsUsed) || 0,
         ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
       })
       onSaved()
@@ -65,7 +85,7 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
@@ -84,8 +104,18 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
                 <input required value={form.parentName} onChange={(e) => setForm((f) => ({ ...f, parentName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Email (untuk login)</label>
-                <input type="email" required value={form.parentEmail} onChange={(e) => setForm((f) => ({ ...f, parentEmail: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Email (untuk login anak)</label>
+                <input
+                  type="email"
+                  required
+                  value={form.parentEmail}
+                  onChange={(e) => setForm((f) => ({ ...f, parentEmail: e.target.value }))}
+                  placeholder="contoh: budi.santoso@sixstars.id"
+                  pattern=".+@sixstars\.id"
+                  title="Email login harus menggunakan domain @sixstars.id"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Wajib domain @sixstars.id — ini akun untuk orang tua login melihat progres anaknya, bukan email pribadi.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -103,6 +133,15 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
           <div className="border-t border-gray-100 pt-4">
             <h4 className="text-xs font-bold text-navy-900 mb-2 uppercase tracking-wider">Data Siswa</h4>
             <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
+                  {form.photo ? <img src={form.photo} alt="" className="w-full h-full object-cover" /> : <Upload size={18} className="text-gray-300" />}
+                </div>
+                <label className="text-xs font-semibold text-navy-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-100">
+                  {uploadingPhoto ? 'Mengunggah...' : 'Unggah Foto Profil'}
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={uploadingPhoto} />
+                </label>
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Lengkap Siswa</label>
                 <input required value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
@@ -141,6 +180,22 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
                   />
                 </div>
               </div>
+              {form.packageId && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi Saat Ini (opsional)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={totalSessions || undefined}
+                    value={form.sessionsUsed}
+                    onChange={(e) => setForm((f) => ({ ...f, sessionsUsed: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Isi kalau anak ini sudah pernah latihan/absen sebelum akunnya dibuat di sistem, dari total {totalSessions} sesi paket ini. Kosongkan / 0 kalau baru mulai dari nol.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Biaya Pendaftaran (Rp)</label>
                 <input

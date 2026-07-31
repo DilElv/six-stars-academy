@@ -510,6 +510,7 @@ model CmsContent {
 model LedgerEntry {
   id          String   @id @default(cuid())
   type        String   // income | expense
+  category    String?
   description String
   amount      Int
   date        DateTime @default(now())

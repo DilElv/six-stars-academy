@@ -38,7 +38,7 @@ export default function QrScannerModal({ onScan, onClose }) {
   }, [onScan])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/70" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-3">
