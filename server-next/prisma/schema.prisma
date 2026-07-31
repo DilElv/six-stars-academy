@@ -58,7 +58,7 @@ model Branch {
   staffAttendances StaffAttendance[]
   fields           Field[]
   trainingSessions TrainingSession[]
-  events           Event[]
+  events           EventBranch[]
   branchPackages   BranchPackage[]
   ledgerEntries    LedgerEntry[]
 
@@ -298,16 +298,29 @@ model Event {
   location             String?
   fee                  Int      @default(0)
   status               String   @default("open")
-  branchId             String?
-  branch               Branch?  @relation(fields: [branchId], references: [id])
   createdById          String
   createdBy            User     @relation(fields: [createdById], references: [id])
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
   participants EventParticipant[]
+  branches     EventBranch[]
 
   @@map("events")
+}
+
+// No rows here for an event means "all branches" — same semantic the old
+// single nullable Event.branchId used, just expressed as an empty relation
+// instead of null, so callers don't need a separate all-branches special case.
+model EventBranch {
+  id       String @id @default(cuid())
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, branchId])
+  @@map("event_branches")
 }
 
 model EventParticipant {

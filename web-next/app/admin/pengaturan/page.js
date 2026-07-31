@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Loader2, Plus, Trash2, Lock } from 'lucide-react'
 import * as api from '@/lib/api'
+import { RupiahInput } from '@/components/ui/rupiah-input'
 
 function formatRupiah(n) {
   return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
@@ -136,15 +137,12 @@ export default function AdminPengaturanPage() {
                 <span className="text-sm text-navy-900">{b.name}</span>
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="number"
+                <RupiahInput
                   value={b.registrationFee ?? settings.registrationFee}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
+                  onChange={(val) => {
                     setBranches((prev) => prev.map((br) => br.id === b.id ? { ...br, registrationFee: val } : br))
                   }}
-                  className="w-28 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right"
-                  title="Biaya pendaftaran cabang"
+                  className="w-32 !py-1 !text-xs"
                 />
                 <button
                   onClick={async () => {
@@ -206,12 +204,11 @@ export default function AdminPengaturanPage() {
                   return (
                     <td key={b.id} className="py-2 px-2 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <input
-                          type="number"
+                        <RupiahInput
                           value={getPrice(pkg.id, b.id)}
-                          onChange={(e) => handlePriceChange(pkg.id, b.id, e.target.value)}
+                          onChange={(val) => handlePriceChange(pkg.id, b.id, val)}
                           placeholder={String(pkg.price)}
-                          className="w-24 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-right"
+                          className="w-28 !py-1.5 !text-xs"
                         />
                         <button
                           onClick={() => handleSavePriceCell(pkg.id, b.id)}

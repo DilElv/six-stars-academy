@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { RupiahInput } from '@/components/ui/rupiah-input'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/ledgerCategories'
 
 export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
@@ -79,7 +80,7 @@ export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nominal (Rp)</label>
-            <input required type="number" min={1} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+            <RupiahInput required value={form.amount} onChange={(n) => setForm((f) => ({ ...f, amount: String(n) }))} className="w-full" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal</label>

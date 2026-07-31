@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
 import { totalSessionsFor, PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
@@ -473,11 +474,11 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Harga Paket (Rp)</label>
-                  <input type="number" min={0} value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                  <RupiahInput value={form.amount} onChange={(n) => setForm((f) => ({ ...f, amount: String(n) }))} className="w-full" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Biaya Pendaftaran (Rp)</label>
-                  <input type="number" min={0} value={form.registrationFee} onChange={(e) => setForm((f) => ({ ...f, registrationFee: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                  <RupiahInput value={form.registrationFee} onChange={(n) => setForm((f) => ({ ...f, registrationFee: String(n) }))} className="w-full" />
                 </div>
               </div>
               <div>

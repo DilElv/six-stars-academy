@@ -5,6 +5,7 @@ import { UserPlus, Loader2, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import { RupiahInput } from '@/components/ui/rupiah-input'
 import { totalSessionsFor } from '@/lib/sessionInfo'
 
 function formatRupiah(n) {
@@ -198,12 +199,10 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
               )}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Biaya Pendaftaran (Rp)</label>
-                <input
-                  type="number"
-                  min={0}
+                <RupiahInput
                   value={form.registrationFee}
-                  onChange={(e) => setForm((f) => ({ ...f, registrationFee: e.target.value }))}
-                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                  onChange={(n) => setForm((f) => ({ ...f, registrationFee: String(n) }))}
+                  className="w-full"
                 />
               </div>
               <div>

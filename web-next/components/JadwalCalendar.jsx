@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Clock, MapPin, CalendarDays, Info, Plus, Trash2, Loader2, Users } from 'lucide-react'
+import { Clock, MapPin, CalendarDays, Info, Plus, Trash2, Loader2, Users, Trophy, Wallet } from 'lucide-react'
 import * as api from '@/lib/api'
 import { Calendar } from '@/components/ui/calendar'
 import { AppSelect } from '@/components/ui/app-select'
@@ -25,6 +25,7 @@ const emptyTopicForm = { topicTitle: '', ageGroups: [], topicDescription: '', ob
 export default function JadwalCalendar({
   schedules,
   sessions,
+  events = [],
   fields = [],
   canAddTopic = false,
   onChanged,
@@ -68,9 +69,20 @@ export default function JadwalCalendar({
     return map
   }, [filteredSessions])
 
+  const eventsByDate = useMemo(() => {
+    const map = {}
+    for (const e of events) {
+      const key = dateKey(new Date(e.date))
+      if (!map[key]) map[key] = []
+      map[key].push(e)
+    }
+    return map
+  }, [events])
+
   const selectedWeekday = selectedDate ? weekdayForDate(selectedDate) : null
   const selectedDaySchedules = selectedWeekday ? scheduleByWeekday[selectedWeekday] || [] : []
   const selectedDaySessions = selectedDate ? sessionsByDate[dateKey(selectedDate)] || [] : []
+  const selectedDayEvents = selectedDate ? eventsByDate[dateKey(selectedDate)] || [] : []
   const hasSchedule = selectedDaySchedules.length > 0
   const selectedAttendance = attendanceByDate && selectedDate ? attendanceByDate[dateKey(selectedDate)] : null
 
@@ -121,10 +133,12 @@ export default function JadwalCalendar({
           modifiers={{
             schedule: (date) => scheduleWeekdays.includes(date.getDay()),
             hasTopic: (date) => !!sessionsByDate[dateKey(date)],
+            event: (date) => !!eventsByDate[dateKey(date)],
           }}
           modifiersClassNames={{
             schedule: 'bg-gold-400/15 text-gold-700 font-bold text-lg ring-1 ring-inset ring-gold-400/50 rounded-xl',
             hasTopic: "relative after:content-[''] after:absolute after:bottom-1.5 after:left-1/2 after:-translate-x-1/2 after:w-1.5 after:h-1.5 after:rounded-full after:bg-emerald-500",
+            event: 'bg-blue-400/15 text-blue-700 font-bold ring-1 ring-inset ring-blue-400/50 rounded-xl',
           }}
         />
         <div className="flex flex-col gap-1.5 pt-4 text-xs text-gray-400 self-start">
@@ -136,6 +150,12 @@ export default function JadwalCalendar({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             Titik hijau = topik sudah diisi
           </div>
+          {events.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-md bg-blue-400/25 ring-1 ring-blue-400 shrink-0" />
+              Tanggal biru = ada event
+            </div>
+          )}
           {attendanceLegend}
         </div>
       </div>
@@ -156,11 +176,29 @@ export default function JadwalCalendar({
             </div>
           </div>
 
-          {!hasSchedule ? (
-            <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
-              <Info size={18} className="text-gray-300" />
-              <div className="text-xs text-gray-400">Tidak ada jadwal latihan pada tanggal ini.</div>
+          {selectedDayEvents.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {selectedDayEvents.map((e) => (
+                <div key={e.id} className="rounded-2xl border border-blue-100 bg-blue-50/50 p-3.5">
+                  <div className="flex items-center gap-1.5 text-blue-700 font-bold text-sm">
+                    <Trophy size={14} /> {e.title}
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-[11px] text-blue-600 mt-1.5">
+                    {e.location && <span className="flex items-center gap-1"><MapPin size={11} /> {e.location}</span>}
+                    {e.fee > 0 && <span className="flex items-center gap-1"><Wallet size={11} /> Rp{e.fee.toLocaleString('id-ID')}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+
+          {!hasSchedule ? (
+            selectedDayEvents.length === 0 && (
+              <div className="flex flex-col items-center justify-center text-center gap-2 py-8">
+                <Info size={18} className="text-gray-300" />
+                <div className="text-xs text-gray-400">Tidak ada jadwal latihan pada tanggal ini.</div>
+              </div>
+            )
           ) : (
             <div className="space-y-4">
               {selectedDaySchedules.map((s) => (

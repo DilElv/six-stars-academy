@@ -22,6 +22,7 @@ export default function JadwalAnakPage() {
   const [student, setStudent] = useState(null)
   const [schedules, setSchedules] = useState([])
   const [sessions, setSessions] = useState([])
+  const [events, setEvents] = useState([])
   const [attendance, setAttendance] = useState([])
   const [error, setError] = useState('')
 
@@ -29,8 +30,14 @@ export default function JadwalAnakPage() {
     Promise.all([
       api.getSchedules(s.ageGroup, s.branchId),
       api.getTrainingSessions(s.ageGroup, s.branchId),
+      api.getMyEvents(),
       api.getMyAttendance(),
-    ]).then(([sched, sess, att]) => { setSchedules(sched); setSessions(sess); setAttendance(att) })
+    ]).then(([sched, sess, participants, att]) => {
+      setSchedules(sched)
+      setSessions(sess)
+      setEvents(participants.map((p) => p.event))
+      setAttendance(att)
+    })
   }
 
   useEffect(() => {
@@ -56,6 +63,7 @@ export default function JadwalAnakPage() {
       <JadwalCalendar
         schedules={schedules}
         sessions={sessions}
+        events={events}
         canAddTopic={false}
         attendanceByDate={attendanceByDate}
         attendanceLegend={

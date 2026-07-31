@@ -17,6 +17,7 @@ export default function HeadCoachJadwalPage() {
 
   const [schedules, setSchedules] = useState([])
   const [sessions, setSessions] = useState([])
+  const [events, setEvents] = useState([])
   const [fields, setFields] = useState([])
   const [coaches, setCoaches] = useState([])
   const [branches, setBranches] = useState([])
@@ -29,14 +30,16 @@ export default function HeadCoachJadwalPage() {
   function load(user) {
     Promise.all([
       api.getSchedules(undefined, user.branchId),
-      api.getTrainingSessions(),
+      api.getTrainingSessions(undefined, user.branchId),
+      api.getEvents(undefined, user.branchId),
       user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),
       api.getUsers('coach'),
       api.getUsers('head_coach'),
       api.getBranches(),
-    ]).then(([sched, sess, flds, coach, headCoach, br]) => {
+    ]).then(([sched, sess, evts, flds, coach, headCoach, br]) => {
       setSchedules(sched)
       setSessions(sess)
+      setEvents(evts)
       setFields(flds)
       setCoaches([...headCoach, ...coach])
       setBranches(br)
@@ -107,7 +110,7 @@ export default function HeadCoachJadwalPage() {
       </div>
 
       {tab === 'kalender' ? (
-        <JadwalCalendar schedules={schedules} sessions={sessions} fields={fields} canAddTopic onChanged={() => load(me)} />
+        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic onChanged={() => load(me)} />
       ) : (
         <div className="space-y-4">
           <div className="flex justify-end">
