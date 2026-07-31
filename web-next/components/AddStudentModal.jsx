@@ -87,7 +87,7 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
           <UserPlus size={24} className="mx-auto text-gold-400 mb-2" />
           <h3 className="font-bold text-white">Tambah Anak</h3>

@@ -8,9 +8,12 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/ledgerCategories'
 
 export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
   const isEdit = !!entry
+  const presetCategories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  const entryIsCustomCategory = entry?.category && !presetCategories.includes(entry.category)
   const [branches, setBranches] = useState([])
   const [form, setForm] = useState({
-    category: entry?.category || '',
+    category: entryIsCustomCategory ? 'Lainnya' : (entry?.category || ''),
+    customCategory: entryIsCustomCategory ? entry.category : '',
     description: entry?.description || '',
     amount: entry?.amount ? String(entry.amount) : '',
     branchId: entry?.branchId || '',
@@ -21,14 +24,15 @@ export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
 
   useEffect(() => { api.getBranches().then(setBranches).catch(() => {}) }, [])
 
-  const categoryOptions = (type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((c) => ({ value: c, label: c }))
+  const categoryOptions = presetCategories.map((c) => ({ value: c, label: c }))
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      const payload = { type, category: form.category || null, description: form.description, amount: Number(form.amount), branchId: form.branchId || null, date: form.date }
+      const resolvedCategory = form.category === 'Lainnya' ? (form.customCategory.trim() || 'Lainnya') : form.category
+      const payload = { type, category: resolvedCategory || null, description: form.description, amount: Number(form.amount), branchId: form.branchId || null, date: form.date }
       if (isEdit) {
         await api.updateLedgerEntry(entry.id, payload)
       } else {
@@ -59,6 +63,15 @@ export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Kategori</label>
             <AppSelect value={form.category} onChange={(v) => setForm((f) => ({ ...f, category: v }))} className="w-full" allLabel="- Pilih Kategori -" placeholder="- Pilih Kategori -" options={categoryOptions} />
+            {form.category === 'Lainnya' && (
+              <input
+                required
+                value={form.customCategory}
+                onChange={(e) => setForm((f) => ({ ...f, customCategory: e.target.value }))}
+                placeholder="Ketik nama kategori..."
+                className="w-full mt-2 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Deskripsi</label>

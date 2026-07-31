@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -19,6 +19,7 @@ export default function AdminDataAnakPage() {
   const [students, setStudents] = useState([])
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const [filterAgeGroup, setFilterAgeGroup] = useState('')
   const [filterPosition, setFilterPosition] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -69,6 +70,8 @@ export default function AdminDataAnakPage() {
   }
 
   const filtered = students.filter((s) => {
+    const q = search.trim().toLowerCase()
+    if (q && !s.fullName.toLowerCase().includes(q) && !s.studentId.toLowerCase().includes(q)) return false
     if (filterAgeGroup && s.ageGroup !== filterAgeGroup) return false
     if (filterPosition && s.position !== filterPosition) return false
     if (filterStatus && s.status !== filterStatus) return false
@@ -93,6 +96,15 @@ export default function AdminDataAnakPage() {
               </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cari nama atau ID siswa..."
+                  className="pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-gold-200 w-full sm:w-56"
+                />
+              </div>
               <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
               <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
               <AppSelect
@@ -258,7 +270,7 @@ function EditModal({ student, branches, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-100">
           <h3 className="font-bold text-navy-900">Edit Data Anak</h3>
         </div>
