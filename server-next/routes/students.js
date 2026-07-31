@@ -122,8 +122,15 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
         data: { name: parentName, email: parentEmail, password: hashed, role: 'parent', phone: parentPhone },
       })
 
-      const count = await tx.student.count()
-      const studentId = `SS-${String(count + 1).padStart(4, '0')}`
+      // Derived from the highest existing studentId, not a row count — count()
+      // collides with an existing ID as soon as any student has ever been
+      // deleted (e.g. SS-0001 deleted leaves count()=1, regenerating the
+      // still-in-use SS-0002 and throwing a P2002 that got misreported as
+      // "Email sudah terdaftar" since the catch-all only checked the error
+      // code, not which field it was on).
+      const lastStudent = await tx.student.findFirst({ orderBy: { studentId: 'desc' }, select: { studentId: true } })
+      const lastNum = lastStudent ? parseInt(lastStudent.studentId.replace('SS-', ''), 10) || 0 : 0
+      const studentId = `SS-${String(lastNum + 1).padStart(4, '0')}`
       const startDate = new Date()
       const endDate = pkg ? new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000) : null
 
@@ -203,7 +210,15 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
 
     res.status(201).json(result)
   } catch (err) {
-    if (err.code === 'P2002') return res.status(400).json({ error: 'Email sudah terdaftar' })
+    // Report which field actually collided instead of always assuming
+    // email — a P2002 here can also fire on studentId/qrCode/cardNumber,
+    // and blindly blaming email produces a misleading error message.
+    if (err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : err.meta?.target
+      if (target?.includes('email')) return res.status(400).json({ error: 'Email sudah terdaftar' })
+      console.error('P2002 on unexpected field:', target, err)
+      return res.status(400).json({ error: `Gagal menyimpan, data bentrok pada field: ${target || 'tidak diketahui'}. Coba lagi.` })
+    }
     console.error(err)
     res.status(500).json({ error: err.message || 'Server error' })
   }
