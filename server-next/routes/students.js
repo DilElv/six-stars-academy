@@ -287,7 +287,7 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       include: {
         package: true,
         branch: true,
-        payments: { orderBy: { createdAt: 'desc' } },
+        payments: { orderBy: { createdAt: 'desc' }, include: { promoCodeUsages: { include: { promoCode: true } } } },
         assessments: { orderBy: [{ year: 'desc' }, { month: 'desc' }] },
         studentCard: true,
       },
@@ -302,36 +302,121 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 })
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed } = req.body
+  const {
+    fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed,
+    parentEmail, parentPassword, registrationFee, amount, paymentStatus, promoCode,
+  } = req.body
   try {
-    const data = {
-      fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-      branchId: branchId !== undefined ? (branchId || null) : undefined,
-      sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
-    }
-
-    // Changing the package re-derives the end date from today (same as a
-    // fresh assignment) — this is a correction to what package the student
-    // is on, not a renewal, so it doesn't touch Payment records.
-    if (packageId !== undefined) {
-      if (packageId) {
-        const pkg = await prisma.package.findUnique({ where: { id: packageId } })
-        if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
-        const startDate = new Date()
-        data.packageId = packageId
-        data.packageStartDate = startDate
-        data.packageEndDate = new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000)
-      } else {
-        data.packageId = null
-        data.packageStartDate = null
-        data.packageEndDate = null
+    const student = await prisma.$transaction(async (tx) => {
+      const data = {
+        fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+        branchId: branchId !== undefined ? (branchId || null) : undefined,
+        sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
       }
-    }
 
-    const student = await prisma.student.update({ where: { id: req.params.id }, data })
+      // Changing the package re-derives the end date from today (same as a
+      // fresh assignment) — this is a correction to what package the student
+      // is on, not a renewal, so it doesn't touch Payment records.
+      if (packageId !== undefined) {
+        if (packageId) {
+          const pkg = await tx.package.findUnique({ where: { id: packageId } })
+          if (!pkg) throw Object.assign(new Error('Paket tidak ditemukan'), { status: 400 })
+          const startDate = new Date()
+          data.packageId = packageId
+          data.packageStartDate = startDate
+          data.packageEndDate = new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000)
+        } else {
+          data.packageId = null
+          data.packageStartDate = null
+          data.packageEndDate = null
+        }
+      }
+
+      const current = await tx.student.findUnique({ where: { id: req.params.id } })
+      if (!current) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
+
+      // Login email lives on both User and Student — keep them in sync, and
+      // guard the same way account creation does (domain + uniqueness).
+      if (parentEmail !== undefined && parentEmail !== current.parentEmail) {
+        if (!parentEmail || !parentEmail.toLowerCase().endsWith('@sixstars.id')) {
+          throw Object.assign(new Error('Email untuk login harus menggunakan domain @sixstars.id'), { status: 400 })
+        }
+        const clash = await tx.user.findUnique({ where: { email: parentEmail } })
+        if (clash && clash.id !== current.userId) throw Object.assign(new Error('Email sudah terdaftar'), { status: 400 })
+        data.parentEmail = parentEmail
+        await tx.user.update({ where: { id: current.userId }, data: { email: parentEmail } })
+      }
+
+      if (parentPassword) {
+        if (parentPassword.length < 6) throw Object.assign(new Error('Password minimal 6 karakter'), { status: 400 })
+        const hashed = await bcrypt.hash(parentPassword, 10)
+        await tx.user.update({ where: { id: current.userId }, data: { password: hashed } })
+      }
+
+      // The registration Payment (created once, when the student was first
+      // added) is what carries biaya pendaftaran / status pembayaran / promo
+      // — same fields Tambah Anak sets, editable here as a correction, not a
+      // new transaction.
+      if (registrationFee !== undefined || amount !== undefined || paymentStatus !== undefined || promoCode !== undefined) {
+        const payment = await tx.payment.findFirst({ where: { studentId: req.params.id, paymentType: 'registration' } })
+        if (payment) {
+          const newAmount = amount !== undefined && amount !== '' ? Math.max(0, Math.round(Number(amount))) : payment.amount
+          const newFee = registrationFee !== undefined && registrationFee !== '' ? Math.max(0, Math.round(Number(registrationFee))) : payment.registrationFee
+
+          let activePromo = null
+          if (promoCode !== undefined) {
+            // Replacing the promo: release whatever usage was on this
+            // payment before applying (or clearing) the new one, so a promo
+            // with maxUses:1 doesn't stay permanently locked to a payment
+            // that no longer uses it.
+            const existingUsage = await tx.promoCodeUsage.findFirst({ where: { paymentId: payment.id } })
+            if (existingUsage) {
+              await tx.promoCode.update({ where: { id: existingUsage.promoCodeId }, data: { usedCount: { decrement: 1 } } })
+              await tx.promoCodeUsage.delete({ where: { id: existingUsage.id } })
+            }
+            if (promoCode) {
+              const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
+              if (!promo) throw Object.assign(new Error('Kode promo tidak ditemukan'), { status: 400 })
+              if (promo.status !== 'active') throw Object.assign(new Error('Kode promo sudah tidak aktif'), { status: 400 })
+              if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) throw Object.assign(new Error('Kode promo sudah kadaluarsa'), { status: 400 })
+              if (promo.usedCount >= promo.maxUses) throw Object.assign(new Error('Kode promo sudah habis dipakai'), { status: 400 })
+              if (!promo.allPackages && payment.packageId) {
+                const valid = promo.packages.some((p) => p.packageId === payment.packageId)
+                if (!valid) throw Object.assign(new Error('Kode promo tidak berlaku untuk paket ini'), { status: 400 })
+              }
+              await tx.promoCode.update({ where: { id: promo.id }, data: { usedCount: { increment: 1 } } })
+              await tx.promoCodeUsage.create({ data: { promoCodeId: promo.id, paymentId: payment.id } })
+              activePromo = promo
+            }
+          } else {
+            const existingUsage = await tx.promoCodeUsage.findFirst({ where: { paymentId: payment.id }, include: { promoCode: true } })
+            activePromo = existingUsage?.promoCode || null
+          }
+
+          const discountBase = newAmount + (activePromo?.appliesToRegistrationFee ? newFee : 0)
+          const discount = activePromo ? Math.round(discountBase * activePromo.discountPercent / 100) : 0
+          const newStatus = paymentStatus !== undefined ? paymentStatus : payment.status
+
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: {
+              amount: newAmount,
+              registrationFee: newFee,
+              totalAmount: Math.max(newAmount + newFee - discount, 0),
+              status: newStatus,
+              paidAt: newStatus === 'success' ? (payment.paidAt || new Date()) : null,
+            },
+          })
+        }
+      }
+
+      return tx.student.update({ where: { id: req.params.id }, data })
+    })
+
     res.json(student)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
