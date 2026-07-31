@@ -205,12 +205,20 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 router.put('/me', authenticate, async (req, res) => {
-  const { name, phone, photo, bio, branchId, password } = req.body
+  const { name, phone, photo, bio, address, email, branchId, password } = req.body
   try {
-    const data = { name, phone, photo, bio }
+    const data = { name, phone, photo, bio, address }
     if (password) {
       if (password.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
       data.password = await bcrypt.hash(password, 10)
+    }
+    if (email !== undefined && email !== req.user.email) {
+      if (req.user.role === 'parent' && !email.toLowerCase().endsWith('@sixstars.id')) {
+        return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
+      }
+      const clash = await prisma.user.findUnique({ where: { email } })
+      if (clash) return res.status(400).json({ error: 'Email sudah terdaftar' })
+      data.email = email
     }
     if (req.user.role === 'coach' || req.user.role === 'head_coach') {
       data.branchId = undefined
@@ -222,6 +230,12 @@ router.put('/me', authenticate, async (req, res) => {
       data,
       include: { branch: true },
     })
+    // Student.parentEmail is a denormalized copy of the parent's login email
+    // (shown read-only elsewhere, e.g. admin's Edit Data Anak) — keep it in
+    // sync so it doesn't silently drift from the credential that actually works.
+    if (data.email && req.user.role === 'parent') {
+      await prisma.student.updateMany({ where: { userId: req.user.id }, data: { parentEmail: data.email } })
+    }
     const { password: _pw, ...profile } = user
     res.json(profile)
   } catch (err) {

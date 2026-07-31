@@ -13,7 +13,7 @@ export default function CoachProfilPage() {
 
   useEffect(() => {
     api.getMe().then((profile) => {
-      setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '' })
+      setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '', email: profile.email || '', address: profile.address || '' })
       setBranchName(profile.branch ? `${profile.branch.name} (${profile.branch.code})` : 'Belum ditentukan')
     })
   }, [])
@@ -72,10 +72,28 @@ export default function CoachProfilPage() {
           />
         </div>
         <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Email</label>
+          <input
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
           <input
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Alamat</label>
+          <textarea
+            value={form.address}
+            onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+            rows={2}
             className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
         </div>

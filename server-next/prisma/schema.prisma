@@ -23,6 +23,7 @@ model User {
   phone     String?
   photo     String?
   bio       String?
+  address   String?
   status    String   @default("active")
   branchId  String?
   branch    Branch?  @relation(fields: [branchId], references: [id])

@@ -26,6 +26,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [branchLabel, setBranchLabel] = useState('')
 
   useEffect(() => {
     api
@@ -37,6 +38,14 @@ export default function DashboardShell({ role, title, navItems, children }) {
         }
         setUser(profile)
         setLoading(false)
+        if (profile.branch) {
+          setBranchLabel(`${profile.branch.name} (${profile.branch.code})`)
+        } else if (role === 'parent') {
+          // Parent accounts have no branch of their own — show the child's.
+          api.getMyChild().then((s) => {
+            if (s.branch) setBranchLabel(`${s.branch.name} (${s.branch.code})`)
+          }).catch(() => {})
+        }
       })
       .catch(() => router.replace('/login'))
   }, [role, router])
@@ -115,7 +124,10 @@ export default function DashboardShell({ role, title, navItems, children }) {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-white truncate">{user.name}</div>
-                <div className="text-[11px] text-gray-400">{ROLE_LABEL[role]}</div>
+                <div className="text-[11px] text-gray-400 truncate">
+                  {ROLE_LABEL[role]}
+                  {branchLabel && <span className="text-gray-500"> · {branchLabel}</span>}
+                </div>
               </div>
             </div>
           </div>
