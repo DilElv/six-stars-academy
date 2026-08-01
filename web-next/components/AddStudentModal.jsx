@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { UserPlus, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { POSITIONS } from '@/lib/positions'
@@ -26,6 +26,16 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [branchPackages, setBranchPackages] = useState(null)
+
+  // Prices differ per branch (Pengaturan > Harga Paket) — refetch whenever
+  // the chosen branch changes so what's shown here matches what gets billed.
+  useEffect(() => {
+    if (!form.branchId) return setBranchPackages(null)
+    api.getPackages(form.branchId).then(setBranchPackages).catch(() => setBranchPackages(null))
+  }, [form.branchId])
+
+  const effectivePackages = branchPackages || packages
 
   async function handlePhotoChange(e) {
     const file = e.target.files?.[0]
@@ -42,7 +52,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
     }
   }
 
-  const selectedPackage = packages.find((p) => p.id === form.packageId)
+  const selectedPackage = effectivePackages.find((p) => p.id === form.packageId)
   const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
   const pkgAmount = selectedPackage?.price || 0
   const regFee = Number(form.registrationFee) || 0
@@ -161,7 +171,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
                     className="w-full"
                     allLabel="- Tanpa Paket -"
                     placeholder="- Tanpa Paket -"
-                    options={packages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg)` }))}
+                    options={effectivePackages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg) — ${formatRupiah(p.price)}` }))}
                   />
                 </div>
               </div>

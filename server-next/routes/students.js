@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import QRCode from 'qrcode'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
+import { getEffectivePrice } from '../lib/pricing.js'
 
 const router = Router()
 
@@ -120,6 +121,12 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     if (existing) return res.status(400).json({ error: 'Email sudah terdaftar' })
 
     const pkg = packageId ? await prisma.package.findUnique({ where: { id: packageId } }) : null
+    // Resolves to the branch's BranchPackage override (Pengaturan > Harga
+    // Paket) when one exists, matching what the picker actually displayed —
+    // `amount` from the body is a rare explicit override, not the norm.
+    const pkgAmount = pkg
+      ? (amount !== undefined && amount !== '' ? Math.max(0, Math.round(Number(amount))) : await getEffectivePrice(pkg.id, branchId || null))
+      : 0
     const ageGroup = assignAgeGroup(dateOfBirth)
     const hashed = await bcrypt.hash(parentPassword, 10)
 
@@ -164,7 +171,6 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
       })
 
       if (pkg) {
-        const pkgAmount = amount ?? pkg.price
         const regFee = registrationFee ?? 750000
         const discount = Math.round(pkgAmount * sppScholarshipPercent / 100) + Math.round(regFee * registrationScholarshipPercent / 100)
         const totalAmount = Math.max(0, pkgAmount + regFee - discount)

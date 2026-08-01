@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, RefreshCw, ChevronLeft } from 'lucide-react'
+import { X, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
 import PaymentMethodModal from '@/components/PaymentMethodModal'
 
@@ -16,8 +16,12 @@ export default function RenewalModal({ onClose, onDone }) {
   const [scholarshipPercent, setScholarshipPercent] = useState(0)
 
   useEffect(() => {
-    api.getPackages().then(setPackages).catch(() => {})
-    api.getMyChild().then((s) => setScholarshipPercent(s?.sppScholarshipPercent || 0)).catch(() => {})
+    api.getMyChild().then((s) => {
+      setScholarshipPercent(s?.sppScholarshipPercent || 0)
+      // Branch-aware: prices here must match what Pengaturan > Harga Paket
+      // has for this student's branch, not the package's raw base price.
+      return api.getPackages(s?.branchId).then(setPackages)
+    }).catch(() => {})
   }, [])
 
   const discountAmount = selectedPackage ? Math.round(selectedPackage.price * scholarshipPercent / 100) : 0
@@ -58,26 +62,33 @@ export default function RenewalModal({ onClose, onDone }) {
         <label className="block text-xs font-semibold text-gray-500 mb-2">Pilih Paket Baru</label>
         <div className="space-y-2 mb-5 max-h-72 overflow-y-auto pr-1">
           {packages.length === 0 && <div className="text-sm text-gray-400 py-4 text-center">Memuat paket...</div>}
-          {packages.map((pkg) => (
-            <button
-              key={pkg.id}
-              onClick={() => setSelectedPackage(pkg)}
-              className={`w-full text-left px-4 py-3 rounded-2xl border transition-colors duration-150 ${
-                selectedPackage?.id === pkg.id
-                  ? 'border-gold-400 bg-gold-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="font-semibold text-navy-900 text-sm">{pkg.name}</div>
-              <div className="text-xs text-gray-400">{pkg.sessionsPerWeek}x/minggu &middot; {formatRupiah(pkg.price)}</div>
-            </button>
-          ))}
+          {packages.map((pkg) => {
+            const pkgDiscount = scholarshipPercent > 0 ? Math.round(pkg.price * scholarshipPercent / 100) : 0
+            return (
+              <button
+                key={pkg.id}
+                onClick={() => setSelectedPackage(pkg)}
+                className={`w-full text-left px-4 py-3 rounded-2xl border transition-colors duration-150 ${
+                  selectedPackage?.id === pkg.id
+                    ? 'border-gold-400 bg-gold-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="font-semibold text-navy-900 text-sm">{pkg.name}</div>
+                {pkgDiscount > 0 ? (
+                  <div className="text-xs mt-0.5">
+                    <span className="text-gray-400">{pkg.sessionsPerWeek}x/minggu &middot; </span>
+                    <span className="text-gray-400 line-through">{formatRupiah(pkg.price)}</span>{' '}
+                    <span className="text-emerald-600 font-semibold">{formatRupiah(pkg.price - pkgDiscount)}</span>
+                    <div className="text-emerald-600">Beasiswa {scholarshipPercent}% — Hemat {formatRupiah(pkgDiscount)}</div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-400">{pkg.sessionsPerWeek}x/minggu &middot; {formatRupiah(pkg.price)}</div>
+                )}
+              </button>
+            )
+          })}
         </div>
-        {selectedPackage && scholarshipPercent > 0 && (
-          <div className="text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg mb-4">
-            Beasiswa SPP {scholarshipPercent}% — Hemat {formatRupiah(discountAmount)}
-          </div>
-        )}
         <button
           onClick={() => setStep('method')}
           disabled={!selectedPackage}

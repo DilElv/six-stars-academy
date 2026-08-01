@@ -4,6 +4,7 @@ import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser } from '../lib/notify.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS } from '../lib/rintisan.js'
+import { getEffectivePrice } from '../lib/pricing.js'
 
 const router = Router()
 
@@ -85,18 +86,22 @@ router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
     const pkg = await prisma.package.findUnique({ where: { id: packageId } })
     if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
 
+    // Resolves to the student's branch's BranchPackage override (Pengaturan
+    // > Harga Paket) when one exists, not the package's raw base price.
+    const effectivePrice = await getEffectivePrice(pkg.id, student.branchId)
+
     // Beasiswa SPP is set by admin on the student (Data Anak) and applies
     // automatically here — no code entry needed from the parent.
     const scholarshipPercent = student.sppScholarshipPercent || 0
-    const discount = Math.round(pkg.price * scholarshipPercent / 100)
+    const discount = Math.round(effectivePrice * scholarshipPercent / 100)
 
     const payment = await prisma.payment.create({
       data: {
         studentId: student.id,
         packageId: pkg.id,
-        amount: pkg.price,
+        amount: effectivePrice,
         registrationFee: 0,
-        totalAmount: Math.max(0, pkg.price - discount),
+        totalAmount: Math.max(0, effectivePrice - discount),
         paymentType: 'renewal',
         status: 'pending',
       },

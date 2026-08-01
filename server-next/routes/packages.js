@@ -4,10 +4,19 @@ import { authenticate, authorize } from '../middleware/auth.js'
 
 const router = Router()
 
+// Optional ?branchId= overrides each package's `price` with that branch's
+// BranchPackage price (set in Pengaturan > Harga Paket) when one exists —
+// the single place every picker (Tambah/Edit Anak, Perpanjang Paket) should
+// read from so what's shown always matches what actually gets billed.
 router.get('/', async (req, res) => {
   try {
+    const { branchId } = req.query
     const packages = await prisma.package.findMany({ where: { status: 'active' }, orderBy: [{ durationMonths: 'asc' }, { sessionsPerWeek: 'asc' }] })
-    res.json(packages)
+    if (!branchId) return res.json(packages)
+
+    const overrides = await prisma.branchPackage.findMany({ where: { branchId } })
+    const overrideMap = new Map(overrides.map((o) => [o.packageId, o.price]))
+    res.json(packages.map((p) => ({ ...p, price: overrideMap.get(p.id) ?? p.price })))
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

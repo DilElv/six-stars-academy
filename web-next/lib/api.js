@@ -74,8 +74,8 @@ export async function updateCmsSection(section, data) {
   return request(`/cms/${section}`, { method: 'PUT', body: JSON.stringify({ data }) })
 }
 
-export async function getPackages() {
-  return request('/packages')
+export async function getPackages(branchId) {
+  return request(`/packages${branchId ? `?branchId=${branchId}` : ''}`)
 }
 
 export async function getMyChild() {
