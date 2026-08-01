@@ -86,6 +86,12 @@ export async function getSchedules(branchId) {
   return request(`/schedules${branchId ? `?branchId=${branchId}` : ''}`)
 }
 
+// Read-only head_coach list for the schedule "coach" dropdown — usable by
+// both admin and head_coach, unlike /admin/users which is admin-only.
+export async function getHeadCoaches() {
+  return request('/schedules/head-coaches')
+}
+
 export async function getMyPayments() {
   return request('/payments/me')
 }

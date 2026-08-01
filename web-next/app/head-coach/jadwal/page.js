@@ -34,7 +34,7 @@ export default function HeadCoachJadwalPage() {
       api.getTrainingSessions(undefined, user.branchId),
       api.getEvents(undefined, user.branchId),
       user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),
-      api.getUsers('head_coach'),
+      api.getHeadCoaches(),
       api.getBranches(),
     ]).then(([sched, sess, evts, flds, headCoach, br]) => {
       setSchedules(sched)
@@ -43,7 +43,7 @@ export default function HeadCoachJadwalPage() {
       setFields(flds)
       setCoaches(headCoach)
       setBranches(br)
-    })
+    }).catch((err) => setError(err.message))
   }
 
   useEffect(() => {
@@ -107,6 +107,8 @@ export default function HeadCoachJadwalPage() {
           <button onClick={() => setTab('buat-jadwal')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'buat-jadwal' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Buat Jadwal</button>
         </div>
       </div>
+
+      {error && !showForm && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
       {tab === 'kalender' ? (
         <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic onChanged={() => load(me)} />

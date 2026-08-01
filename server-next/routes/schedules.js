@@ -12,6 +12,24 @@ async function assertHeadCoach(coachId) {
   }
 }
 
+// Narrow, read-only list for the "assign a coach" dropdown — head_coach
+// users need this too (they create schedules for their own branch), but
+// the full user-management endpoint under /admin/users is admin-only, so
+// this can't reuse that one.
+router.get('/head-coaches', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    const coaches = await prisma.user.findMany({
+      where: { role: 'head_coach' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    })
+    res.json(coaches)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/', authenticate, async (req, res) => {
   try {
     const where = {}

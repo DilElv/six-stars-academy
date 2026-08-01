@@ -25,12 +25,13 @@ export default function AdminJadwalPage() {
 
   function load() {
     setLoading(true)
-    Promise.all([api.getSchedules(), api.getUsers('head_coach'), api.getBranches()])
+    Promise.all([api.getSchedules(), api.getHeadCoaches(), api.getBranches()])
       .then(([sched, headCoach, br]) => {
         setSchedules(sched)
         setCoaches(headCoach)
         setBranches(br)
       })
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }
 
@@ -93,6 +94,8 @@ export default function AdminJadwalPage() {
           </button>
         </div>
       </div>
+
+      {error && !showForm && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
       {loading ? null : (
         <div className="glass-card rounded-3xl overflow-hidden">
