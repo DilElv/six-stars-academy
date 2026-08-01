@@ -32,12 +32,13 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
   const { dates, startTime, endTime, location, coachId, branchId } = req.body
   try {
     if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Pilih minimal satu tanggal' })
+    if (!branchId) return res.status(400).json({ error: 'Cabang wajib dipilih — jadwal tanpa cabang tidak akan muncul di halaman head coach/coach' })
     await assertHeadCoach(coachId)
 
     const schedules = await prisma.$transaction(
       dates.map((date) =>
         prisma.schedule.create({
-          data: { date: new Date(date), startTime, endTime, location, coachId: coachId || null, branchId: branchId || null },
+          data: { date: new Date(date), startTime, endTime, location, coachId: coachId || null, branchId },
         })
       )
     )
@@ -52,8 +53,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
 router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   const { date, startTime, endTime, location, coachId, status, branchId } = req.body
   try {
+    if (branchId !== undefined && !branchId) return res.status(400).json({ error: 'Cabang wajib dipilih — jadwal tanpa cabang tidak akan muncul di halaman head coach/coach' })
     await assertHeadCoach(coachId)
-    const data = { startTime, endTime, location, coachId: coachId || null, status, branchId: branchId !== undefined ? (branchId || null) : undefined }
+    const data = { startTime, endTime, location, coachId: coachId || null, status, branchId: branchId || undefined }
     if (date !== undefined) data.date = new Date(date)
     const schedule = await prisma.schedule.update({ where: { id: req.params.id }, data })
     res.json(schedule)

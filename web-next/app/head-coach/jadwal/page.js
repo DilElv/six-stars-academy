@@ -209,12 +209,13 @@ export default function HeadCoachJadwalPage() {
                   value={form.branchId}
                   onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
                   className="w-full"
-                  allLabel="- Belum ditentukan -"
-                  placeholder="- Belum ditentukan -"
+                  allLabel="- Pilih Cabang -"
+                  placeholder="- Pilih Cabang -"
                   options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
                 />
+                <p className="text-[11px] text-gray-400 mt-1">Wajib diisi — jadwal tanpa cabang tidak akan muncul di halaman coach.</p>
               </div>
-              <button type="submit" disabled={saving || form.dates.length === 0} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
+              <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan
               </button>
             </form>

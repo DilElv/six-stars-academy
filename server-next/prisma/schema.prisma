@@ -453,8 +453,8 @@ model Schedule {
   coachId    String?
   coach      User?     @relation(fields: [coachId], references: [id])
   status     String    @default("active")
-  branchId   String?
-  branch     Branch?   @relation(fields: [branchId], references: [id])
+  branchId   String
+  branch     Branch    @relation(fields: [branchId], references: [id])
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
