@@ -149,14 +149,15 @@ async function main() {
   })
   console.log('  ✓ Payment demo dibuat (lunas)')
 
+  // Jadwal latihan is date-based (not recurring by weekday) — seed a couple
+  // of upcoming demo dates, all assigned to the head coach (only head_coach
+  // users are assignable, per Pengaturan Jadwal).
+  const nextWeekday = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d }
   await prisma.schedule.createMany({
     data: [
-      { ageGroup: 'U-8', day: 'Senin & Rabu', startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: coach.id, branchId: bsd.id },
-      { ageGroup: 'U-10', day: 'Selasa & Kamis', startTime: '16.00', endTime: '18.00', location: 'Lapangan A', coachId: coach.id, branchId: bsd.id },
-      { ageGroup: 'U-12', day: 'Senin & Rabu', startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id, branchId: bsd.id },
-      { ageGroup: 'U-14', day: 'Jumat & Sabtu', startTime: '15.30', endTime: '17.30', location: 'Lapangan B', coachId: headCoach.id, branchId: bsd.id },
-      { ageGroup: 'U-16', day: 'Selasa & Jumat', startTime: '16.00', endTime: '18.00', location: 'Lapangan C', coachId: headCoach.id, branchId: bsd.id },
-      { ageGroup: 'U-18', day: 'Senin, Rabu & Jumat', startTime: '17.00', endTime: '19.00', location: 'Lapangan C', coachId: headCoach.id, branchId: bsd.id },
+      { date: nextWeekday(1), startTime: '15.00', endTime: '16.30', location: 'Lapangan A', coachId: headCoach.id, branchId: bsd.id },
+      { date: nextWeekday(3), startTime: '16.00', endTime: '18.00', location: 'Lapangan B', coachId: headCoach.id, branchId: bsd.id },
+      { date: nextWeekday(5), startTime: '15.30', endTime: '17.30', location: 'Lapangan C', coachId: headCoach.id, branchId: bsd.id },
     ],
   })
   console.log('  ✓ Jadwal latihan demo dibuat')

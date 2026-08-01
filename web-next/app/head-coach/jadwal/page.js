@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Edit3, Trash2, Loader2 } from 'lucide-react'
+import { format } from 'date-fns'
+import { id as localeId } from 'date-fns/locale'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
-import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
-import { AGE_GROUPS } from '@/lib/ageGroups'
-import { WEEKDAYS, weekdayLabel } from '@/lib/weekdays'
+import { DatePicker, MultiDatePicker } from '@/components/ui/date-picker'
 import JadwalCalendar from '@/components/JadwalCalendar'
 import ModalPortal from '@/components/ui/modal-portal'
 
-const emptyForm = { weekdays: [], ageGroups: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
+const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
 export default function HeadCoachJadwalPage() {
   const [tab, setTab] = useState('kalender')
@@ -30,19 +30,18 @@ export default function HeadCoachJadwalPage() {
 
   function load(user) {
     Promise.all([
-      api.getSchedules(undefined, user.branchId),
+      api.getSchedules(user.branchId),
       api.getTrainingSessions(undefined, user.branchId),
       api.getEvents(undefined, user.branchId),
       user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),
-      api.getUsers('coach'),
       api.getUsers('head_coach'),
       api.getBranches(),
-    ]).then(([sched, sess, evts, flds, coach, headCoach, br]) => {
+    ]).then(([sched, sess, evts, flds, headCoach, br]) => {
       setSchedules(sched)
       setSessions(sess)
       setEvents(evts)
       setFields(flds)
-      setCoaches([...headCoach, ...coach])
+      setCoaches(headCoach)
       setBranches(br)
     })
   }
@@ -60,8 +59,7 @@ export default function HeadCoachJadwalPage() {
 
   function openEdit(s) {
     setForm({
-      weekdays: [s.day],
-      ageGroups: s.ageGroup ? s.ageGroup.split(',').filter(Boolean) : [],
+      dates: [format(new Date(s.date), 'yyyy-MM-dd')],
       startTime: s.startTime,
       endTime: s.endTime,
       location: s.location,
@@ -79,7 +77,7 @@ export default function HeadCoachJadwalPage() {
     setError('')
     try {
       if (editSchedule) {
-        await api.updateSchedule(editSchedule.id, { ...form, day: form.weekdays[0] })
+        await api.updateSchedule(editSchedule.id, { ...form, date: form.dates[0] })
       } else {
         await api.createSchedule(form)
       }
@@ -124,20 +122,18 @@ export default function HeadCoachJadwalPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Hari</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Tanggal</th>
                     <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Waktu</th>
-                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Umur</th>
                     <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
-                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Coach</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Head Coach</th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {schedules.map((s) => (
                     <tr key={s.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{weekdayLabel(s.day)}</td>
+                      <td className="px-4 py-3 text-gray-500">{format(new Date(s.date), 'd MMM yyyy', { locale: localeId })}</td>
                       <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
-                      <td className="px-3 py-3 text-gray-500">{s.ageGroup}</td>
                       <td className="px-3 py-3 text-gray-500">{s.location}</td>
                       <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
                       <td className="px-4 py-3">
@@ -167,20 +163,20 @@ export default function HeadCoachJadwalPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Hari{!editSchedule && ' (bisa pilih lebih dari satu)'}</label>
-                <MultiSelectCheckbox
-                  options={WEEKDAYS.map((w) => ({ value: w.value, label: w.label }))}
-                  values={form.weekdays}
-                  onChange={(vals) => setForm((f) => ({ ...f, weekdays: editSchedule ? vals.slice(-1) : vals }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-                <MultiSelectCheckbox
-                  options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
-                  values={form.ageGroups}
-                  onChange={(vals) => setForm((f) => ({ ...f, ageGroups: vals }))}
-                />
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal{!editSchedule && ' (bisa pilih lebih dari satu)'}</label>
+                {editSchedule ? (
+                  <DatePicker
+                    value={form.dates[0] || ''}
+                    onChange={(v) => setForm((f) => ({ ...f, dates: [v] }))}
+                    className="w-full"
+                  />
+                ) : (
+                  <MultiDatePicker
+                    value={form.dates}
+                    onChange={(vals) => setForm((f) => ({ ...f, dates: vals }))}
+                    className="w-full"
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -197,14 +193,14 @@ export default function HeadCoachJadwalPage() {
                 <input required value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Coach</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Head Coach</label>
                 <AppSelect
                   value={form.coachId}
                   onChange={(v) => setForm((f) => ({ ...f, coachId: v }))}
                   className="w-full"
                   allLabel="- Belum ditentukan -"
                   placeholder="- Belum ditentukan -"
-                  options={coaches.map((c) => ({ value: c.id, label: `${c.name} (${c.role === 'head_coach' ? 'Head Coach' : 'Coach'})` }))}
+                  options={coaches.map((c) => ({ value: c.id, label: c.name }))}
                 />
               </div>
               <div>
@@ -218,7 +214,7 @@ export default function HeadCoachJadwalPage() {
                   options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
                 />
               </div>
-              <button type="submit" disabled={saving || form.weekdays.length === 0} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
+              <button type="submit" disabled={saving || form.dates.length === 0} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan
               </button>
             </form>

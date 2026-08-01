@@ -13,7 +13,7 @@ export default function CoachJadwalPage() {
 
   function load(user) {
     Promise.all([
-      api.getSchedules(undefined, user.branchId),
+      api.getSchedules(user.branchId),
       api.getTrainingSessions(),
       api.getEvents(),
       user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),

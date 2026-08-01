@@ -82,12 +82,8 @@ export async function getMyChild() {
   return request('/students/me')
 }
 
-export async function getSchedules(ageGroup, branchId) {
-  const params = new URLSearchParams()
-  if (ageGroup) params.set('ageGroup', ageGroup)
-  if (branchId) params.set('branchId', branchId)
-  const qs = params.toString()
-  return request(`/schedules${qs ? `?${qs}` : ''}`)
+export async function getSchedules(branchId) {
+  return request(`/schedules${branchId ? `?branchId=${branchId}` : ''}`)
 }
 
 export async function getMyPayments() {

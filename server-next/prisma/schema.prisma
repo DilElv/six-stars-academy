@@ -446,9 +446,7 @@ model Report {
 
 model Schedule {
   id         String    @id @default(cuid())
-  ageGroup   String
-  day        String
-  date       DateTime?
+  date       DateTime
   startTime  String
   endTime    String
   location   String

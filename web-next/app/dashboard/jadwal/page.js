@@ -30,7 +30,7 @@ export default function JadwalAnakPage() {
 
   function load(s) {
     Promise.all([
-      api.getSchedules(s.ageGroup, s.branchId),
+      api.getSchedules(s.branchId),
       api.getTrainingSessions(s.ageGroup, s.branchId),
       api.getMyEvents(),
       api.getMyAttendance(),

@@ -7,7 +7,6 @@ import { Calendar } from '@/components/ui/calendar'
 import { AppSelect } from '@/components/ui/app-select'
 import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 import { AGE_GROUPS } from '@/lib/ageGroups'
-import { WEEKDAYS, weekdayForDate } from '@/lib/weekdays'
 import { id as localeId } from 'date-fns/locale'
 import { format } from 'date-fns'
 import ModalPortal from '@/components/ui/modal-portal'
@@ -42,19 +41,15 @@ export default function JadwalCalendar({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const scheduleByWeekday = useMemo(() => {
+  const scheduleByDate = useMemo(() => {
     const map = {}
     for (const s of schedules) {
-      if (!map[s.day]) map[s.day] = []
-      map[s.day].push(s)
+      const key = dateKey(new Date(s.date))
+      if (!map[key]) map[key] = []
+      map[key].push(s)
     }
     return map
   }, [schedules])
-
-  const scheduleWeekdays = useMemo(
-    () => Object.keys(scheduleByWeekday).map((day) => WEEKDAYS.find((w) => w.value === day)?.jsDay).filter((n) => n !== undefined),
-    [scheduleByWeekday]
-  )
 
   const filteredSessions = useMemo(() => {
     if (!ageGroupFilter) return sessions
@@ -81,8 +76,7 @@ export default function JadwalCalendar({
     return map
   }, [events])
 
-  const selectedWeekday = selectedDate ? weekdayForDate(selectedDate) : null
-  const selectedDaySchedules = selectedWeekday ? scheduleByWeekday[selectedWeekday] || [] : []
+  const selectedDaySchedules = selectedDate ? scheduleByDate[dateKey(selectedDate)] || [] : []
   const selectedDaySessions = selectedDate ? sessionsByDate[dateKey(selectedDate)] || [] : []
   const selectedDayEvents = selectedDate ? eventsByDate[dateKey(selectedDate)] || [] : []
   const hasSchedule = selectedDaySchedules.length > 0
@@ -133,7 +127,7 @@ export default function JadwalCalendar({
           onSelect={setSelectedDate}
           className="[--cell-size:2.5rem] sm:[--cell-size:3.25rem] lg:[--cell-size:4.5rem] [--cell-font-size:0.875rem] sm:[--cell-font-size:1.0625rem] lg:[--cell-font-size:1.375rem]"
           modifiers={{
-            schedule: (date) => scheduleWeekdays.includes(date.getDay()),
+            schedule: (date) => !!scheduleByDate[dateKey(date)],
             hasTopic: (date) => !!sessionsByDate[dateKey(date)],
             event: (date) => !!eventsByDate[dateKey(date)],
           }}
@@ -215,7 +209,7 @@ export default function JadwalCalendar({
                 <div key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 bg-gray-50 rounded-2xl px-3 py-2.5">
                   <span className="flex items-center gap-1.5"><Clock size={12} className="text-gold-600" /> {s.startTime} - {s.endTime} WIB</span>
                   <span className="flex items-center gap-1.5"><MapPin size={12} className="text-gold-600" /> {s.location}</span>
-                  {s.ageGroup && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> {s.ageGroup.split(',').join(', ')}</span>}
+                  {s.coach?.name && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> {s.coach.name}</span>}
                 </div>
               ))}
 
