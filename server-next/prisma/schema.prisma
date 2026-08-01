@@ -140,6 +140,11 @@ model Student {
   status            String    @default("active")
   branchId          String?
   branch            Branch?   @relation(fields: [branchId], references: [id])
+  // Beasiswa (scholarship) — admin-only, set from Data Anak. 0 = none.
+  // registrationScholarshipPercent only ever matters at initial registration;
+  // sppScholarshipPercent is re-applied automatically on every renewal.
+  registrationScholarshipPercent Int @default(0)
+  sppScholarshipPercent          Int @default(0)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -166,7 +171,6 @@ model Package {
   students        Student[]
   payments        Payment[]
   branchPackages  BranchPackage[]
-  promoCodePackages PromoCodePackage[]
 
   @@map("packages")
 }
@@ -208,8 +212,6 @@ model Payment {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  promoCodeUsages PromoCodeUsage[]
-
   @@map("payments")
 }
 
@@ -233,7 +235,6 @@ model PendingRegistration {
   amount          Int
   registrationFee Int
   totalAmount     Int
-  promoCode       String?
   paymentMethod   String?
   status          String    @default("pending") // pending | success | failed
   transactionId   String?
@@ -442,47 +443,6 @@ model Report {
   @@map("reports")
 }
 
-model PromoCode {
-  id              String      @id @default(cuid())
-  code            String      @unique
-  discountPercent Int
-  maxUses         Int         @default(1)
-  usedCount       Int         @default(0)
-  allPackages     Boolean     @default(false)
-  appliesToRegistrationFee Boolean @default(false)
-  status          String      @default("active")
-  expiresAt       DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  packages PromoCodePackage[]
-  usages   PromoCodeUsage[]
-
-  @@map("promo_codes")
-}
-
-model PromoCodePackage {
-  id          String   @id @default(cuid())
-  promoCodeId String
-  packageId   String
-  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
-  package     Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
-
-  @@unique([promoCodeId, packageId])
-  @@map("promo_code_packages")
-}
-
-model PromoCodeUsage {
-  id          String   @id @default(cuid())
-  promoCodeId String
-  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
-  paymentId   String
-  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  usedAt      DateTime @default(now())
-
-  @@unique([promoCodeId, paymentId])
-  @@map("promo_code_usages")
-}
 
 model Schedule {
   id         String    @id @default(cuid())

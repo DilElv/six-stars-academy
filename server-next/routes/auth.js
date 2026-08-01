@@ -46,7 +46,7 @@ router.post('/register', async (req, res) => {
   const {
     packageId, fullName, dateOfBirth, position, photo,
     parentName, parentPhone, address, email, password, branchId,
-    amount, registrationFee: regFeeOverride, promoCode, paymentMethod,
+    amount, registrationFee: regFeeOverride, paymentMethod,
   } = req.body
 
   try {
@@ -68,21 +68,9 @@ router.post('/register', async (req, res) => {
     const pkgAmount = amount ?? pkg.price
     const totalAmount = pkgAmount + registrationFee
 
-    let discount = 0
-    if (promoCode) {
-      const promoCodeRecord = await prisma.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
-      if (!promoCodeRecord) return res.status(400).json({ error: 'Kode promo tidak ditemukan' })
-      if (promoCodeRecord.status !== 'active') return res.status(400).json({ error: 'Kode promo sudah tidak aktif' })
-      if (promoCodeRecord.expiresAt && new Date(promoCodeRecord.expiresAt) < new Date()) return res.status(400).json({ error: 'Kode promo sudah kadaluarsa' })
-      if (promoCodeRecord.usedCount >= promoCodeRecord.maxUses) return res.status(400).json({ error: 'Kode promo sudah habis dipakai' })
-      if (!promoCodeRecord.allPackages) {
-        const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
-        if (!valid) return res.status(400).json({ error: 'Kode promo tidak berlaku untuk paket ini' })
-      }
-      const discountBase = pkgAmount + (promoCodeRecord.appliesToRegistrationFee ? registrationFee : 0)
-      discount = Math.round(discountBase * promoCodeRecord.discountPercent / 100)
-    }
-
+    // New self-registrations always start with no beasiswa (0%) — admin can
+    // grant one afterward via Data Anak, which then applies from the next
+    // renewal onward.
     const pending = await prisma.pendingRegistration.create({
       data: {
         fullName,
@@ -98,8 +86,7 @@ router.post('/register', async (req, res) => {
         packageId: pkg.id,
         amount: pkgAmount,
         registrationFee,
-        totalAmount: totalAmount - discount,
-        promoCode: promoCode || null,
+        totalAmount,
         paymentMethod: paymentMethod || null,
       },
     })

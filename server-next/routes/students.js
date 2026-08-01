@@ -100,9 +100,15 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     parentName, parentEmail, parentPhone, parentPassword,
     fullName, dateOfBirth, position, photo,
     packageId, branchId,
-    paymentStatus, amount, registrationFee, promoCode,
+    paymentStatus, amount, registrationFee,
     sessionsUsed,
   } = req.body
+  // Beasiswa is admin-only — head_coach can create/edit students same as
+  // always, but never sets a scholarship percent, same pattern as branchId
+  // being stripped for coach/head_coach in routes/auth.js.
+  const isAdmin = req.user.role === 'admin'
+  const registrationScholarshipPercent = isAdmin ? Math.max(0, Math.min(100, Number(req.body.registrationScholarshipPercent) || 0)) : 0
+  const sppScholarshipPercent = isAdmin ? Math.max(0, Math.min(100, Number(req.body.sppScholarshipPercent) || 0)) : 0
 
   try {
     if (!parentEmail || !parentEmail.toLowerCase().endsWith('@sixstars.id')) {
@@ -152,31 +158,18 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           packageEndDate: endDate,
           branchId: branchId || null,
           sessionsUsed: sessionsUsed ? Math.max(0, Math.round(Number(sessionsUsed))) : 0,
+          registrationScholarshipPercent,
+          sppScholarshipPercent,
         },
       })
 
       if (pkg) {
         const pkgAmount = amount ?? pkg.price
         const regFee = registrationFee ?? 750000
-        let totalAmount = pkgAmount + regFee
+        const discount = Math.round(pkgAmount * sppScholarshipPercent / 100) + Math.round(regFee * registrationScholarshipPercent / 100)
+        const totalAmount = Math.max(0, pkgAmount + regFee - discount)
 
-        let discount = 0
-        if (promoCode) {
-          const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
-          if (!promo) throw new Error('Kode promo tidak ditemukan')
-          if (promo.status !== 'active') throw new Error('Kode promo sudah tidak aktif')
-          if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) throw new Error('Kode promo sudah kadaluarsa')
-          if (promo.usedCount >= promo.maxUses) throw new Error('Kode promo sudah habis dipakai')
-          if (!promo.allPackages) {
-            const valid = promo.packages.some((p) => p.packageId === pkg.id)
-            if (!valid) throw new Error('Kode promo tidak berlaku untuk paket ini')
-          }
-          const discountBase = pkgAmount + (promo.appliesToRegistrationFee ? regFee : 0)
-          discount = Math.round(discountBase * promo.discountPercent / 100)
-          totalAmount -= discount
-        }
-
-        const payment = await tx.payment.create({
+        await tx.payment.create({
           data: {
             studentId: student.id,
             packageId: pkg.id,
@@ -188,17 +181,6 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
             paidAt: paymentStatus === 'success' ? new Date() : null,
           },
         })
-
-        if (promoCode) {
-          const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() } })
-          await tx.promoCode.update({
-            where: { id: promo.id },
-            data: { usedCount: { increment: 1 } },
-          })
-          await tx.promoCodeUsage.create({
-            data: { promoCodeId: promo.id, paymentId: payment.id },
-          })
-        }
       }
 
       await tx.studentCard.create({
@@ -287,7 +269,7 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       include: {
         package: true,
         branch: true,
-        payments: { orderBy: { createdAt: 'desc' }, include: { promoCodeUsages: { include: { promoCode: true } } } },
+        payments: { orderBy: { createdAt: 'desc' } },
         assessments: { orderBy: [{ year: 'desc' }, { month: 'desc' }] },
         studentCard: true,
       },
@@ -304,8 +286,10 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   const {
     fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed,
-    parentEmail, parentPassword, registrationFee, amount, paymentStatus, promoCode,
+    parentEmail, parentPassword, registrationFee, amount, paymentStatus,
   } = req.body
+  const isAdmin = req.user.role === 'admin'
+  const { registrationScholarshipPercent, sppScholarshipPercent } = req.body
   try {
     const student = await prisma.$transaction(async (tx) => {
       const data = {
@@ -313,6 +297,14 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
         branchId: branchId !== undefined ? (branchId || null) : undefined,
         sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
+      }
+      // Beasiswa is admin-only — a head_coach's request simply never sets
+      // these keys, so `undefined` leaves the student's existing values untouched.
+      if (isAdmin && registrationScholarshipPercent !== undefined) {
+        data.registrationScholarshipPercent = Math.max(0, Math.min(100, Number(registrationScholarshipPercent) || 0))
+      }
+      if (isAdmin && sppScholarshipPercent !== undefined) {
+        data.sppScholarshipPercent = Math.max(0, Math.min(100, Number(sppScholarshipPercent) || 0))
       }
 
       // Changing the package re-derives the end date from today (same as a
@@ -355,47 +347,19 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       }
 
       // The registration Payment (created once, when the student was first
-      // added) is what carries biaya pendaftaran / status pembayaran / promo
-      // — same fields Tambah Anak sets, editable here as a correction, not a
-      // new transaction.
-      if (registrationFee !== undefined || amount !== undefined || paymentStatus !== undefined || promoCode !== undefined) {
+      // added) is what carries biaya pendaftaran / status pembayaran /
+      // beasiswa discount — same fields Tambah Anak sets, editable here as a
+      // correction, not a new transaction.
+      if (registrationFee !== undefined || amount !== undefined || paymentStatus !== undefined
+        || (isAdmin && (registrationScholarshipPercent !== undefined || sppScholarshipPercent !== undefined))) {
         const payment = await tx.payment.findFirst({ where: { studentId: req.params.id, paymentType: 'registration' } })
         if (payment) {
           const newAmount = amount !== undefined && amount !== '' ? Math.max(0, Math.round(Number(amount))) : payment.amount
           const newFee = registrationFee !== undefined && registrationFee !== '' ? Math.max(0, Math.round(Number(registrationFee))) : payment.registrationFee
+          const regScholarship = data.registrationScholarshipPercent ?? current.registrationScholarshipPercent
+          const sppScholarship = data.sppScholarshipPercent ?? current.sppScholarshipPercent
 
-          let activePromo = null
-          if (promoCode !== undefined) {
-            // Replacing the promo: release whatever usage was on this
-            // payment before applying (or clearing) the new one, so a promo
-            // with maxUses:1 doesn't stay permanently locked to a payment
-            // that no longer uses it.
-            const existingUsage = await tx.promoCodeUsage.findFirst({ where: { paymentId: payment.id } })
-            if (existingUsage) {
-              await tx.promoCode.update({ where: { id: existingUsage.promoCodeId }, data: { usedCount: { decrement: 1 } } })
-              await tx.promoCodeUsage.delete({ where: { id: existingUsage.id } })
-            }
-            if (promoCode) {
-              const promo = await tx.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
-              if (!promo) throw Object.assign(new Error('Kode promo tidak ditemukan'), { status: 400 })
-              if (promo.status !== 'active') throw Object.assign(new Error('Kode promo sudah tidak aktif'), { status: 400 })
-              if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) throw Object.assign(new Error('Kode promo sudah kadaluarsa'), { status: 400 })
-              if (promo.usedCount >= promo.maxUses) throw Object.assign(new Error('Kode promo sudah habis dipakai'), { status: 400 })
-              if (!promo.allPackages && payment.packageId) {
-                const valid = promo.packages.some((p) => p.packageId === payment.packageId)
-                if (!valid) throw Object.assign(new Error('Kode promo tidak berlaku untuk paket ini'), { status: 400 })
-              }
-              await tx.promoCode.update({ where: { id: promo.id }, data: { usedCount: { increment: 1 } } })
-              await tx.promoCodeUsage.create({ data: { promoCodeId: promo.id, paymentId: payment.id } })
-              activePromo = promo
-            }
-          } else {
-            const existingUsage = await tx.promoCodeUsage.findFirst({ where: { paymentId: payment.id }, include: { promoCode: true } })
-            activePromo = existingUsage?.promoCode || null
-          }
-
-          const discountBase = newAmount + (activePromo?.appliesToRegistrationFee ? newFee : 0)
-          const discount = activePromo ? Math.round(discountBase * activePromo.discountPercent / 100) : 0
+          const discount = Math.round(newAmount * sppScholarship / 100) + Math.round(newFee * regScholarship / 100)
           const newStatus = paymentStatus !== undefined ? paymentStatus : payment.status
 
           await tx.payment.update({

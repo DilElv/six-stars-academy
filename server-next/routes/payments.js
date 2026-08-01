@@ -75,7 +75,7 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
 // Parent starts a package renewal for their child. Creates a pending Payment
 // and immediately requests a billing link from Rintisan.
 router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
-  const { packageId, paymentMethod, promoCode } = req.body
+  const { packageId, paymentMethod } = req.body
   if (!packageId || !paymentMethod) return res.status(400).json({ error: 'packageId dan paymentMethod wajib diisi' })
 
   try {
@@ -85,20 +85,10 @@ router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
     const pkg = await prisma.package.findUnique({ where: { id: packageId } })
     if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
 
-    let discount = 0
-    let promoCodeRecord = null
-    if (promoCode) {
-      promoCodeRecord = await prisma.promoCode.findUnique({ where: { code: promoCode.toUpperCase() }, include: { packages: true } })
-      if (!promoCodeRecord) return res.status(400).json({ error: 'Kode promo tidak ditemukan' })
-      if (promoCodeRecord.status !== 'active') return res.status(400).json({ error: 'Kode promo sudah tidak aktif' })
-      if (promoCodeRecord.expiresAt && new Date(promoCodeRecord.expiresAt) < new Date()) return res.status(400).json({ error: 'Kode promo sudah kadaluarsa' })
-      if (promoCodeRecord.usedCount >= promoCodeRecord.maxUses) return res.status(400).json({ error: 'Kode promo sudah habis dipakai' })
-      if (!promoCodeRecord.allPackages) {
-        const valid = promoCodeRecord.packages.some((p) => p.packageId === pkg.id)
-        if (!valid) return res.status(400).json({ error: 'Kode promo tidak berlaku untuk paket ini' })
-      }
-      discount = Math.round(pkg.price * promoCodeRecord.discountPercent / 100)
-    }
+    // Beasiswa SPP is set by admin on the student (Data Anak) and applies
+    // automatically here — no code entry needed from the parent.
+    const scholarshipPercent = student.sppScholarshipPercent || 0
+    const discount = Math.round(pkg.price * scholarshipPercent / 100)
 
     const payment = await prisma.payment.create({
       data: {
@@ -106,16 +96,11 @@ router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
         packageId: pkg.id,
         amount: pkg.price,
         registrationFee: 0,
-        totalAmount: pkg.price - discount,
+        totalAmount: Math.max(0, pkg.price - discount),
         paymentType: 'renewal',
         status: 'pending',
       },
     })
-
-    if (promoCodeRecord) {
-      await prisma.promoCode.update({ where: { id: promoCodeRecord.id }, data: { usedCount: { increment: 1 } } })
-      await prisma.promoCodeUsage.create({ data: { promoCodeId: promoCodeRecord.id, paymentId: payment.id } })
-    }
 
     const { payment: updated, rintisan } = await checkoutPayment({
       payment,
@@ -127,7 +112,7 @@ router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
       note: `Perpanjangan paket ${pkg.name} - ${student.fullName}`,
     })
 
-    res.status(201).json({ payment: updated, rintisan })
+    res.status(201).json({ payment: updated, rintisan, scholarshipPercent })
   } catch (err) {
     console.error(err)
     res.status(400).json({ error: err.message || 'Gagal membuat tagihan perpanjangan' })

@@ -32,7 +32,7 @@ function formatRupiah(n) {
  * refreshed — the Rintisan webhook already updates the DB on its own, this
  * just picks that change up without the user doing anything.
  */
-export default function PaymentMethodModal({ title, amount, onConfirm, onClose, onDone, pollStatus }) {
+export default function PaymentMethodModal({ title, amount, note, onConfirm, onClose, onDone, pollStatus }) {
   const [methods, setMethods] = useState(FALLBACK_METHODS)
   const [method, setMethod] = useState('QRIS')
   const [loading, setLoading] = useState(false)
@@ -104,6 +104,12 @@ export default function PaymentMethodModal({ title, amount, onConfirm, onClose, 
           <div className="bg-navy-50 rounded-2xl px-4 py-3 mb-4 text-center">
             <div className="text-xs text-gray-500">Total Tagihan</div>
             <div className="text-lg font-bold text-navy-900">{formatRupiah(amount)}</div>
+          </div>
+        )}
+
+        {note && !result && !finalStatus && (
+          <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-2.5 mb-4 text-xs font-medium">
+            {note}
           </div>
         )}
 

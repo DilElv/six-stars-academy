@@ -177,11 +177,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
     paymentStatus: 'pending',
   })
   const [regPayment, setRegPayment] = useState(null)
-  const [initialPromoCode, setInitialPromoCode] = useState('')
-  const [promoCodeInput, setPromoCodeInput] = useState('')
-  const [promoDiscount, setPromoDiscount] = useState(null)
-  const [promoTouched, setPromoTouched] = useState(false)
-  const [promoChecking, setPromoChecking] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(true)
@@ -201,9 +196,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           amount: String(payment.amount),
           paymentStatus: payment.status,
         }))
-        const code = payment.promoCodeUsages?.[0]?.promoCode?.code || ''
-        setInitialPromoCode(code)
-        setPromoCodeInput(code)
       }
     }).catch(() => {}).finally(() => setLoadingDetail(false))
   }, [student.id])
@@ -223,28 +215,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
     }
   }
 
-  async function handleCheckPromo() {
-    if (!promoCodeInput.trim() || !form.packageId) return
-    setPromoChecking(true)
-    setError('')
-    try {
-      const result = await api.validatePromoCode(promoCodeInput.trim(), form.packageId, Number(form.amount) || 0, Number(form.registrationFee) || 0)
-      setPromoDiscount(result)
-      setPromoTouched(true)
-    } catch (err) {
-      setPromoDiscount(null)
-      setError(err.message)
-    } finally {
-      setPromoChecking(false)
-    }
-  }
-
-  function handleRemovePromo() {
-    setPromoCodeInput('')
-    setPromoDiscount(null)
-    setPromoTouched(true)
-  }
-
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
@@ -257,9 +227,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
         amount: Number(form.amount) || 0,
       }
       if (!payload.parentPassword) delete payload.parentPassword
-      if (promoTouched && promoCodeInput.trim() !== initialPromoCode) {
-        payload.promoCode = promoCodeInput.trim()
-      }
       await api.updateStudent(student.id, payload)
       onSaved()
     } catch (err) {
@@ -396,32 +363,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
                   className="w-full"
                   options={[{ value: 'pending', label: 'Belum Lunas' }, { value: 'success', label: 'Lunas' }]}
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kode Promo</label>
-                <div className="flex gap-2">
-                  <input
-                    value={promoCodeInput}
-                    onChange={(e) => setPromoCodeInput(e.target.value)}
-                    placeholder="Masukkan kode promo"
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase"
-                    disabled={!promoTouched && !!initialPromoCode}
-                  />
-                  {!promoTouched && initialPromoCode ? (
-                    <button type="button" onClick={handleRemovePromo} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
-                  ) : promoDiscount ? (
-                    <button type="button" onClick={handleRemovePromo} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
-                  ) : (
-                    <button type="button" onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim() || !form.packageId} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50">
-                      {promoChecking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                    </button>
-                  )}
-                </div>
-                {promoDiscount && (
-                  <div className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
-                    Diskon {promoDiscount.discountPercent}% — Hemat {formatRupiah(promoDiscount.discount)}
-                  </div>
-                )}
               </div>
             </div>
           )}

@@ -108,6 +108,7 @@ router.get('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
 
 router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds } = req.body
+  if (!date || isNaN(new Date(date).getTime())) return res.status(400).json({ error: 'Tanggal event tidak valid' })
   try {
     const event = await prisma.$transaction(async (tx) => {
       const created = await tx.event.create({

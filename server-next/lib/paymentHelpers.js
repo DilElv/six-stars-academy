@@ -176,14 +176,6 @@ export async function convertPendingRegistration(pending) {
       },
     })
 
-    if (pending.promoCode) {
-      const promoCodeRecord = await tx.promoCode.findUnique({ where: { code: pending.promoCode.toUpperCase() } })
-      if (promoCodeRecord) {
-        await tx.promoCode.update({ where: { id: promoCodeRecord.id }, data: { usedCount: { increment: 1 } } })
-        await tx.promoCodeUsage.create({ data: { promoCodeId: promoCodeRecord.id, paymentId: payment.id } })
-      }
-    }
-
     const card = await tx.studentCard.create({
       data: {
         studentId: student.id,

@@ -1,28 +1,28 @@
 'use client'
 
 import { useState } from 'react'
-import { UserPlus, Loader2, Search, Upload } from 'lucide-react'
+import { UserPlus, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import { totalSessionsFor } from '@/lib/sessionInfo'
+import ScholarshipField from '@/components/ScholarshipField'
 
 function formatRupiah(n) {
   return `Rp${(n || 0).toLocaleString('id-ID')}`
 }
 
-export default function AddStudentModal({ branches, packages, onClose, onSaved }) {
+export default function AddStudentModal({ branches, packages, isAdmin = false, onClose, onSaved }) {
   const [form, setForm] = useState({
     parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
     fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
     photo: '', sessionsUsed: '0',
     registrationFee: '750000',
     paymentStatus: 'pending',
+    registrationScholarshipPercent: 0,
+    sppScholarshipPercent: 0,
   })
-  const [promoCodeInput, setPromoCodeInput] = useState('')
-  const [promoDiscount, setPromoDiscount] = useState(null)
-  const [promoChecking, setPromoChecking] = useState(false)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -47,23 +47,8 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
   const pkgAmount = selectedPackage?.price || 0
   const regFee = Number(form.registrationFee) || 0
   const subtotal = pkgAmount + regFee
-  const discount = promoDiscount?.discount || 0
+  const discount = Math.round(pkgAmount * form.sppScholarshipPercent / 100) + Math.round(regFee * form.registrationScholarshipPercent / 100)
   const total = Math.max(subtotal - discount, 0)
-
-  async function handleCheckPromo() {
-    if (!promoCodeInput.trim() || !form.packageId) return
-    setPromoChecking(true)
-    setError('')
-    try {
-      const result = await api.validatePromoCode(promoCodeInput.trim(), form.packageId, pkgAmount, regFee)
-      setPromoDiscount(result)
-    } catch (err) {
-      setPromoDiscount(null)
-      setError(err.message)
-    } finally {
-      setPromoChecking(false)
-    }
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -75,7 +60,6 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
         ...form,
         registrationFee: regFee,
         sessionsUsed: Number(form.sessionsUsed) || 0,
-        ...(promoDiscount ? { promoCode: promoCodeInput.trim() } : {}),
       })
       onSaved()
     } catch (err) {
@@ -173,7 +157,7 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
                   <AppSelect
                     value={form.packageId}
-                    onChange={(v) => { setForm((f) => ({ ...f, packageId: v })); setPromoDiscount(null) }}
+                    onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
                     className="w-full"
                     allLabel="- Tanpa Paket -"
                     placeholder="- Tanpa Paket -"
@@ -217,30 +201,21 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
                   ]}
                 />
               </div>
-              <div className="pt-3 border-t border-gray-100">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Kode Promo (opsional)</label>
-                <div className="flex gap-2">
-                  <input
-                    value={promoCodeInput}
-                    onChange={(e) => setPromoCodeInput(e.target.value)}
-                    placeholder="Masukkan kode promo"
-                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase"
-                    disabled={promoDiscount !== null}
+              {isAdmin && (
+                <div className="pt-3 border-t border-gray-100 space-y-3">
+                  <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">Beasiswa</h4>
+                  <ScholarshipField
+                    label="Beasiswa Biaya Pendaftaran"
+                    percent={form.registrationScholarshipPercent}
+                    onChange={(p) => setForm((f) => ({ ...f, registrationScholarshipPercent: p }))}
                   />
-                  {promoDiscount ? (
-                    <button type="button" onClick={() => { setPromoDiscount(null); setPromoCodeInput('') }} className="text-xs font-semibold text-red-600 bg-red-50 px-3 py-2 rounded-xl hover:bg-red-100">Hapus</button>
-                  ) : (
-                    <button type="button" onClick={handleCheckPromo} disabled={promoChecking || !promoCodeInput.trim() || !form.packageId} className="text-xs font-semibold text-navy-900 bg-gold-400 px-3 py-2 rounded-xl hover:bg-gold-500 disabled:opacity-50">
-                      {promoChecking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                    </button>
-                  )}
+                  <ScholarshipField
+                    label="Beasiswa SPP / Paket"
+                    percent={form.sppScholarshipPercent}
+                    onChange={(p) => setForm((f) => ({ ...f, sppScholarshipPercent: p }))}
+                  />
                 </div>
-                {promoDiscount && (
-                  <div className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">
-                    Diskon {promoDiscount.discountPercent}%{promoDiscount.appliesToRegistrationFee ? ' (paket + pendaftaran)' : ' (paket saja)'} — Hemat {formatRupiah(discount)}
-                  </div>
-                )}
-              </div>
+              )}
 
               {form.packageId && (
                 <div className="bg-navy-50 rounded-2xl p-3.5 space-y-1.5 text-xs">
@@ -254,7 +229,7 @@ export default function AddStudentModal({ branches, packages, onClose, onSaved }
                   </div>
                   {discount > 0 && (
                     <div className="flex justify-between text-emerald-600">
-                      <span>Diskon Promo</span>
+                      <span>Diskon Beasiswa</span>
                       <span className="font-medium">-{formatRupiah(discount)}</span>
                     </div>
                   )}
