@@ -50,6 +50,14 @@ export default function HeadCoachJadwalPage() {
     api.getMe().then((user) => { setMe(user); load(user) })
   }, [])
 
+  // `schedules` is already scoped to this head coach's own branch — that's
+  // the only branch we have visibility into here, so taken-dates blocking
+  // only applies when the form's branch matches it (backend still enforces
+  // the real constraint regardless).
+  const takenDates = me && form.branchId === me.branchId
+    ? schedules.filter((s) => s.id !== editSchedule?.id).map((s) => format(new Date(s.date), 'yyyy-MM-dd'))
+    : []
+
   function openAdd() {
     setForm({ ...emptyForm, branchId: me?.branchId || '' })
     setEditSchedule(null)
@@ -165,20 +173,35 @@ export default function HeadCoachJadwalPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+                <AppSelect
+                  value={form.branchId}
+                  onChange={(v) => setForm((f) => ({ ...f, branchId: v, dates: [] }))}
+                  className="w-full"
+                  allLabel="- Pilih Cabang -"
+                  placeholder="- Pilih Cabang -"
+                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Wajib diisi — jadwal tanpa cabang tidak akan muncul di halaman coach.</p>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal{!editSchedule && ' (bisa pilih lebih dari satu)'}</label>
                 {editSchedule ? (
                   <DatePicker
                     value={form.dates[0] || ''}
                     onChange={(v) => setForm((f) => ({ ...f, dates: [v] }))}
+                    disabledDates={takenDates}
                     className="w-full"
                   />
                 ) : (
                   <MultiDatePicker
                     value={form.dates}
                     onChange={(vals) => setForm((f) => ({ ...f, dates: vals }))}
+                    disabledDates={takenDates}
                     className="w-full"
                   />
                 )}
+                {!form.branchId && <p className="text-[11px] text-amber-600 mt-1">Pilih cabang dulu.</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -204,18 +227,6 @@ export default function HeadCoachJadwalPage() {
                   placeholder="- Belum ditentukan -"
                   options={coaches.map((c) => ({ value: c.id, label: c.name }))}
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                <AppSelect
-                  value={form.branchId}
-                  onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-                  className="w-full"
-                  allLabel="- Pilih Cabang -"
-                  placeholder="- Pilih Cabang -"
-                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">Wajib diisi — jadwal tanpa cabang tidak akan muncul di halaman coach.</p>
               </div>
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan

@@ -8,11 +8,15 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover'
 import { Calendar } from './calendar'
 import { cn } from '@/lib/utils'
 
-export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', className, max, min }) {
+// `disabledDates`: 'yyyy-MM-dd' strings that can't be picked (e.g. a branch
+// already has a jadwal that day) — shown crossed-out and blocked, not just
+// visually flagged, so double-booking isn't possible from the picker itself.
+export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', className, max, min, disabledDates = [] }) {
   const [open, setOpen] = useState(false)
   const dateValue = value ? new Date(`${value}T00:00:00`) : undefined
   const maxDate = max ? new Date(`${max}T23:59:59`) : new Date()
   const minDate = min ? new Date(`${min}T00:00:00`) : new Date(maxDate.getFullYear() - 25, 0, 1)
+  const disabledSet = new Set(disabledDates)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -39,8 +43,13 @@ export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', cla
             onChange(format(d, 'yyyy-MM-dd'))
             setOpen(false)
           }}
-          disabled={(d) => (max && d > new Date(`${max}T23:59:59`)) || (min && d < new Date(`${min}T00:00:00`))}
+          disabled={(d) => (max && d > new Date(`${max}T23:59:59`)) || (min && d < new Date(`${min}T00:00:00`)) || disabledSet.has(format(d, 'yyyy-MM-dd'))}
+          modifiers={{ taken: (d) => disabledSet.has(format(d, 'yyyy-MM-dd')) }}
+          modifiersClassNames={{ taken: 'line-through text-red-300' }}
         />
+        {disabledDates.length > 0 && (
+          <p className="text-[11px] text-gray-400 px-2 pb-1">Tanggal dicoret = sudah ada jadwal di cabang ini.</p>
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -49,14 +58,16 @@ export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', cla
 // Pick several dates in one go (e.g. multiple jadwal latihan dates at once).
 // `value` is an array of 'yyyy-MM-dd' strings; the popover stays open across
 // selections so admin can keep clicking dates, closing only on outside click.
-export function MultiDatePicker({ value = [], onChange, placeholder = 'Pilih tanggal', className, max, min }) {
+export function MultiDatePicker({ value = [], onChange, placeholder = 'Pilih tanggal', className, max, min, disabledDates = [] }) {
   const [open, setOpen] = useState(false)
   const dateValues = value.map((v) => new Date(`${v}T00:00:00`))
   const maxDate = max ? new Date(`${max}T23:59:59`) : new Date(new Date().getFullYear() + 2, 11, 31)
   const minDate = min ? new Date(`${min}T00:00:00`) : new Date()
+  const disabledSet = new Set(disabledDates)
 
   function toggleDate(d) {
     const key = format(d, 'yyyy-MM-dd')
+    if (disabledSet.has(key)) return
     if (value.includes(key)) onChange(value.filter((v) => v !== key))
     else onChange([...value, key].sort())
   }
@@ -83,8 +94,13 @@ export function MultiDatePicker({ value = [], onChange, placeholder = 'Pilih tan
             selected={dateValues}
             defaultMonth={dateValues[dateValues.length - 1] || minDate}
             onDayClick={toggleDate}
-            disabled={(d) => (max && d > new Date(`${max}T23:59:59`)) || (min && d < new Date(`${min}T00:00:00`))}
+            disabled={(d) => (max && d > new Date(`${max}T23:59:59`)) || (min && d < new Date(`${min}T00:00:00`)) || disabledSet.has(format(d, 'yyyy-MM-dd'))}
+            modifiers={{ taken: (d) => disabledSet.has(format(d, 'yyyy-MM-dd')) }}
+            modifiersClassNames={{ taken: 'line-through text-red-300' }}
           />
+          {disabledDates.length > 0 && (
+            <p className="text-[11px] text-gray-400 px-2 pb-1">Tanggal dicoret = sudah ada jadwal di cabang ini.</p>
+          )}
         </PopoverContent>
       </Popover>
       {value.length > 0 && (

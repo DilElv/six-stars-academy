@@ -458,6 +458,9 @@ model Schedule {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  // One branch can't have two jadwal on the same date — prevents double-
+  // booking; a different branch on the same date is unaffected.
+  @@unique([branchId, date])
   @@map("schedules")
 }
 

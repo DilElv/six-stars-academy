@@ -7,11 +7,13 @@ import { id as localeId } from 'date-fns/locale'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker, MultiDatePicker } from '@/components/ui/date-picker'
+import JadwalCalendar from '@/components/JadwalCalendar'
 import ModalPortal from '@/components/ui/modal-portal'
 
 const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
 
 export default function AdminJadwalPage() {
+  const [tab, setTab] = useState('kalender')
   const [schedules, setSchedules] = useState([])
   const [coaches, setCoaches] = useState([])
   const [branches, setBranches] = useState([])
@@ -38,6 +40,14 @@ export default function AdminJadwalPage() {
   useEffect(load, [])
 
   const filteredSchedules = filterBranch ? schedules.filter((s) => s.branchId === filterBranch) : schedules
+
+  // Dates the currently-selected branch is already booked on — blocks
+  // double-booking in the picker (excludes the schedule being edited itself).
+  const takenDates = form.branchId
+    ? schedules
+        .filter((s) => s.branchId === form.branchId && s.id !== editSchedule?.id)
+        .map((s) => format(new Date(s.date), 'yyyy-MM-dd'))
+    : []
 
   function openAdd() {
     setForm(emptyForm)
@@ -87,7 +97,11 @@ export default function AdminJadwalPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Jadwal Latihan</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-2xl p-1 w-fit">
+            <button onClick={() => setTab('kalender')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'kalender' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Kalender</button>
+            <button onClick={() => setTab('daftar')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'daftar' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Daftar</button>
+          </div>
           <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
           <button onClick={openAdd} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
             <Plus size={16} /> Tambah Jadwal
@@ -97,7 +111,9 @@ export default function AdminJadwalPage() {
 
       {error && !showForm && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
-      {loading ? null : (
+      {loading ? null : tab === 'kalender' ? (
+        <JadwalCalendar schedules={filteredSchedules} sessions={[]} events={[]} canAddTopic={false} />
+      ) : (
         <div className="glass-card rounded-3xl overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -147,20 +163,35 @@ export default function AdminJadwalPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-3">
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
+                <AppSelect
+                  value={form.branchId}
+                  onChange={(v) => setForm((f) => ({ ...f, branchId: v, dates: [] }))}
+                  className="w-full"
+                  allLabel="- Pilih Cabang -"
+                  placeholder="- Pilih Cabang -"
+                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Wajib diisi — pilih cabang dulu supaya kalender di bawah tahu tanggal mana yang sudah terisi.</p>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal{!editSchedule && ' (bisa pilih lebih dari satu)'}</label>
                 {editSchedule ? (
                   <DatePicker
                     value={form.dates[0] || ''}
                     onChange={(v) => setForm((f) => ({ ...f, dates: [v] }))}
+                    disabledDates={takenDates}
                     className="w-full"
                   />
                 ) : (
                   <MultiDatePicker
                     value={form.dates}
                     onChange={(vals) => setForm((f) => ({ ...f, dates: vals }))}
+                    disabledDates={takenDates}
                     className="w-full"
                   />
                 )}
+                {!form.branchId && <p className="text-[11px] text-amber-600 mt-1">Pilih cabang dulu.</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -186,18 +217,6 @@ export default function AdminJadwalPage() {
                   placeholder="- Belum ditentukan -"
                   options={coaches.map((c) => ({ value: c.id, label: c.name }))}
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                <AppSelect
-                  value={form.branchId}
-                  onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-                  className="w-full"
-                  allLabel="- Pilih Cabang -"
-                  placeholder="- Pilih Cabang -"
-                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">Wajib diisi — jadwal tanpa cabang tidak akan muncul di halaman head coach/coach.</p>
               </div>
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan

@@ -53,6 +53,18 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     if (!branchId) return res.status(400).json({ error: 'Cabang wajib dipilih — jadwal tanpa cabang tidak akan muncul di halaman head coach/coach' })
     await assertHeadCoach(coachId)
 
+    // Same-branch, same-date is a double-booking — the DB unique index
+    // catches races too, but checking here gives a specific error message
+    // instead of a generic constraint-violation 500.
+    const existing = await prisma.schedule.findMany({
+      where: { branchId, date: { in: dates.map((d) => new Date(d)) } },
+      select: { date: true },
+    })
+    if (existing.length > 0) {
+      const clash = existing[0].date.toISOString().slice(0, 10)
+      return res.status(409).json({ error: `Cabang ini sudah punya jadwal di tanggal ${clash}` })
+    }
+
     const schedules = await prisma.$transaction(
       dates.map((date) =>
         prisma.schedule.create({
@@ -63,6 +75,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     res.status(201).json(schedules)
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Cabang ini sudah punya jadwal di salah satu tanggal yang dipilih' })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
@@ -73,12 +86,24 @@ router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, r
   try {
     if (branchId !== undefined && !branchId) return res.status(400).json({ error: 'Cabang wajib dipilih — jadwal tanpa cabang tidak akan muncul di halaman head coach/coach' })
     await assertHeadCoach(coachId)
+
+    if (date !== undefined) {
+      const current = await prisma.schedule.findUnique({ where: { id: req.params.id } })
+      if (!current) return res.status(404).json({ error: 'Jadwal tidak ditemukan' })
+      const effectiveBranch = branchId || current.branchId
+      const clash = await prisma.schedule.findFirst({
+        where: { branchId: effectiveBranch, date: new Date(date), NOT: { id: req.params.id } },
+      })
+      if (clash) return res.status(409).json({ error: 'Cabang ini sudah punya jadwal di tanggal tersebut' })
+    }
+
     const data = { startTime, endTime, location, coachId: coachId || null, status, branchId: branchId || undefined }
     if (date !== undefined) data.date = new Date(date)
     const schedule = await prisma.schedule.update({ where: { id: req.params.id }, data })
     res.json(schedule)
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Cabang ini sudah punya jadwal di tanggal tersebut' })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
