@@ -32,10 +32,10 @@ export default function RenewalModal({ onClose, onDone }) {
         onConfirm={(paymentMethod) => api.createRenewalPayment({ packageId: selectedPackage.id, paymentMethod })}
         onClose={() => setStep('package')}
         onDone={(result) => onDone?.(result)}
-        pollStatus={async () => {
-          const list = await api.getMyPayments()
-          const p = list.find((x) => x.paymentType === 'renewal' && x.packageId === selectedPackage.id)
-          return { status: p?.status || 'pending', paidAt: p?.paidAt, paymentMethod: p?.paymentMethod }
+        pollStatus={async (confirmResult) => {
+          const paymentId = confirmResult?.payment?.id
+          if (!paymentId) return { status: 'pending' }
+          return api.syncPayment(paymentId)
         }}
       />
     )

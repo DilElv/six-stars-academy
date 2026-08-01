@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import prisma from './prisma.js'
-import { createBilling } from './rintisan.js'
+import { createBilling, queryPayment } from './rintisan.js'
 import { notifyUser } from './notify.js'
 import { assignAgeGroup } from './ageGroup.js'
 
@@ -52,6 +52,25 @@ export async function checkoutPayment({ payment, paymentMethod, toName, toEmail,
   })
 
   return { payment: updated, rintisan: result }
+}
+
+// Actively asks Rintisan whether a still-pending payment has actually been
+// paid, instead of only waiting passively for their webhook callback — a
+// second, self-sufficient path to "lunas" that doesn't depend on Rintisan's
+// callback URL being reachable/registered correctly. Safe to call repeatedly
+// (e.g. from frontend polling): a no-op once the payment is no longer pending.
+export async function syncPaymentWithRintisan(payment) {
+  if (payment.status !== 'pending' || !payment.transactionId) return payment
+
+  try {
+    const result = await queryPayment(payment.transactionId)
+    if (result?.payment_status === 'PAID') {
+      return applyPaymentSuccess(payment)
+    }
+  } catch (err) {
+    console.error('Rintisan query payment error:', err.message)
+  }
+  return payment
 }
 
 // Applies the business effect of a successful payment, based on its type.

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser } from '../lib/notify.js'
-import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration } from '../lib/paymentHelpers.js'
+import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS } from '../lib/rintisan.js'
 
 const router = Router()
@@ -165,6 +165,22 @@ router.post('/event', authenticate, authorize('parent'), async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(400).json({ error: err.message || 'Gagal membuat tagihan event' })
+  }
+})
+
+// Parent-facing polling target: actively asks Rintisan whether this payment
+// has been paid yet (on top of the passive webhook), so "lunas" detection
+// doesn't depend on Rintisan's callback URL being reachable/registered.
+router.get('/:id/sync', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true } })
+    if (!payment || payment.student.userId !== req.user.id) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+
+    const fresh = await syncPaymentWithRintisan(payment)
+    res.json({ status: fresh.status, paidAt: fresh.paidAt, paymentMethod: fresh.paymentMethod })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
   }
 })
 

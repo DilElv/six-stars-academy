@@ -27,10 +27,12 @@ function formatRupiah(n) {
  * createRenewalPayment / createEventPayment, or auth register()'s response shape).
  *
  * `pollStatus`, if given, is polled every 3s once a billing link/QR is shown:
- * `async () => ({ status: 'pending'|'success'|'failed', paidAt, paymentMethod })`.
- * Detecting success/failure here means the parent never has to be manually
- * refreshed — the Rintisan webhook already updates the DB on its own, this
- * just picks that change up without the user doing anything.
+ * `async (confirmResult) => ({ status: 'pending'|'success'|'failed', paidAt, paymentMethod })`,
+ * where `confirmResult` is whatever `onConfirm` returned (typically used to
+ * grab `confirmResult.payment.id` for `api.syncPayment(id)`, which actively
+ * asks Rintisan for the latest status — not just a passive DB re-read — so
+ * "lunas" is detected with no admin action even if Rintisan's webhook never
+ * arrives.
  */
 export default function PaymentMethodModal({ title, amount, note, onConfirm, onClose, onDone, pollStatus }) {
   const [methods, setMethods] = useState(FALLBACK_METHODS)
@@ -49,7 +51,7 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
     if (!result || !pollStatus || finalStatus) return
     pollRef.current = setInterval(async () => {
       try {
-        const s = await pollStatus()
+        const s = await pollStatus(result)
         if (s?.status === 'success' || s?.status === 'failed') {
           clearInterval(pollRef.current)
           setFinalStatus(s)

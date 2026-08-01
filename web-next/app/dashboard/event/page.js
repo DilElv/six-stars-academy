@@ -144,10 +144,10 @@ function ParentEventContent() {
           onConfirm={(paymentMethod) => api.createEventPayment({ eventParticipantId: selected.id, paymentMethod })}
           onClose={() => setShowPayment(false)}
           onDone={() => { setShowPayment(false); load() }}
-          pollStatus={async () => {
-            const list = await api.getMyEvents()
-            const p = list.find((x) => x.id === selected.id)
-            return { status: p?.payment?.status || 'pending', paidAt: p?.payment?.paidAt, paymentMethod: p?.payment?.paymentMethod }
+          pollStatus={async (confirmResult) => {
+            const paymentId = confirmResult?.payment?.id
+            if (!paymentId) return { status: 'pending' }
+            return api.syncPayment(paymentId)
           }}
         />
       )}

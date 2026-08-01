@@ -102,6 +102,12 @@ export async function createRenewalPayment(payload) {
   return request('/payments/renewal', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+// Actively asks Rintisan whether this payment has been paid yet, instead of
+// only waiting for their webhook — used while polling on the payment screen.
+export async function syncPayment(id) {
+  return request(`/payments/${id}/sync`)
+}
+
 export async function createEventPayment(payload) {
   return request('/payments/event', { method: 'POST', body: JSON.stringify(payload) })
 }
