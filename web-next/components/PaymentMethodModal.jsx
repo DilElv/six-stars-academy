@@ -76,8 +76,27 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
     try {
       const res = await onConfirm(method)
       setResult(res)
+      // A Rp 0 payment (e.g. 100% scholarship) is applied as paid immediately
+      // server-side, with no Rintisan billing to show — skip straight to the
+      // success animation instead of a QR/link screen for nothing.
+      if (res?.payment?.status === 'success') {
+        setFinalStatus({ status: 'success', paidAt: res.payment.paidAt, paymentMethod: res.payment.paymentMethod })
+      }
     } catch (err) {
       setError(err.message || 'Gagal membuat tagihan pembayaran')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleCancel() {
+    if (!result?.payment?.id) return
+    setLoading(true)
+    try {
+      await api.cancelPayment(result.payment.id)
+      onClose?.()
+    } catch (err) {
+      setError(err.message || 'Gagal membatalkan pembayaran')
     } finally {
       setLoading(false)
     }
@@ -170,13 +189,34 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
                 <Loader2 size={12} className="animate-spin" /> Menunggu konfirmasi pembayaran otomatis...
               </div>
             )}
-            <button
-              onClick={() => onDone?.(result)}
-              className="w-full text-sm font-semibold text-gray-500 hover:text-navy-700 py-2"
-            >
-              Nanti Saja, Tutup
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCancel}
+                disabled={loading}
+                className="flex-1 text-sm font-semibold text-red-500 hover:text-red-600 py-2 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => onDone?.(result)}
+                disabled={loading}
+                className="flex-1 text-sm font-semibold text-gray-500 hover:text-navy-700 py-2 disabled:opacity-50"
+              >
+                Nanti Saja, Tutup
+              </button>
+            </div>
           </div>
+        ) : amount === 0 ? (
+          <>
+            <p className="text-sm text-gray-500 text-center mb-4">Beasiswa 100% — tidak ada yang perlu dibayar.</p>
+            <button
+              onClick={handleConfirm}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-3 rounded-2xl disabled:opacity-50"
+            >
+              {loading && <Loader2 size={15} className="animate-spin" />} Konfirmasi (Gratis)
+            </button>
+          </>
         ) : (
           <>
             <label className="block text-xs font-semibold text-gray-500 mb-2">Pilih Metode Pembayaran</label>

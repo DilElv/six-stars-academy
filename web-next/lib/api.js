@@ -114,6 +114,12 @@ export async function createEventPayment(payload) {
   return request('/payments/event', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+// Cancels a still-pending payment (parent changed their mind) — deletes it,
+// only allowed while status is 'pending'.
+export async function cancelPayment(id) {
+  return request(`/payments/${id}`, { method: 'DELETE' })
+}
+
 export async function getMyReports() {
   return request('/reports/me')
 }

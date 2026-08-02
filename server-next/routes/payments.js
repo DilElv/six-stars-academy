@@ -95,17 +95,26 @@ router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
     const scholarshipPercent = student.sppScholarshipPercent || 0
     const discount = Math.round(effectivePrice * scholarshipPercent / 100)
 
+    const totalAmount = Math.max(0, effectivePrice - discount)
     const payment = await prisma.payment.create({
       data: {
         studentId: student.id,
         packageId: pkg.id,
         amount: effectivePrice,
         registrationFee: 0,
-        totalAmount: Math.max(0, effectivePrice - discount),
+        totalAmount,
         paymentType: 'renewal',
         status: 'pending',
       },
     })
+
+    // 100% scholarship makes totalAmount 0 — Rintisan can't create a real
+    // billing/QRIS for Rp 0, so there's nothing to actually pay. Apply the
+    // same success side-effects (extend package, reset sessions) directly.
+    if (totalAmount === 0) {
+      const updated = await applyPaymentSuccess(payment)
+      return res.status(201).json({ payment: updated, rintisan: null, scholarshipPercent })
+    }
 
     const { payment: updated, rintisan } = await checkoutPayment({
       payment,
@@ -183,6 +192,24 @@ router.get('/:id/sync', authenticate, authorize('parent'), async (req, res) => {
 
     const fresh = await syncPaymentWithRintisan(payment)
     res.json({ status: fresh.status, paidAt: fresh.paidAt, paymentMethod: fresh.paymentMethod })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Parent cancels a payment they changed their mind about — only while still
+// pending (nothing to undo yet: session/package/registration state is only
+// touched once applyPaymentSuccess runs). Hard-deleted, not soft-cancelled,
+// so it doesn't clutter their payment history with a dead row.
+router.delete('/:id', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true } })
+    if (!payment || payment.student.userId !== req.user.id) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    if (payment.status !== 'pending') return res.status(400).json({ error: 'Hanya pembayaran yang masih menunggu verifikasi yang bisa dibatalkan' })
+
+    await prisma.payment.delete({ where: { id: payment.id } })
+    res.json({ message: 'Dibatalkan' })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

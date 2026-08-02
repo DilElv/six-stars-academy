@@ -215,7 +215,7 @@ export default function AdminJadwalPage() {
                   className="w-full"
                   allLabel="- Belum ditentukan -"
                   placeholder="- Belum ditentukan -"
-                  options={coaches.map((c) => ({ value: c.id, label: c.name }))}
+                  options={coaches.map((c) => ({ value: c.id, label: c.branch ? `${c.name} (${c.branch.code})` : c.name }))}
                 />
               </div>
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">

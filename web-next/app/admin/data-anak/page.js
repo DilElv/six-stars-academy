@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, UserPlus, Search, Upload } from 'lucide-react'
+import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, MessageCircle, UserPlus, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -14,6 +14,12 @@ import { totalSessionsFor, PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
+
+function waLink(phone, parentName, studentName) {
+  const normalized = phone.startsWith('62') ? phone : `62${phone.replace(/^0/, '')}`
+  const message = `Halo ${parentName}, saya dari SixStars Academy ingin menginformasikan terkait ${studentName}.`
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
 }
 
 export default function AdminDataAnakPage() {
@@ -171,6 +177,9 @@ export default function AdminDataAnakPage() {
                   <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
                     <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
                     <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
+                    {s.parentPhone && (
+                      <a href={waLink(s.parentPhone, s.parentName, s.fullName)} target="_blank" rel="noopener noreferrer" title="Chat WhatsApp" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl"><MessageCircle size={14} /><span className="hidden sm:inline">WA</span></a>
+                    )}
                     <button onClick={() => handleDelete(s.id)} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
                   </div>
                 </div>

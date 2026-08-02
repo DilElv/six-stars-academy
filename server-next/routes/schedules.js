@@ -20,7 +20,7 @@ router.get('/head-coaches', authenticate, authorize('admin', 'head_coach'), asyn
   try {
     const coaches = await prisma.user.findMany({
       where: { role: 'head_coach' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, branch: { select: { name: true, code: true } } },
       orderBy: { name: 'asc' },
     })
     res.json(coaches)

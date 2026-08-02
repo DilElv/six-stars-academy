@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck, RefreshCw, AlertTriangle, ExternalLink, X } from 'lucide-react'
 import * as api from '@/lib/api'
 import RenewalModal from '@/components/RenewalModal'
 
@@ -29,6 +29,8 @@ export default function PembayaranAnakPage() {
   const [filter, setFilter] = useState('all')
   const [expanded, setExpanded] = useState(null)
   const [showRenewal, setShowRenewal] = useState(false)
+  const [cancelling, setCancelling] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   function load() {
     api.getMyPayments().then(setPayments).catch((err) => setError(err.message))
@@ -36,6 +38,20 @@ export default function PembayaranAnakPage() {
   }
 
   useEffect(load, [])
+
+  async function handleCancel(id) {
+    if (!confirm('Batalkan pembayaran ini?')) return
+    setCancelling(id)
+    setActionError('')
+    try {
+      await api.cancelPayment(id)
+      load()
+    } catch (err) {
+      setActionError(err.message)
+    } finally {
+      setCancelling(null)
+    }
+  }
 
   if (error) return <p className="text-sm text-red-500">{error}</p>
   if (!payments) return null
@@ -52,6 +68,8 @@ export default function PembayaranAnakPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-bold text-navy-900 text-lg">Riwayat Pembayaran</h1>
+
+      {actionError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{actionError}</div>}
 
       {child && (isExpired || nearExpiry) && (
         <div className={`flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border ${isExpired ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
@@ -200,15 +218,26 @@ export default function PembayaranAnakPage() {
                           </div>
                         )}
                       </div>
-                      {p.status === 'pending' && p.paymentLink && (
-                        <a
-                          href={p.paymentLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl"
-                        >
-                          <ExternalLink size={14} /> Lanjutkan Pembayaran
-                        </a>
+                      {p.status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          {p.paymentLink && (
+                            <a
+                              href={p.paymentLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 flex items-center justify-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl"
+                            >
+                              <ExternalLink size={14} /> Lanjutkan Pembayaran
+                            </a>
+                          )}
+                          <button
+                            onClick={() => handleCancel(p.id)}
+                            disabled={cancelling === p.id}
+                            className="flex-1 flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50"
+                          >
+                            <X size={14} /> Batal
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

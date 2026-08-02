@@ -1,26 +1,27 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Handshake, Save, Loader2, Plus, Trash2 } from 'lucide-react'
+import { Handshake, Save, Loader2, Plus, Trash2, ImagePlus } from 'lucide-react'
 import * as api from '@/lib/api'
 
 export default function CmsSponsorPage() {
   const [items, setItems] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(-1)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
     api.getCmsSection('sponsors').then((raw) => {
       const arr = Array.isArray(raw) ? raw : []
-      setItems(arr.map((s) => (typeof s === 'string' ? s : s.name || '')))
+      setItems(arr.map((s) => ({ image: typeof s === 'string' ? '' : s.image || '' })))
     })
   }, [])
 
-  function update(index, value) {
+  function update(index, image) {
     setItems((list) => {
       const next = [...list]
-      next[index] = value
+      next[index] = { image }
       return next
     })
   }
@@ -29,15 +30,29 @@ export default function CmsSponsorPage() {
     setItems((list) => list.filter((_, i) => i !== index))
   }
 
-  function add() {
-    setItems((list) => [...list, ''])
+  async function handleUpload(index, file) {
+    setUploading(index)
+    try {
+      const url = await api.uploadFile(file)
+      update(index, url)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploading(-1)
+    }
+  }
+
+  async function handleAddNew(file) {
+    const index = items.length
+    setItems((list) => [...list, { image: '' }])
+    await handleUpload(index, file)
   }
 
   async function handleSave() {
     setError('')
     setSaving(true)
     try {
-      await api.updateCmsSection('sponsors', items.filter((name) => name.trim()))
+      await api.updateCmsSection('sponsors', items.filter((i) => i.image).map((i) => ({ image: i.image })))
       setMessage('Daftar sponsor berhasil disimpan')
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
@@ -75,32 +90,40 @@ export default function CmsSponsorPage() {
       {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-3 text-sm text-red-600">{error}</div>}
 
       <div className="glass-card rounded-3xl p-5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {items.map((name, i) => (
-            <div key={i} className="flex items-center gap-2 bg-white/60 border border-gray-100 rounded-2xl p-2 pl-3.5">
-              <input
-                value={name}
-                onChange={(e) => update(i, e.target.value)}
-                placeholder="Nama sponsor"
-                className="flex-1 min-w-0 bg-transparent text-sm font-medium text-navy-900 focus:outline-none"
-              />
-              <button onClick={() => remove(i)} className="shrink-0 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                <Trash2 size={14} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {items.map((it, i) => (
+            <div key={i} className="group relative aspect-square rounded-2xl overflow-hidden bg-navy-50 border border-gray-100">
+              {it.image ? (
+                <img src={it.image} alt="" className="w-full h-full object-contain p-3" />
+              ) : uploading === i ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Loader2 size={20} className="animate-spin text-navy-300" />
+                </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <ImagePlus size={20} className="text-navy-300" />
+                </div>
+              )}
+              <button
+                onClick={() => remove(i)}
+                className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              >
+                <Trash2 size={13} />
               </button>
             </div>
           ))}
 
-          <button
-            onClick={add}
-            className="flex items-center justify-center gap-1.5 text-sm font-semibold text-gray-400 hover:text-navy-700 border-2 border-dashed border-gray-300 hover:border-gold-400 rounded-2xl p-2.5 transition-colors duration-150"
-          >
-            <Plus size={15} /> Tambah
-          </button>
+          <label className="cursor-pointer aspect-square rounded-2xl border-2 border-dashed border-gray-300 hover:border-gold-400 flex flex-col items-center justify-center gap-1.5 text-gray-400 hover:text-gold-500 transition-colors duration-150">
+            <Plus size={20} />
+            <span className="text-xs font-semibold">Tambah Logo</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => e.target.files[0] && handleAddNew(e.target.files[0])}
+            />
+          </label>
         </div>
-
-        {items.length === 0 && (
-          <div className="text-center text-sm text-gray-400 py-8 border border-dashed border-gray-200 rounded-2xl mt-3">Belum ada sponsor. Klik "Tambah" untuk mulai.</div>
-        )}
       </div>
     </div>
   )

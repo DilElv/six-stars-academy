@@ -14,14 +14,22 @@ export default function CmsGaleriPage() {
   useEffect(() => {
     api.getCmsSection('gallery').then((raw) => {
       const arr = Array.isArray(raw) ? raw : []
-      setItems(arr.map((g) => ({ image: g.image || g.url || '' })))
+      setItems(arr.map((g) => ({ image: g.image || g.url || '', caption: g.caption || '' })))
     })
   }, [])
 
   function update(index, image) {
     setItems((list) => {
       const next = [...list]
-      next[index] = { image }
+      next[index] = { ...next[index], image }
+      return next
+    })
+  }
+
+  function updateCaption(index, caption) {
+    setItems((list) => {
+      const next = [...list]
+      next[index] = { ...next[index], caption }
       return next
     })
   }
@@ -44,7 +52,7 @@ export default function CmsGaleriPage() {
 
   async function handleAddNew(file) {
     const index = items.length
-    setItems((list) => [...list, { image: '' }])
+    setItems((list) => [...list, { image: '', caption: '' }])
     await handleUpload(index, file)
   }
 
@@ -52,7 +60,7 @@ export default function CmsGaleriPage() {
     setError('')
     setSaving(true)
     try {
-      await api.updateCmsSection('gallery', items.filter((i) => i.image).map((i) => ({ image: i.image })))
+      await api.updateCmsSection('gallery', items.filter((i) => i.image).map((i) => ({ image: i.image, caption: i.caption || '' })))
       setMessage('Galeri berhasil disimpan')
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
@@ -92,24 +100,32 @@ export default function CmsGaleriPage() {
       <div className="glass-card rounded-3xl p-5">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {items.map((it, i) => (
-            <div key={i} className="group relative aspect-square rounded-2xl overflow-hidden bg-navy-50 border border-gray-100">
-              {it.image ? (
-                <img src={it.image} alt="" className="w-full h-full object-cover" />
-              ) : uploading === i ? (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Loader2 size={20} className="animate-spin text-navy-300" />
-                </div>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <ImagePlus size={20} className="text-navy-300" />
-                </div>
-              )}
-              <button
-                onClick={() => remove(i)}
-                className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-              >
-                <Trash2 size={13} />
-              </button>
+            <div key={i} className="space-y-1.5">
+              <div className="group relative aspect-square rounded-2xl overflow-hidden bg-navy-50 border border-gray-100">
+                {it.image ? (
+                  <img src={it.image} alt="" className="w-full h-full object-cover" />
+                ) : uploading === i ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Loader2 size={20} className="animate-spin text-navy-300" />
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImagePlus size={20} className="text-navy-300" />
+                  </div>
+                )}
+                <button
+                  onClick={() => remove(i)}
+                  className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <input
+                value={it.caption}
+                onChange={(e) => updateCaption(i, e.target.value)}
+                placeholder="Deskripsi foto"
+                className="w-full px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+              />
             </div>
           ))}
 

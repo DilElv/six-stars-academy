@@ -127,13 +127,15 @@ export default async function Home() {
             <h2 className="font-heading font-bold text-2xl sm:text-3xl text-white mt-3 tracking-tight">Didukung Oleh</h2>
           </Reveal>
           <Reveal group className="flex flex-wrap items-center justify-center gap-x-12 gap-y-8 mb-10">
-            {(sponsors && sponsors.length ? sponsors.slice(0, 6) : [1, 2, 3, 4]).map((s, i) => (
-              <div
-                key={i}
-                className="text-gray-500 hover:text-white font-extrabold text-lg sm:text-xl tracking-tight grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition-all duration-300"
-              >
-                {typeof s === 'string' ? s : s.name || 'SPONSOR'}
-              </div>
+            {(sponsors && sponsors.length ? sponsors.slice(0, 6) : []).map((s, i) => (
+              s.image && (
+                <img
+                  key={i}
+                  src={s.image}
+                  alt="Sponsor"
+                  className="h-8 sm:h-10 w-auto object-contain grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition-all duration-300"
+                />
+              )
             ))}
           </Reveal>
           <Reveal className="text-center">
