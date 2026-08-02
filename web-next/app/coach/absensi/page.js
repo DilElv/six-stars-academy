@@ -146,19 +146,28 @@ function AbsensiContent() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-navy-900 truncate">{s.fullName}</div>
                 <div className="text-xs text-gray-400">{s.studentId}</div>
+                {s.status === 'needs_renewal' && (
+                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Kuota Habis</span>
+                )}
               </div>
               <div className="shrink-0 w-[118px] sm:w-[136px]">
-                <AppSelect
-                  value={statusMap[s.id] || ''}
-                  onChange={(v) => setStatusMap((m) => ({ ...m, [s.id]: v }))}
-                  placeholder="Absen"
-                  className={`w-full text-xs font-semibold ${
-                    statusMap[s.id]
-                      ? STATUS_OPTIONS.find((o) => o.value === statusMap[s.id])?.color || ''
-                      : 'opacity-60'
-                  }`}
-                  options={STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
-                />
+                {s.status === 'needs_renewal' ? (
+                  <div className="w-full text-center text-[11px] font-semibold text-red-500 bg-red-50 border border-red-100 rounded-2xl py-2.5">
+                    Perlu Perpanjang
+                  </div>
+                ) : (
+                  <AppSelect
+                    value={statusMap[s.id] || ''}
+                    onChange={(v) => setStatusMap((m) => ({ ...m, [s.id]: v }))}
+                    placeholder="Absen"
+                    className={`w-full text-xs font-semibold ${
+                      statusMap[s.id]
+                        ? STATUS_OPTIONS.find((o) => o.value === statusMap[s.id])?.color || ''
+                        : 'opacity-60'
+                    }`}
+                    options={STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+                  />
+                )}
               </div>
             </div>
           ))}

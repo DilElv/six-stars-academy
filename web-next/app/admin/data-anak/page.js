@@ -10,7 +10,7 @@ import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
 import ScholarshipField from '@/components/ScholarshipField'
-import { totalSessionsFor, PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
+import { totalSessionsFor, PAYMENT_STATUS_BADGE, STUDENT_STATUS_BADGE } from '@/lib/sessionInfo'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -120,7 +120,7 @@ export default function AdminDataAnakPage() {
                 onChange={setFilterStatus}
                 allLabel="Semua Status"
                 placeholder="Semua Status"
-                options={[{ value: 'active', label: 'Aktif' }, { value: 'inactive', label: 'Nonaktif' }]}
+                options={[{ value: 'active', label: 'Aktif' }, { value: 'needs_renewal', label: 'Perlu Perpanjang' }, { value: 'inactive', label: 'Nonaktif' }]}
               />
               <AppSelect value={filterBranch} onChange={setFilterBranch} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
             </div>
@@ -133,8 +133,8 @@ export default function AdminDataAnakPage() {
               {filtered.map((s) => (
                 <div key={s.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
                   <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
-                    <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/10 text-gray-300'}`}>
-                      {s.status === 'active' ? 'Aktif' : 'Nonaktif'}
+                    <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).color}`}>
+                      {(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).label}
                     </span>
                     <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden flex items-center justify-center font-bold text-white text-sm">
                       {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}

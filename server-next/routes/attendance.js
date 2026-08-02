@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { notifyRole } from '../lib/notify.js'
+import { notifyUser, notifyRole } from '../lib/notify.js'
 
 const router = Router()
 
@@ -14,16 +14,70 @@ function startOfDay(dateStr) {
 // Any attendance status (hadir/izin/sakit/alfa) consumes one session from the
 // student's package quota. Only counts once per calendar day — editing an
 // already-recorded day's status does not consume another session.
+//
+// Once sessionsUsed reaches totalSessions, the student flips to
+// 'needs_renewal' and every further NEW check-in (any role, no exceptions)
+// is rejected until a renewal payment resets sessionsUsed back to 0 (see
+// applyPaymentSuccess in lib/paymentHelpers.js).
+// Mirrors computeSessionStats() in routes/students.js — the stored
+// Student.totalSessions column is only ever written by renewal/registration
+// flows and can be stale/null (e.g. an admin-added student with a package
+// assigned directly), so quota checks always recompute from the package
+// itself rather than trust that column.
+function totalSessionsFor(student) {
+  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+}
+
 async function upsertAttendanceAndConsumeSession(studentId, date, data) {
   const existing = await prisma.attendance.findUnique({ where: { studentId_date: { studentId, date } } })
+
+  if (!existing) {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { sessionsUsed: true, package: { select: { sessionsPerWeek: true, durationMonths: true } } },
+    })
+    const totalSessions = student ? totalSessionsFor(student) : 0
+    if (student && totalSessions > 0 && student.sessionsUsed >= totalSessions) {
+      throw Object.assign(
+        new Error('Paket latihan anak telah habis. Orang tua harus melakukan perpanjangan paket sebelum dapat mengikuti latihan berikutnya.'),
+        { status: 409 }
+      )
+    }
+  }
+
   const row = await prisma.attendance.upsert({
     where: { studentId_date: { studentId, date } },
     update: data,
     create: { studentId, date, ...data },
   })
+
   if (!existing) {
-    await prisma.student.update({ where: { id: studentId }, data: { sessionsUsed: { increment: 1 } } })
+    const updated = await prisma.student.update({
+      where: { id: studentId },
+      data: { sessionsUsed: { increment: 1 } },
+      include: { package: { select: { sessionsPerWeek: true, durationMonths: true } } },
+    })
+    const totalSessions = totalSessionsFor(updated)
+
+    if (totalSessions > 0 && updated.sessionsUsed >= totalSessions && updated.status !== 'needs_renewal') {
+      await prisma.student.update({ where: { id: studentId }, data: { status: 'needs_renewal' } })
+
+      await notifyUser(updated.userId, {
+        type: 'quota_exhausted',
+        title: 'Kuota Paket Habis',
+        message: `Kuota ${totalSessions} sesi latihan ${updated.fullName} sudah habis. Segera perpanjang paket agar bisa lanjut latihan.`,
+        link: '/dashboard/pembayaran',
+      })
+
+      const adminMessage = `${updated.fullName} (${totalSessions}/${totalSessions}) telah mencapai batas kuota paket.`
+      await Promise.all([
+        notifyRole('admin', { type: 'student_quota_reached', title: 'Kuota Siswa Habis', message: adminMessage, link: '/admin/data-anak' }),
+        notifyRole('head_coach', { type: 'student_quota_reached', title: 'Kuota Siswa Habis', message: adminMessage, link: '/head-coach/data-anak' }),
+        notifyRole('coach', { type: 'student_quota_reached', title: 'Kuota Siswa Habis', message: adminMessage, link: '/coach/absensi' }),
+      ])
+    }
   }
+
   return row
 }
 
@@ -143,6 +197,7 @@ router.post('/scan', authenticate, authorize('coach', 'head_coach', 'admin'), as
 
     res.json({ student: card.student, attendance })
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
@@ -169,11 +224,17 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
     }
 
     const results = []
+    const skipped = []
     for (const r of records) {
-      const row = await upsertAttendanceAndConsumeSession(r.studentId, day, {
-        status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date(),
-      })
-      results.push(row)
+      try {
+        const row = await upsertAttendanceAndConsumeSession(r.studentId, day, {
+          status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date(),
+        })
+        results.push(row)
+      } catch (err) {
+        if (!err.status) throw err
+        skipped.push({ studentId: r.studentId, error: err.message })
+      }
     }
 
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
@@ -184,7 +245,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
       link: '/admin/absensi',
     })
 
-    res.json({ message: 'Absensi terkirim', count: results.length })
+    res.json({ message: 'Absensi terkirim', count: results.length, skipped })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

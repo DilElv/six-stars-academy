@@ -122,20 +122,29 @@ export default function HeadCoachAbsensiPage() {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-navy-900 truncate">{s.fullName}</div>
                 <div className="text-xs text-gray-400">{s.studentId}</div>
+                {s.status === 'needs_renewal' && (
+                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Kuota Habis</span>
+                )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {STATUS_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setStatusMap((m) => ({ ...m, [s.id]: opt.value }))}
-                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-colors duration-150 ${
-                      statusMap[s.id] === opt.value ? opt.color + ' border-transparent shadow-sm' : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {s.status === 'needs_renewal' ? (
+                <div className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-1.5 shrink-0">
+                  Perlu Perpanjang
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {STATUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setStatusMap((m) => ({ ...m, [s.id]: opt.value }))}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-xl border transition-colors duration-150 ${
+                        statusMap[s.id] === opt.value ? opt.color + ' border-transparent shadow-sm' : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 

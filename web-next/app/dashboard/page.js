@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check } from 'lucide-react'
+import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
 import OvrGauge from '@/components/charts/OvrGauge'
 import SkillRadar from '@/components/charts/SkillRadar'
 import OvrTrendChart from '@/components/charts/OvrTrendChart'
+import RenewalModal from '@/components/RenewalModal'
 
 const paymentStatusLabel = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -31,8 +32,9 @@ export default function ParentDasborPage() {
   const [attendances, setAttendances] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showRenewal, setShowRenewal] = useState(false)
 
-  useEffect(() => {
+  function load() {
     Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports(), api.getMyAttendance()])
       .then(([s, p, r, att]) => {
         setStudent(s)
@@ -48,7 +50,9 @@ export default function ParentDasborPage() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(load, [])
 
   const attendedDates = new Set(
     (attendances || [])
@@ -107,6 +111,23 @@ export default function ParentDasborPage() {
           </div>
         </div>
       </div>
+
+      {student.status === 'needs_renewal' && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border bg-red-50 border-red-100">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className="text-red-600 shrink-0" />
+            <div className="text-sm text-red-800">
+              Kuota {student.totalSessions} sesi latihan {student.fullName} sudah habis. Perpanjang paket agar bisa lanjut latihan.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRenewal(true)}
+            className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
+          >
+            <RefreshCw size={14} /> Perpanjang Paket
+          </button>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">
@@ -317,6 +338,13 @@ export default function ParentDasborPage() {
             )}
           </div>
         </div>
+      )}
+
+      {showRenewal && (
+        <RenewalModal
+          onClose={() => setShowRenewal(false)}
+          onDone={() => { setShowRenewal(false); load() }}
+        />
       )}
     </div>
   )

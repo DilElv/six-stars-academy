@@ -15,7 +15,9 @@ router.get('/stats', async (req, res) => {
     const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999)
 
     const [totalAnak, totalHeadCoach, totalCoach, pendapatanBulanIni, absensiHariIni, pembayaranPending, raporBelumDibuat] = await Promise.all([
-      prisma.student.count({ where: { status: 'active' } }),
+      // 'needs_renewal' students are still enrolled, just quota-exhausted —
+      // only true withdrawals ('inactive') should drop out of this count.
+      prisma.student.count({ where: { status: { not: 'inactive' } } }),
       prisma.user.count({ where: { role: 'head_coach' } }),
       prisma.user.count({ where: { role: 'coach' } }),
       prisma.payment.aggregate({ _sum: { totalAmount: true }, where: { status: 'success', paidAt: { gte: startOfMonth } } }),
