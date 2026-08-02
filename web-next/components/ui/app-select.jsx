@@ -11,7 +11,7 @@ const EMPTY = '__empty__'
  * to render a "Semua ..." option that maps to an empty-string value
  * (Base UI disallows value="" on SelectItem, so we sentinel-map it here).
  */
-export function AppSelect({ value, onChange, placeholder, options, className, allLabel }) {
+export function AppSelect({ value, onChange, placeholder, options, className, allLabel, disabled }) {
   const items = {
     ...(allLabel !== undefined ? { [EMPTY]: allLabel } : {}),
     ...Object.fromEntries(options.map((opt) => [opt.value, opt.label])),
@@ -24,6 +24,7 @@ export function AppSelect({ value, onChange, placeholder, options, className, al
       items={items}
       value={isEmpty ? (allLabel !== undefined ? EMPTY : null) : value}
       onValueChange={(v) => onChange(v === EMPTY ? '' : v)}
+      disabled={disabled}
     >
       <SelectTrigger className={className}>
         <SelectValue placeholder={placeholder} />

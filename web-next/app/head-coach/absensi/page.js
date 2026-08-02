@@ -22,6 +22,10 @@ function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
 
+function totalSessionsFor(student) {
+  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+}
+
 export default function HeadCoachAbsensiPage() {
   const [ageGroup, setAgeGroup] = useState(AGE_GROUPS[0])
   const [date, setDate] = useState(today)
@@ -52,8 +56,12 @@ export default function HeadCoachAbsensiPage() {
     if (records.length === 0) return setMessage('Tandai status minimal 1 siswa dulu')
     setSending(true)
     try {
-      await api.submitAttendance(date, records)
-      setMessage('Absensi berhasil disimpan')
+      const result = await api.submitAttendance(date, records)
+      setMessage(
+        result.alreadyRecorded?.length > 0
+          ? `Absensi berhasil disimpan (${result.alreadyRecorded.length} siswa sudah tercatat hari ini, sesi tidak bertambah)`
+          : 'Absensi berhasil disimpan'
+      )
     } catch (err) {
       setMessage(err.message)
     } finally {
@@ -69,7 +77,11 @@ export default function HeadCoachAbsensiPage() {
     try {
       const result = await api.scanAttendance(qrCode)
       setStatusMap((m) => ({ ...m, [result.student.id]: 'hadir' }))
-      setMessage(`${result.student.fullName} berhasil absen (Hadir)`)
+      setMessage(
+        result.attendance?.alreadyRecorded
+          ? `${result.student.fullName} sudah tercatat hari ini — sesi tidak bertambah lagi`
+          : `${result.student.fullName} berhasil absen (Hadir)`
+      )
     } catch (err) {
       setMessage(err.message)
     } finally {
@@ -121,7 +133,10 @@ export default function HeadCoachAbsensiPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-navy-900 truncate">{s.fullName}</div>
-                <div className="text-xs text-gray-400">{s.studentId}</div>
+                <div className="text-xs text-gray-400">
+                  {s.studentId}
+                  {totalSessionsFor(s) > 0 && <span className="ml-2 text-gray-500 font-medium">{s.sessionsUsed}/{totalSessionsFor(s)} sesi</span>}
+                </div>
                 {s.status === 'needs_renewal' && (
                   <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Kuota Habis</span>
                 )}

@@ -6,8 +6,10 @@ import * as api from '@/lib/api'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
+import { DatePicker } from '@/components/ui/date-picker'
 import { totalSessionsFor } from '@/lib/sessionInfo'
 import ScholarshipField from '@/components/ScholarshipField'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
   return `Rp${(n || 0).toLocaleString('id-ID')}`
@@ -33,6 +35,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
   useEffect(() => {
     if (!form.branchId) return setBranchPackages(null)
     api.getPackages(form.branchId).then(setBranchPackages).catch(() => setBranchPackages(null))
+    setForm((f) => ({ ...f, packageId: '' }))
   }, [form.branchId])
 
   const effectivePackages = branchPackages || packages
@@ -63,6 +66,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
   async function handleSubmit(e) {
     e.preventDefault()
     if (form.parentPassword.length < 6) return setError('Password minimal 6 karakter')
+    if (!form.dateOfBirth) return setError('Tanggal lahir wajib diisi')
     setSaving(true)
     setError('')
     try {
@@ -80,7 +84,8 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
@@ -144,7 +149,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
-                  <input type="date" required value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                  <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} className="w-full" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
@@ -169,9 +174,10 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
                     value={form.packageId}
                     onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
                     className="w-full"
+                    disabled={!form.branchId}
                     allLabel="- Tanpa Paket -"
-                    placeholder="- Tanpa Paket -"
-                    options={effectivePackages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg) — ${formatRupiah(p.price)}` }))}
+                    placeholder={form.branchId ? '- Tanpa Paket -' : 'Pilih cabang dulu'}
+                    options={form.branchId ? effectivePackages.map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg) — ${formatRupiah(p.price)}` })) : []}
                   />
                 </div>
               </div>
@@ -258,5 +264,6 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
         </form>
       </div>
     </div>
+    </ModalPortal>
   )
 }

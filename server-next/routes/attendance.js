@@ -78,7 +78,7 @@ async function upsertAttendanceAndConsumeSession(studentId, date, data) {
     }
   }
 
-  return row
+  return { ...row, alreadyRecorded: !!existing }
 }
 
 router.get('/summary', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
@@ -225,12 +225,14 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 
     const results = []
     const skipped = []
+    const alreadyRecorded = []
     for (const r of records) {
       try {
         const row = await upsertAttendanceAndConsumeSession(r.studentId, day, {
           status: r.status, coachId: req.user.id, method: 'manual', submittedAt: new Date(),
         })
         results.push(row)
+        if (row.alreadyRecorded) alreadyRecorded.push(r.studentId)
       } catch (err) {
         if (!err.status) throw err
         skipped.push({ studentId: r.studentId, error: err.message })
@@ -245,7 +247,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
       link: '/admin/absensi',
     })
 
-    res.json({ message: 'Absensi terkirim', count: results.length, skipped })
+    res.json({ message: 'Absensi terkirim', count: results.length, skipped, alreadyRecorded })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

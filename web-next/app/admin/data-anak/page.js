@@ -10,6 +10,8 @@ import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
 import ScholarshipField from '@/components/ScholarshipField'
+import { DatePicker } from '@/components/ui/date-picker'
+import ModalPortal from '@/components/ui/modal-portal'
 import { totalSessionsFor, PAYMENT_STATUS_BADGE, STUDENT_STATUS_BADGE } from '@/lib/sessionInfo'
 
 function initials(name = '') {
@@ -286,8 +288,15 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(true)
   const [error, setError] = useState('')
+  const [branchPackages, setBranchPackages] = useState(null)
 
-  const selectedPackage = packages?.find((p) => p.id === form.packageId)
+  useEffect(() => {
+    if (!form.branchId) return setBranchPackages(null)
+    api.getPackages(form.branchId).then(setBranchPackages).catch(() => setBranchPackages(null))
+  }, [form.branchId])
+
+  const effectivePackages = branchPackages || packages
+  const selectedPackage = effectivePackages?.find((p) => p.id === form.packageId)
   const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
 
   useEffect(() => {
@@ -342,7 +351,8 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b border-gray-100">
@@ -366,7 +376,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Lahir</label>
-              <input type="date" value={form.dateOfBirth} onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} className="w-full" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Posisi</label>
@@ -424,7 +434,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
                 className="w-full"
                 allLabel="- Tanpa Paket -"
                 placeholder="- Tanpa Paket -"
-                options={(packages || []).map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg)` }))}
+                options={(effectivePackages || []).map((p) => ({ value: p.id, label: `${p.name} (${p.sessionsPerWeek}x/mgg) — ${formatRupiah(p.price)}` }))}
               />
             </div>
           </div>
@@ -501,5 +511,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
         </form>
       </div>
     </div>
+    </ModalPortal>
   )
 }
