@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { UserPlus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 
 export default function CoachUserManager({ role, label }) {
   const [users, setUsers] = useState([])
@@ -62,7 +63,7 @@ export default function CoachUserManager({ role, label }) {
                   <td className="px-4 py-3 font-medium text-navy-900">{u.name}</td>
                   <td className="px-3 py-3 text-gray-500">{u.email}</td>
                   <td className="px-3 py-3 text-gray-500">{u.phone || '-'}</td>
-                  {role !== 'admin' && <td className="px-3 py-3 text-gray-500">{u.branch?.name || '-'}</td>}
+                  {role !== 'admin' && <td className="px-3 py-3 text-gray-500">{u.branches?.map((b) => b.branch.code).join(', ') || '-'}</td>}
                   {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.coachAttendances ?? 0}</td>}
                   {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.trainingSessions ?? 0}</td>}
                   <td className="px-3 py-3 text-center">
@@ -92,7 +93,7 @@ export default function CoachUserManager({ role, label }) {
 }
 
 function AddModal({ role, label, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', branchId: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', branchIds: [] })
   const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -141,13 +142,11 @@ function AddModal({ role, label, onClose, onSaved }) {
           </div>
           {role !== 'admin' && (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-              <AppSelect
-                value={form.branchId}
-                onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-                className="w-full"
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang (bisa lebih dari satu)</label>
+              <MultiSelectCheckbox
+                values={form.branchIds}
+                onChange={(v) => setForm((f) => ({ ...f, branchIds: v }))}
                 options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                placeholder="Pilih cabang..."
               />
             </div>
           )}
@@ -161,7 +160,13 @@ function AddModal({ role, label, onClose, onSaved }) {
 }
 
 function EditModal({ user, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: user.name, phone: user.phone || '', status: user.status, password: '', branchId: user.branchId || '' })
+  const [form, setForm] = useState({
+    name: user.name,
+    phone: user.phone || '',
+    status: user.status,
+    password: '',
+    branchIds: user.branches?.map((b) => b.branch.id) || [],
+  })
   const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -212,13 +217,11 @@ function EditModal({ user, onClose, onSaved }) {
           </div>
           {user.role !== 'admin' && (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-              <AppSelect
-                value={form.branchId}
-                onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
-                className="w-full"
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang (bisa lebih dari satu)</label>
+              <MultiSelectCheckbox
+                values={form.branchIds}
+                onChange={(v) => setForm((f) => ({ ...f, branchIds: v }))}
                 options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                placeholder="Pilih cabang..."
               />
             </div>
           )}

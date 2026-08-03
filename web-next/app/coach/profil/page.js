@@ -14,7 +14,7 @@ export default function CoachProfilPage() {
   useEffect(() => {
     api.getMe().then((profile) => {
       setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '', email: profile.email || '', address: profile.address || '' })
-      setBranchName(profile.branch ? `${profile.branch.name} (${profile.branch.code})` : 'Belum ditentukan')
+      setBranchName(profile.branches?.length ? profile.branches.map((b) => `${b.branch.name} (${b.branch.code})`).join(', ') : 'Belum ditentukan')
     })
   }, [])
 

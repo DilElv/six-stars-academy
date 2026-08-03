@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Camera, Loader2, MapPin, RotateCcw, Check } from 'lucide-react'
 import * as api from '@/lib/api'
+import { AppSelect } from '@/components/ui/app-select'
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -71,6 +72,15 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
   const [locationText, setLocationText] = useState('Mencari lokasi...')
   const [capturedImage, setCapturedImage] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [me, setMe] = useState(null)
+  const [branchId, setBranchId] = useState('')
+
+  useEffect(() => {
+    api.getMe().then((user) => {
+      setMe(user)
+      setBranchId(user.branches?.[0]?.branch?.id || '')
+    })
+  }, [])
 
   useEffect(() => {
     let stopped = false
@@ -155,6 +165,7 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
         locationName: locationText,
+        branchId: branchId || undefined,
       })
       onSuccess(record)
     } catch (err) {
@@ -205,6 +216,19 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
           <span className="truncate">{locationText}</span>
         </div>
 
+        {me?.branches?.length > 0 && (
+          <div className="mt-3">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Absen di cabang mana?</label>
+            <AppSelect
+              value={branchId}
+              onChange={setBranchId}
+              className="w-full"
+              placeholder="Pilih cabang..."
+              options={me.branches.map((b) => ({ value: b.branch.id, label: `${b.branch.name} (${b.branch.code})` }))}
+            />
+          </div>
+        )}
+
         <div className="mt-4">
           {!capturedImage ? (
             <button
@@ -225,7 +249,7 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting}
+                disabled={submitting || (me?.role === 'coach' && !branchId)}
                 className="flex items-center justify-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-3 rounded-2xl disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}

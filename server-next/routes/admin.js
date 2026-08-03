@@ -72,12 +72,12 @@ router.get('/users', async (req, res) => {
   try {
     const where = {}
     if (req.query.role) where.role = req.query.role
-    if (req.query.branchId) where.branchId = req.query.branchId
+    if (req.query.branchId) where.branches = { some: { branchId: req.query.branchId } }
     const users = await prisma.user.findMany({
       where,
       select: {
         id: true, name: true, email: true, role: true, phone: true, photo: true, bio: true, status: true, createdAt: true,
-        branchId: true, branch: true,
+        branches: { select: { branch: true } },
         _count: { select: { coachAttendances: true, trainingSessions: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -90,13 +90,18 @@ router.get('/users', async (req, res) => {
 })
 
 router.post('/users', async (req, res) => {
-  const { name, email, password, role, phone, branchId } = req.body
+  const { name, email, password, role, phone, branchIds } = req.body
   try {
     if (['coach', 'head_coach'].includes(role) && !email?.toLowerCase().endsWith('@sixstars.id')) {
       return res.status(400).json({ error: `Email ${role === 'coach' ? 'coach' : 'head coach'} harus menggunakan domain @sixstars.id` })
     }
     const hashed = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({ data: { name, email, password: hashed, role, phone, branchId: branchId || null } })
+    const user = await prisma.user.create({
+      data: {
+        name, email, password: hashed, role, phone,
+        branches: branchIds?.length ? { create: branchIds.map((branchId) => ({ branchId })) } : undefined,
+      },
+    })
     const { password: _pw, ...profile } = user
     res.status(201).json(profile)
   } catch (err) {
@@ -107,10 +112,13 @@ router.post('/users', async (req, res) => {
 })
 
 router.put('/users/:id', async (req, res) => {
-  const { name, phone, status, password, branchId } = req.body
+  const { name, phone, status, password, branchIds } = req.body
   try {
-    const data = { name, phone, status, branchId: branchId !== undefined ? (branchId || null) : undefined }
+    const data = { name, phone, status }
     if (password) data.password = await bcrypt.hash(password, 10)
+    if (branchIds !== undefined) {
+      data.branches = { deleteMany: {}, create: branchIds.map((branchId) => ({ branchId })) }
+    }
     const user = await prisma.user.update({ where: { id: req.params.id }, data })
     const { password: _pw, ...profile } = user
     res.json(profile)

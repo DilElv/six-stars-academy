@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getEffectivePrice } from '../lib/pricing.js'
+import { getUserBranchIds } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -219,8 +220,8 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
     if (req.query.branchId) where.branchId = req.query.branchId
 
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      where.branchId = coach?.branchId || '__none__'
+      const branchIds = await getUserBranchIds(req.user.id)
+      where.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : '__none__'
     }
 
     const students = await prisma.student.findMany({

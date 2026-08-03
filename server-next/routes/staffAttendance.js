@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole, notifyUser } from '../lib/notify.js'
+import { assertBranchAccess } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -12,10 +13,14 @@ function startOfDay(dateStr) {
 }
 
 router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
-  const { photo, latitude, longitude, locationName } = req.body
+  const { photo, latitude, longitude, locationName, branchId } = req.body
   if (!photo) return res.status(400).json({ error: 'Foto selfie wajib diambil' })
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } })
+    if (req.user.role === 'coach') {
+      if (!branchId) return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
+      await assertBranchAccess(req.user.id, branchId)
+    }
     const day = startOfDay()
     const now = new Date()
     const record = await prisma.staffAttendance.upsert({
@@ -23,7 +28,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
       update: {
         status: 'hadir',
         checkInTime: now,
-        branchId: user.branchId,
+        branchId: branchId || null,
         photo,
         latitude: latitude ?? null,
         longitude: longitude ?? null,
@@ -35,7 +40,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
       },
       create: {
         userId: req.user.id,
-        branchId: user.branchId,
+        branchId: branchId || null,
         date: day,
         status: 'hadir',
         checkInTime: now,
@@ -56,6 +61,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
 
     res.json(record)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }

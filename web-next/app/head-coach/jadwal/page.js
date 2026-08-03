@@ -15,6 +15,7 @@ const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId
 export default function HeadCoachJadwalPage() {
   const [tab, setTab] = useState('kalender')
   const [me, setMe] = useState(null)
+  const [branchId, setBranchId] = useState('')
 
   const [schedules, setSchedules] = useState([])
   const [sessions, setSessions] = useState([])
@@ -28,12 +29,12 @@ export default function HeadCoachJadwalPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function load(user) {
+  function load(bId) {
     Promise.all([
-      api.getSchedules(user.branchId),
-      api.getTrainingSessions(undefined, user.branchId),
-      api.getEvents(undefined, user.branchId),
-      user.branchId ? api.getFields(user.branchId) : Promise.resolve([]),
+      bId ? api.getSchedules(bId) : Promise.resolve([]),
+      bId ? api.getTrainingSessions(undefined, bId) : Promise.resolve([]),
+      bId ? api.getEvents(undefined, bId) : Promise.resolve([]),
+      bId ? api.getFields(bId) : Promise.resolve([]),
       api.getHeadCoaches(),
       api.getBranches(),
     ]).then(([sched, sess, evts, flds, headCoach, br]) => {
@@ -47,19 +48,23 @@ export default function HeadCoachJadwalPage() {
   }
 
   useEffect(() => {
-    api.getMe().then((user) => { setMe(user); load(user) })
+    api.getMe().then((user) => {
+      setMe(user)
+      const first = user.branches?.[0]?.branch?.id || ''
+      setBranchId(first)
+      load(first)
+    })
   }, [])
 
-  // `schedules` is already scoped to this head coach's own branch — that's
-  // the only branch we have visibility into here, so taken-dates blocking
-  // only applies when the form's branch matches it (backend still enforces
-  // the real constraint regardless).
-  const takenDates = me && form.branchId === me.branchId
+  // `schedules` is scoped to the currently selected branch in the picker
+  // above — taken-dates blocking only applies when the form's branch
+  // matches it (backend still enforces the real constraint regardless).
+  const takenDates = form.branchId === branchId
     ? schedules.filter((s) => s.id !== editSchedule?.id).map((s) => format(new Date(s.date), 'yyyy-MM-dd'))
     : []
 
   function openAdd() {
-    setForm({ ...emptyForm, branchId: me?.branchId || '' })
+    setForm({ ...emptyForm, branchId })
     setEditSchedule(null)
     setShowForm(true)
     setError('')
@@ -90,7 +95,7 @@ export default function HeadCoachJadwalPage() {
         await api.createSchedule(form)
       }
       setShowForm(false)
-      load(me)
+      load(branchId)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -101,7 +106,7 @@ export default function HeadCoachJadwalPage() {
   async function handleDelete(id) {
     if (!confirm('Hapus jadwal ini?')) return
     await api.deleteSchedule(id)
-    load(me)
+    load(branchId)
   }
 
   if (!me) return null
@@ -110,16 +115,26 @@ export default function HeadCoachJadwalPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Jadwal</h1>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-2xl p-1 w-fit">
-          <button onClick={() => setTab('kalender')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'kalender' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Kalender</button>
-          <button onClick={() => setTab('buat-jadwal')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'buat-jadwal' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Buat Jadwal</button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <AppSelect
+            value={branchId}
+            onChange={(v) => { setBranchId(v); load(v) }}
+            placeholder="Pilih cabang..."
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+          />
+          <div className="flex items-center gap-1 bg-gray-100 rounded-2xl p-1 w-fit">
+            <button onClick={() => setTab('kalender')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'kalender' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Kalender</button>
+            <button onClick={() => setTab('buat-jadwal')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${tab === 'buat-jadwal' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Buat Jadwal</button>
+          </div>
         </div>
       </div>
 
       {error && !showForm && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
-      {tab === 'kalender' ? (
-        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic onChanged={() => load(me)} />
+      {tab === 'kalender' && !branchId ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Pilih cabang dulu untuk melihat kalender.</div>
+      ) : tab === 'kalender' ? (
+        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic branchId={branchId} onChanged={() => load(branchId)} />
       ) : (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -225,7 +240,7 @@ export default function HeadCoachJadwalPage() {
                   className="w-full"
                   allLabel="- Belum ditentukan -"
                   placeholder="- Belum ditentukan -"
-                  options={coaches.map((c) => ({ value: c.id, label: c.branch ? `${c.name} (${c.branch.code})` : c.name }))}
+                  options={coaches.map((c) => ({ value: c.id, label: c.branches?.length ? `${c.name} (${c.branches.map((b) => b.branch.code).join(', ')})` : c.name }))}
                 />
               </div>
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">

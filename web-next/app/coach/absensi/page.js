@@ -37,14 +37,24 @@ function AbsensiContent() {
   const [message, setMessage] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [me, setMe] = useState(null)
+  const [branchId, setBranchId] = useState('')
 
   const filteredStudents = students.filter((s) =>
     s.fullName.toLowerCase().includes(search.trim().toLowerCase())
   )
 
   useEffect(() => {
+    api.getMe().then((user) => {
+      setMe(user)
+      setBranchId(user.branches?.[0]?.branch?.id || '')
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!branchId) { setStudents([]); setStatusMap({}); setLoading(false); return }
     setLoading(true)
-    Promise.all([api.getStudents(ageGroup || undefined), api.getAttendance(today, ageGroup || undefined)])
+    Promise.all([api.getStudents(ageGroup || undefined, branchId), api.getAttendance(today, ageGroup || undefined, branchId)])
       .then(([studentList, attendanceList]) => {
         setStudents(studentList)
         const map = {}
@@ -52,7 +62,7 @@ function AbsensiContent() {
         setStatusMap(map)
       })
       .finally(() => setLoading(false))
-  }, [ageGroup])
+  }, [ageGroup, branchId])
 
   async function handleSubmit() {
     const records = students
@@ -117,6 +127,12 @@ function AbsensiContent() {
             allLabel="Semua Umur"
             options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
           />
+          <AppSelect
+            value={branchId}
+            onChange={setBranchId}
+            placeholder="Pilih cabang..."
+            options={(me?.branches || []).map((b) => ({ value: b.branch.id, label: `${b.branch.name} (${b.branch.code})` }))}
+          />
         </div>
       </div>
 
@@ -137,7 +153,11 @@ function AbsensiContent() {
         <div className="text-sm bg-navy-50 text-navy-700 border border-navy-100 rounded-2xl px-3 py-2">{message}</div>
       )}
 
-      {loading ? null : students.length === 0 ? (
+      {loading ? null : !branchId ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
+          {me?.branches?.length === 0 ? 'Anda belum ditugaskan ke cabang manapun. Hubungi admin.' : 'Pilih cabang dulu untuk melihat daftar siswa.'}
+        </div>
+      ) : students.length === 0 ? (
         <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Belum ada siswa di kelompok umur ini.
         </div>

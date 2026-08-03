@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Users, ClipboardCheck, ClipboardList, Star, ChevronRight } from 'lucide-react'
+import { Users, ClipboardCheck, ClipboardList, Star, ChevronRight, MapPin } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
@@ -13,6 +13,7 @@ export default function HeadCoachDasborPage() {
   const [totalStudents, setTotalStudents] = useState(null)
   const [hadirToday, setHadirToday] = useState(null)
   const [byGroup, setByGroup] = useState(null)
+  const [me, setMe] = useState(null)
 
   useEffect(() => {
     Promise.all(AGE_GROUPS.map((ag) => api.getStudents(ag))).then((results) => {
@@ -24,6 +25,7 @@ export default function HeadCoachDasborPage() {
     Promise.all(AGE_GROUPS.map((ag) => api.getAttendance(today, ag))).then((results) => {
       setHadirToday(results.flat().filter((a) => a.status === 'hadir').length)
     })
+    api.getMe().then(setMe).catch(() => {})
   }, [])
 
   const chartData = AGE_GROUPS.map((ag) => ({ ageGroup: ag, count: byGroup?.[ag] ?? 0 }))
@@ -35,6 +37,12 @@ export default function HeadCoachDasborPage() {
         <div className="relative">
           <h1 className="font-bold text-white text-lg">Dasbor Head Coach</h1>
           <p className="text-sm text-gray-400 mt-1">Ringkasan seluruh kelompok umur hari ini.</p>
+          {me?.branches?.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-300">
+              <MapPin size={12} className="text-gold-400" />
+              Cabang: {me.branches.map((b) => b.branch.name).join(', ')}
+            </div>
+          )}
         </div>
       </div>
 

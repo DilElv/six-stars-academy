@@ -166,7 +166,7 @@ router.get('/pending-registration/:id', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { branch: true } })
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, include: { branches: { include: { branch: true } } } })
     if (!user) return res.status(404).json({ error: 'User not found' })
     const { password: _pw, ...profile } = user
 
@@ -192,7 +192,7 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 router.put('/me', authenticate, async (req, res) => {
-  const { name, phone, photo, bio, address, email, branchId, password } = req.body
+  const { name, phone, photo, bio, address, email, password } = req.body
   try {
     const data = { name, phone, photo, bio, address }
     if (password) {
@@ -207,15 +207,10 @@ router.put('/me', authenticate, async (req, res) => {
       if (clash) return res.status(400).json({ error: 'Email sudah terdaftar' })
       data.email = email
     }
-    if (req.user.role === 'coach' || req.user.role === 'head_coach') {
-      data.branchId = undefined
-    } else {
-      data.branchId = branchId !== undefined ? (branchId || null) : undefined
-    }
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data,
-      include: { branch: true },
+      include: { branches: { include: { branch: true } } },
     })
     // Student.parentEmail is a denormalized copy of the parent's login email
     // (shown read-only elsewhere, e.g. admin's Edit Data Anak) — keep it in

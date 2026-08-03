@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser, notifyRole } from '../lib/notify.js'
+import { getUserBranchIds } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -85,8 +86,8 @@ router.get('/summary', authenticate, authorize('coach', 'head_coach', 'admin'), 
   try {
     let branchId = req.query.branchId || undefined
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      branchId = coach?.branchId || '__none__'
+      const branchIds = await getUserBranchIds(req.user.id)
+      branchId = branchId && branchIds.includes(branchId) ? branchId : '__none__'
     }
 
     const studentWhere = branchId ? { branchId } : {}
@@ -162,8 +163,8 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
     if (req.query.branchId) where.student.branchId = req.query.branchId
 
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      where.student.branchId = coach?.branchId || '__none__'
+      const branchIds = await getUserBranchIds(req.user.id)
+      where.student.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : '__none__'
     }
 
     if (Object.keys(where.student).length === 0) delete where.student
@@ -183,8 +184,8 @@ router.post('/scan', authenticate, authorize('coach', 'head_coach', 'admin'), as
     if (!card || card.status !== 'active') return res.status(404).json({ error: 'Kartu tidak dikenali' })
 
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      if (coach?.branchId && card.student.branchId && coach.branchId !== card.student.branchId) {
+      const branchIds = await getUserBranchIds(req.user.id)
+      if (card.student.branchId && !branchIds.includes(card.student.branchId)) {
         return res.status(403).json({ error: 'Siswa ini bukan dari cabang Anda' })
       }
     }
@@ -210,16 +211,14 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
     const day = startOfDay(date)
 
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      if (coach?.branchId) {
-        const students = await prisma.student.findMany({
-          where: { id: { in: records.map((r) => r.studentId) } },
-          select: { id: true, branchId: true },
-        })
-        const wrong = students.find((s) => s.branchId && s.branchId !== coach.branchId)
-        if (wrong) {
-          return res.status(403).json({ error: 'Salah satu siswa bukan dari cabang Anda' })
-        }
+      const branchIds = await getUserBranchIds(req.user.id)
+      const students = await prisma.student.findMany({
+        where: { id: { in: records.map((r) => r.studentId) } },
+        select: { id: true, branchId: true },
+      })
+      const wrong = students.find((s) => s.branchId && !branchIds.includes(s.branchId))
+      if (wrong) {
+        return res.status(403).json({ error: 'Salah satu siswa bukan dari cabang Anda' })
       }
     }
 

@@ -30,6 +30,7 @@ export default function CoachDasborPage() {
 
   const [sessions, setSessions] = useState(null)
   const [events, setEvents] = useState(null)
+  const [me, setMe] = useState(null)
 
   useEffect(() => {
     api.getAttendanceSummary()
@@ -37,6 +38,7 @@ export default function CoachDasborPage() {
       .finally(() => setLoadingSummary(false))
     api.getTrainingSessions().then((rows) => setSessions(rows.slice(0, 3)))
     api.getEvents(undefined, undefined, 'open').then((rows) => setEvents(rows.slice(0, 3)))
+    api.getMe().then(setMe).catch(() => {})
   }, [])
 
   function handleExpand() {
@@ -65,6 +67,12 @@ export default function CoachDasborPage() {
         <div className="relative">
           <h1 className="font-bold text-white text-lg">Dasbor Coach</h1>
           <p className="text-sm text-gray-400 mt-1">Pilih kelompok umur untuk mengisi absensi atau topik latihan.</p>
+          {me?.branches?.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-300">
+              <MapPin size={12} className="text-gold-400" />
+              Cabang: {me.branches.map((b) => b.branch.name).join(', ')}
+            </div>
+          )}
           <div className="flex items-center gap-2 mt-4">
             <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-400/15 text-emerald-300 border border-emerald-400/25">
               {loadingSummary ? '...' : summary?.today?.hadir ?? 0} siswa hadir hari ini

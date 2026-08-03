@@ -36,10 +36,20 @@ export default function HeadCoachAbsensiPage() {
   const [message, setMessage] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [branches, setBranches] = useState([])
+  const [branchId, setBranchId] = useState('')
 
   useEffect(() => {
+    api.getBranches().then((rows) => {
+      setBranches(rows)
+      setBranchId(rows[0]?.id || '')
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!branchId) { setStudents([]); setStatusMap({}); setLoading(false); return }
     setLoading(true)
-    Promise.all([api.getStudents(ageGroup), api.getAttendance(date, ageGroup)])
+    Promise.all([api.getStudents(ageGroup, branchId), api.getAttendance(date, ageGroup, branchId)])
       .then(([studentList, attendanceList]) => {
         setStudents(studentList)
         const map = {}
@@ -47,7 +57,7 @@ export default function HeadCoachAbsensiPage() {
         setStatusMap(map)
       })
       .finally(() => setLoading(false))
-  }, [ageGroup, date])
+  }, [ageGroup, date, branchId])
 
   async function handleSubmit() {
     const records = students
@@ -108,6 +118,12 @@ export default function HeadCoachAbsensiPage() {
           </button>
           <DatePicker value={date} max={today} onChange={setDate} />
           <AppSelect value={ageGroup} onChange={setAgeGroup} options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+          <AppSelect
+            value={branchId}
+            onChange={setBranchId}
+            placeholder="Pilih cabang..."
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+          />
         </div>
       </div>
 
@@ -117,7 +133,11 @@ export default function HeadCoachAbsensiPage() {
         <div className="text-sm bg-navy-50 text-navy-700 border border-navy-100 rounded-2xl px-3 py-2">{message}</div>
       )}
 
-      {loading ? null : students.length === 0 ? (
+      {loading ? null : !branchId ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
+          Pilih cabang dulu untuk melihat daftar siswa.
+        </div>
+      ) : students.length === 0 ? (
         <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Belum ada siswa di kelompok umur ini.
         </div>

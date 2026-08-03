@@ -28,6 +28,7 @@ export default function JadwalCalendar({
   events = [],
   fields = [],
   canAddTopic = false,
+  branchId,
   onChanged,
   ageGroupFilter,
   attendanceByDate,
@@ -98,6 +99,7 @@ export default function JadwalCalendar({
         ...topicForm,
         date: dateKey(selectedDate),
         fieldId: topicForm.fieldId || undefined,
+        branchId,
       })
       setShowTopicForm(false)
       onChanged?.()

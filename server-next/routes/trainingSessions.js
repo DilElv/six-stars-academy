@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole } from '../lib/notify.js'
+import { getUserBranchIds, assertBranchAccess } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -20,8 +21,8 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
     if (req.query.branchId) where.branchId = req.query.branchId
 
     if (req.user.role === 'coach') {
-      const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
-      where.branchId = coach?.branchId || '__none__'
+      const branchIds = await getUserBranchIds(req.user.id)
+      where.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : '__none__'
     }
 
     const sessions = await prisma.trainingSession.findMany({
@@ -41,18 +42,19 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
 })
 
 router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, branchId } = req.body
   try {
     if (!Array.isArray(ageGroups) || ageGroups.length === 0) return res.status(400).json({ error: 'Pilih minimal satu kelompok umur' })
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
 
     if (req.user.role === 'coach') {
-      if (!coach?.branchId) {
-        return res.status(403).json({ error: 'Anda belum ditugaskan ke cabang manapun' })
+      if (!branchId) {
+        return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
       }
+      await assertBranchAccess(req.user.id, branchId)
       if (fieldId) {
         const field = await prisma.field.findUnique({ where: { id: fieldId } })
-        if (!field || field.branchId !== coach.branchId) {
+        if (!field || field.branchId !== branchId) {
           return res.status(403).json({ error: 'Lapangan tidak sesuai dengan cabang Anda' })
         }
       }
@@ -70,7 +72,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
         duration,
         equipment,
         fieldId: fieldId || null,
-        branchId: coach?.branchId || null,
+        branchId: branchId || null,
       },
     })
 
@@ -84,18 +86,22 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 
     res.status(201).json(session)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, branchId } = req.body
   try {
-    const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
+    if (req.user.role === 'coach' && branchId) {
+      await assertBranchAccess(req.user.id, branchId)
+    }
     if (req.user.role === 'coach' && fieldId) {
       const field = await prisma.field.findUnique({ where: { id: fieldId } })
-      if (!field || field.branchId !== coach?.branchId) {
+      const branchIds = await getUserBranchIds(req.user.id)
+      if (!field || !branchIds.includes(field.branchId)) {
         return res.status(403).json({ error: 'Lapangan tidak sesuai dengan cabang Anda' })
       }
     }
@@ -111,11 +117,12 @@ router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
         duration,
         equipment,
         fieldId: fieldId !== undefined ? (fieldId || null) : undefined,
-        branchId: coach?.branchId || undefined,
+        branchId: branchId || undefined,
       },
     })
     res.json(session)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }

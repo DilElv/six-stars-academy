@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole, notifyUser } from '../lib/notify.js'
+import { getUserBranchIds } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -26,16 +27,18 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
     }
     if (req.query.status) where.status = req.query.status
 
-    let branchScopeId = req.query.branchId || null
     if (req.user.role === 'coach') {
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } })
-      branchScopeId = user?.branchId || '__none__'
-    }
-    if (branchScopeId) {
+      const branchIds = await getUserBranchIds(req.user.id)
       where.OR = [
         ...(where.OR || []),
         { branches: { none: {} } },
-        { branches: { some: { branchId: branchScopeId } } },
+        { branches: { some: { branchId: { in: branchIds.length ? branchIds : ['__none__'] } } } },
+      ]
+    } else if (req.query.branchId) {
+      where.OR = [
+        ...(where.OR || []),
+        { branches: { none: {} } },
+        { branches: { some: { branchId: req.query.branchId } } },
       ]
     }
 
