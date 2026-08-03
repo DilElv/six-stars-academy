@@ -36,6 +36,22 @@ function assignAgeGroup(dob) {
   return bracket ? bracket.label : AGE_GROUP_BRACKETS[0].label
 }
 
+// Finds a student's existing hidden custom package (Package.isCustom),
+// whether or not it's currently their ACTIVE package — needed because a
+// pending (unpaid) renewal never writes Student.packageId, so relying on
+// `student.package?.isCustom` alone would create a duplicate custom package
+// on every subsequent quote until the parent actually pays. Falls back to
+// the most recent Payment (any status) that targeted a custom package.
+async function findExistingCustomPackage(student) {
+  if (student.package?.isCustom) return student.package
+  const priorPayment = await prisma.payment.findFirst({
+    where: { studentId: student.id, package: { isCustom: true } },
+    orderBy: { createdAt: 'desc' },
+    include: { package: true },
+  })
+  return priorPayment?.package || null
+}
+
 async function ensureCard(studentId) {
   let card = await prisma.studentCard.findUnique({ where: { studentId } })
   if (!card) {
@@ -257,7 +273,11 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
 
     const stats = await computeSessionStats(student)
-    res.json({ ...student, ...stats })
+    // For "anak lama", surface their quoted custom package even before it's
+    // paid/activated (Student.packageId only updates once paid) — the
+    // renewal UI needs this to know a custom price already exists.
+    const customPackage = student.isOldMember ? await findExistingCustomPackage(student) : null
+    res.json({ ...student, ...stats, customPackage })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -434,8 +454,9 @@ router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async 
         durationMonths: Math.round(Number(durationMonths)),
         price: Math.round(Number(price)),
       }
-      pkg = student.package?.isCustom
-        ? await prisma.package.update({ where: { id: student.package.id }, data: customData })
+      const existingCustom = await findExistingCustomPackage(student)
+      pkg = existingCustom
+        ? await prisma.package.update({ where: { id: existingCustom.id }, data: customData })
         : await prisma.package.create({ data: { ...customData, status: 'inactive', isCustom: true } })
     } else {
       if (!packageId) return res.status(400).json({ error: 'Pilih paket terlebih dahulu' })

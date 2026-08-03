@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Eye, Edit3, Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, MessageCircle, UserPlus, Search, Upload } from 'lucide-react'
+import { Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, MessageCircle, UserPlus, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
@@ -135,7 +135,7 @@ export default function AdminDataAnakPage() {
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {filtered.map((s) => (
-                <div key={s.id} className="glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                <div key={s.id} onClick={() => setViewStudent(s)} className="cursor-pointer glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
                   <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
                     <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).color}`}>
                       {(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).label}
@@ -182,20 +182,24 @@ export default function AdminDataAnakPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
-                    <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
-                    <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
-                    <button onClick={() => setRenewStudentTarget(s)} title="Perpanjang Paket" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-gold-600 hover:bg-gray-50 rounded-xl"><RefreshCw size={14} /><span className="hidden sm:inline">Perpanjang</span></button>
                     {s.parentPhone && (
-                      <a href={waLink(s.parentPhone, s.parentName, s.fullName)} target="_blank" rel="noopener noreferrer" title="Chat WhatsApp" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl"><MessageCircle size={14} /><span className="hidden sm:inline">WA</span></a>
+                      <a href={waLink(s.parentPhone, s.parentName, s.fullName)} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" title="Chat WhatsApp" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl"><MessageCircle size={14} /><span className="hidden sm:inline">WA</span></a>
                     )}
-                    <button onClick={() => handleDelete(s.id)} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(s.id) }} title="Hapus" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /><span className="hidden sm:inline">Hapus</span></button>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {viewStudent && <StudentDetailModal student={viewStudent} onClose={() => setViewStudent(null)} />}
+          {viewStudent && (
+            <StudentDetailModal
+              student={viewStudent}
+              onClose={() => setViewStudent(null)}
+              onEdit={() => { setEditStudent(viewStudent); setViewStudent(null) }}
+              onRenew={() => { setRenewStudentTarget(viewStudent); setViewStudent(null) }}
+            />
+          )}
           {editStudent && <EditModal student={editStudent} branches={branches} packages={packages} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
           {renewStudentTarget && <PerpanjangPaketModal student={renewStudentTarget} branches={branches} packages={packages} onClose={() => setRenewStudentTarget(null)} onSaved={load} />}
           {showAddStudent && <AddStudentModal branches={branches} packages={packages} isAdmin onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}

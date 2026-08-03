@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { qrImageUrl } from '@/lib/qrImage'
 import PaymentStatusIcon from './PaymentStatusIcon'
+import ModalPortal from '@/components/ui/modal-portal'
 
 const FALLBACK_METHODS = [
   { value: 'QRIS', label: 'QRIS' },
@@ -106,7 +107,8 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
   const qrString = result?.rintisan?.qr_string || result?.payment?.qrString
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/60" onClick={loading ? undefined : onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
@@ -249,5 +251,6 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
         )}
       </div>
     </div>
+    </ModalPortal>
   )
 }

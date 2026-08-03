@@ -155,8 +155,8 @@ model Student {
   // Beasiswa (scholarship) — admin-only, set from Data Anak. 0 = none.
   // registrationScholarshipPercent only ever matters at initial registration;
   // sppScholarshipPercent is re-applied automatically on every renewal.
-  registrationScholarshipPercent Int       @default(0)
-  sppScholarshipPercent          Int       @default(0)
+  registrationScholarshipPercent Float     @default(0)
+  sppScholarshipPercent          Float     @default(0)
   // "Anak Lama" — a legacy member kept on a hidden custom-priced package
   // (see Package.isCustom) instead of the standard Pengaturan catalog.
   isOldMember                    Boolean   @default(false)

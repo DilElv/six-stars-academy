@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Download, QrCode as QrCodeIcon } from 'lucide-react'
+import { Loader2, Download, QrCode as QrCodeIcon, Edit3, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { downloadStudentCard } from '@/lib/studentCard'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function Row({ label, value }) {
   return (
@@ -17,7 +18,7 @@ function Row({ label, value }) {
 
 const PAYMENT_STATUS_LABEL = { success: 'Lunas', pending: 'Menunggu', failed: 'Gagal' }
 
-export default function StudentDetailModal({ student: initialStudent, onClose }) {
+export default function StudentDetailModal({ student: initialStudent, onClose, onEdit, onRenew }) {
   const [student, setStudent] = useState(initialStudent)
   const [loading, setLoading] = useState(true)
   const [qrUrl, setQrUrl] = useState('')
@@ -43,7 +44,8 @@ export default function StudentDetailModal({ student: initialStudent, onClose })
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-5 text-center">
@@ -53,6 +55,20 @@ export default function StudentDetailModal({ student: initialStudent, onClose })
           <h3 className="font-heading font-bold text-white">{student.fullName}</h3>
           <p className="text-xs text-gray-300">{student.studentId}</p>
         </div>
+        {(onEdit || onRenew) && (
+          <div className="flex items-center gap-2 p-3 border-b border-gray-100">
+            {onEdit && (
+              <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-navy-700 border border-gray-200 px-3 py-2.5 rounded-2xl">
+                <Edit3 size={13} /> Edit
+              </button>
+            )}
+            {onRenew && (
+              <button onClick={onRenew} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold bg-navy-900 hover:bg-navy-800 text-white px-3 py-2.5 rounded-2xl">
+                <RefreshCw size={13} /> Perpanjang Paket
+              </button>
+            )}
+          </div>
+        )}
         <div className="p-5">
           <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID')} />
           <Row label="Posisi" value={student.position} />
@@ -154,5 +170,6 @@ export default function StudentDetailModal({ student: initialStudent, onClose })
         </div>
       </div>
     </div>
+    </ModalPortal>
   )
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { X, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
 import PaymentMethodModal from '@/components/PaymentMethodModal'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
   return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
@@ -18,6 +19,16 @@ export default function RenewalModal({ onClose, onDone }) {
   useEffect(() => {
     api.getMyChild().then((s) => {
       setScholarshipPercent(s?.sppScholarshipPercent || 0)
+      // "Anak lama" with a custom-priced package (Package.isCustom) never
+      // renews from the standard catalog — only their own quoted package is
+      // ever offered, since the whole point is a legacy price that differs
+      // from Pengaturan's current rates. `customPackage` (from GET /me) is
+      // set even before the quote is paid/activated (Student.package only
+      // reflects the currently ACTIVE package).
+      if (s?.isOldMember && s?.customPackage) {
+        setPackages([s.customPackage])
+        return
+      }
       // Branch-aware: prices here must match what Pengaturan > Harga Paket
       // has for this student's branch, not the package's raw base price.
       return api.getPackages(s?.branchId).then(setPackages)
@@ -46,7 +57,8 @@ export default function RenewalModal({ onClose, onDone }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-4">
@@ -98,5 +110,6 @@ export default function RenewalModal({ onClose, onDone }) {
         </button>
       </div>
     </div>
+    </ModalPortal>
   )
 }
