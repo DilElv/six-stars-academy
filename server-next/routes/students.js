@@ -8,6 +8,7 @@ import { getEffectivePrice } from '../lib/pricing.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { computePackagePeriod } from '../lib/packagePeriod.js'
 import { notifyUser, notifyRole } from '../lib/notify.js'
+import { applyPaymentSuccess } from '../lib/paymentHelpers.js'
 
 const router = Router()
 
@@ -403,13 +404,18 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 })
 
 // Admin-initiated renewal — distinct from PUT /:id's simple package
-// correction: this always creates a real Payment (status success, so it
-// shows up in Keuangan Pemasukan immediately) and resets the session quota.
-// "Anak lama" (isOldMember) students get a hidden, student-specific
-// custom-priced Package (Package.isCustom) instead of ever being matched to
-// the standard Pengaturan catalog — reused across renewals once created.
+// correction: this creates a real Payment record and, once it's actually
+// paid, resets the session quota. Defaults to `paymentStatus: 'pending'` —
+// the common case is admin quoting a price and sending a WA reminder before
+// the parent has paid, so the session/package must NOT activate yet; only
+// once admin later marks it paid (via applyPaymentSuccess, either here
+// immediately or through Keuangan Pemasukan's "Verifikasi" button) does the
+// renewal actually take effect. "Anak lama" (isOldMember) students get a
+// hidden, student-specific custom-priced Package (Package.isCustom) instead
+// of ever being matched to the standard Pengaturan catalog — reused across
+// renewals once created, independent of payment status.
 router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
-  const { isOldMember, packageId, customPackage, amount } = req.body
+  const { isOldMember, packageId, customPackage, amount, paymentStatus } = req.body
   try {
     const student = await prisma.student.findUnique({ where: { id: req.params.id }, include: { package: true } })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
@@ -441,59 +447,49 @@ router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async 
       ? Math.max(0, Math.round(Number(amount)))
       : (customPackage ? pkg.price : await getEffectivePrice(pkg.id, student.branchId))
 
-    // Renewing early (before the current period expires) starts the new
-    // period the day after the existing end date, not on it — same reasoning
-    // as applyPaymentSuccess in lib/paymentHelpers.js.
-    let base = new Date()
+    const isPaid = paymentStatus === 'success'
+
+    // Quoted period for display (e.g. the WA reminder) even when this
+    // renewal is left pending — only actually written to the student once
+    // paid, via applyPaymentSuccess below.
+    let quoteBase = new Date()
     if (student.packageEndDate && new Date(student.packageEndDate) > new Date()) {
-      base = new Date(student.packageEndDate)
-      base.setDate(base.getDate() + 1)
+      quoteBase = new Date(student.packageEndDate)
+      quoteBase.setDate(quoteBase.getDate() + 1)
     }
-    const period = computePackagePeriod(base, pkg)
+    const quote = computePackagePeriod(quoteBase, pkg)
 
-    const [payment] = await prisma.$transaction([
-      prisma.payment.create({
-        data: {
-          studentId: student.id,
-          packageId: pkg.id,
-          amount: resolvedAmount,
-          registrationFee: 0,
-          totalAmount: resolvedAmount,
-          paymentType: 'renewal',
-          status: 'success',
-          paymentMethod: 'manual',
-          paidAt: new Date(),
-        },
-      }),
-      prisma.student.update({
-        where: { id: student.id },
-        data: {
-          packageId: pkg.id,
-          packageStartDate: student.packageStartDate || new Date(),
-          packageEndDate: period.packageEndDate,
-          totalSessions: period.totalSessions,
-          sessionsUsed: 0,
-          status: 'active',
-          isOldMember: isOldMember !== undefined ? !!isOldMember : student.isOldMember,
-        },
-      }),
-    ])
+    if (isOldMember !== undefined) {
+      await prisma.student.update({ where: { id: student.id }, data: { isOldMember: !!isOldMember } })
+    }
 
-    await notifyUser(student.userId, {
-      type: 'payment_renewal_success',
-      title: 'Perpanjangan Paket Berhasil',
-      message: `Perpanjangan paket untuk ${student.fullName} berhasil. Paket aktif sampai ${period.packageEndDate.toLocaleDateString('id-ID')}.`,
-      link: '/dashboard/pembayaran',
+    let payment = await prisma.payment.create({
+      data: {
+        studentId: student.id,
+        packageId: pkg.id,
+        amount: resolvedAmount,
+        registrationFee: 0,
+        totalAmount: resolvedAmount,
+        paymentType: 'renewal',
+        status: isPaid ? 'success' : 'pending',
+        paymentMethod: 'manual',
+        paidAt: isPaid ? new Date() : null,
+      },
     })
+
+    if (isPaid) {
+      payment = await applyPaymentSuccess(payment)
+    }
+
     await notifyRole('admin', {
       type: 'renewal_recorded',
-      title: 'Perpanjangan Paket Dicatat',
-      message: `${student.fullName} diperpanjang oleh ${req.user.role === 'admin' ? 'admin' : 'head coach'} — Rp${resolvedAmount.toLocaleString('id-ID')}.`,
+      title: isPaid ? 'Perpanjangan Paket Dicatat' : 'Perpanjangan Paket Menunggu Pembayaran',
+      message: `${student.fullName} diperpanjang oleh ${req.user.role === 'admin' ? 'admin' : 'head coach'} — Rp${resolvedAmount.toLocaleString('id-ID')}${isPaid ? '' : ' (belum dibayar)'}.`,
       link: '/admin/data-anak',
     })
 
     const updatedStudent = await prisma.student.findUnique({ where: { id: student.id }, include: { package: true, branch: true } })
-    res.json({ student: updatedStudent, payment, package: pkg })
+    res.json({ student: updatedStudent, payment, package: pkg, paid: isPaid, quote })
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)

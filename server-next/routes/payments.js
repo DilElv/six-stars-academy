@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { notifyUser } from '../lib/notify.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS } from '../lib/rintisan.js'
 import { getEffectivePrice } from '../lib/pricing.js'
@@ -31,23 +30,27 @@ router.get('/methods', (req, res) => {
 router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
   const { status, paymentMethod } = req.body
   try {
-    const data = { status, paymentMethod }
-    if (status === 'success') data.paidAt = new Date()
-    const payment = await prisma.payment.update({
-      where: { id: req.params.id },
-      data,
-      include: { student: true },
-    })
+    const existing = await prisma.payment.findUnique({ where: { id: req.params.id } })
+    if (!existing) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
 
-    if (status === 'success' || status === 'failed') {
-      await notifyUser(payment.student.userId, {
-        type: status === 'success' ? 'payment_success' : 'payment_failed',
-        title: status === 'success' ? 'Pembayaran Berhasil' : 'Pembayaran Gagal',
-        message: status === 'success'
-          ? `Pembayaran untuk ${payment.student.fullName} telah diverifikasi lunas.`
-          : `Pembayaran untuk ${payment.student.fullName} ditandai gagal. Silakan hubungi admin.`,
-        link: '/dashboard/pembayaran',
-      })
+    if (paymentMethod !== undefined) {
+      await prisma.payment.update({ where: { id: req.params.id }, data: { paymentMethod } })
+    }
+
+    // Delegates to the same applyPaymentSuccess/applyPaymentFailed used by
+    // the online (Rintisan) payment flow — so admin manually verifying a
+    // payment here (e.g. the "Verifikasi" button in Keuangan Pemasukan)
+    // correctly applies renewal-type side effects too (session reset,
+    // package period activation), not just a bare status flip. No behavior
+    // change for registration/event payments — those helpers already do
+    // exactly what the old inline update here did.
+    let payment
+    if (status === 'success') {
+      payment = await applyPaymentSuccess(existing)
+    } else if (status === 'failed') {
+      payment = await applyPaymentFailed(existing)
+    } else {
+      payment = await prisma.payment.update({ where: { id: req.params.id }, data: { status }, include: { student: true } })
     }
 
     res.json(payment)

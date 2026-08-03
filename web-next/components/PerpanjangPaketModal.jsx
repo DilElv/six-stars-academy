@@ -31,6 +31,7 @@ function renewalWaLink(phone, parentName, studentName, pkg, amount, endDate) {
 export default function PerpanjangPaketModal({ student, branches, packages, onClose, onSaved }) {
   const isCustomPackage = !!student.package?.isCustom
   const [isOldMember, setIsOldMember] = useState(student.isOldMember || false)
+  const [paymentStatus, setPaymentStatus] = useState('pending')
   const [branchId, setBranchId] = useState(student.branchId || '')
   const [packageId, setPackageId] = useState('')
   const [amount, setAmount] = useState('')
@@ -54,7 +55,7 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    const payload = { isOldMember }
+    const payload = { isOldMember, paymentStatus }
     if (isOldMember) {
       if (!customName.trim()) return setError('Nama paket wajib diisi')
       if (!customPrice) return setError('Harga wajib diisi')
@@ -84,21 +85,28 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
   if (result) {
     const pkg = result.package
     const waHref = student.parentPhone
-      ? renewalWaLink(student.parentPhone, student.parentName, student.fullName, pkg, result.payment.amount, result.student.packageEndDate)
+      ? renewalWaLink(student.parentPhone, student.parentName, student.fullName, pkg, result.payment.amount, result.quote.packageEndDate)
       : null
     return (
       <ModalPortal>
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
-              <Check size={24} className="text-emerald-600" />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 ${result.paid ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+              <Check size={24} className={result.paid ? 'text-emerald-600' : 'text-amber-600'} />
             </div>
-            <h3 className="font-bold text-navy-900">Perpanjangan Berhasil</h3>
+            <h3 className="font-bold text-navy-900">{result.paid ? 'Perpanjangan Berhasil' : 'Perpanjangan Dicatat — Menunggu Pembayaran'}</h3>
             <p className="text-sm text-gray-500 mt-1">
               {student.fullName} — {pkg.name} ({pkg.sessionsPerWeek}x/minggu) — {formatRupiah(result.payment.amount)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">Berlaku sampai {formatTanggal(result.student.packageEndDate)}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {result.paid ? 'Berlaku sampai' : 'Kalau sudah bayar, berlaku sampai'} {formatTanggal(result.quote.packageEndDate)}
+            </p>
+            {!result.paid && (
+              <p className="text-[11px] text-amber-600 mt-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                Sesi & paket BELUM aktif. Tandai lunas di Keuangan Pemasukan setelah orang tua membayar.
+              </p>
+            )}
             {waHref && (
               <a
                 href={waHref}
@@ -210,8 +218,23 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
               </div>
             )}
 
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Status Pembayaran</label>
+              <AppSelect
+                value={paymentStatus}
+                onChange={setPaymentStatus}
+                className="w-full"
+                options={[{ value: 'pending', label: 'Belum Lunas' }, { value: 'success', label: 'Lunas' }]}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                {paymentStatus === 'pending'
+                  ? 'Paket & sesi baru BELUM aktif sampai pembayaran ditandai lunas (verifikasi di Keuangan Pemasukan).'
+                  : 'Paket & sesi baru langsung aktif sekarang.'}
+              </p>
+            </div>
+
             <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
-              {saving && <Loader2 size={14} className="animate-spin" />} Perpanjang & Tandai Lunas
+              {saving && <Loader2 size={14} className="animate-spin" />} {paymentStatus === 'pending' ? 'Simpan & Kirim Reminder' : 'Perpanjang & Tandai Lunas'}
             </button>
           </form>
         </div>
