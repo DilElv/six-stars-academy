@@ -157,6 +157,9 @@ model Student {
   // sppScholarshipPercent is re-applied automatically on every renewal.
   registrationScholarshipPercent Int       @default(0)
   sppScholarshipPercent          Int       @default(0)
+  // "Anak Lama" — a legacy member kept on a hidden custom-priced package
+  // (see Package.isCustom) instead of the standard Pengaturan catalog.
+  isOldMember                    Boolean   @default(false)
   createdAt                      DateTime  @default(now())
   updatedAt                      DateTime  @updatedAt
 
@@ -177,6 +180,12 @@ model Package {
   sessionsPerWeek Int
   price           Int
   status          String   @default("active")
+  // A hidden, student-specific legacy price ("anak lama") — excluded from
+  // the public/branch catalog and Pengaturan's package list, but assignable
+  // via Student.packageId like any other package so every existing
+  // session/quota computation (which always keys off student.package)
+  // works unchanged.
+  isCustom        Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

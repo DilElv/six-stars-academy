@@ -9,6 +9,7 @@ import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
+import PerpanjangPaketModal from '@/components/PerpanjangPaketModal'
 import ScholarshipField from '@/components/ScholarshipField'
 import { DatePicker } from '@/components/ui/date-picker'
 import ModalPortal from '@/components/ui/modal-portal'
@@ -36,6 +37,7 @@ export default function AdminDataAnakPage() {
   const [filterBranch, setFilterBranch] = useState('')
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
+  const [renewStudentTarget, setRenewStudentTarget] = useState(null)
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [packages, setPackages] = useState([])
   const [requests, setRequests] = useState([])
@@ -143,6 +145,9 @@ export default function AdminDataAnakPage() {
                     </div>
                     <h3 className="font-heading font-bold text-white text-xs sm:text-sm truncate">{s.fullName}</h3>
                     <p className="text-[10px] sm:text-xs text-gray-300">{s.studentId}</p>
+                    {s.isOldMember && (
+                      <span className="inline-block mt-1 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200">Anak Lama</span>
+                    )}
                   </div>
                   <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                     <div className="flex justify-between">
@@ -179,6 +184,7 @@ export default function AdminDataAnakPage() {
                   <div className="flex items-center gap-0.5 sm:gap-1 border-t border-gray-100 p-1.5 sm:p-2">
                     <button onClick={() => setViewStudent(s)} title="Lihat" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Eye size={14} /><span className="hidden sm:inline">Lihat</span></button>
                     <button onClick={() => setEditStudent(s)} title="Edit" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /><span className="hidden sm:inline">Edit</span></button>
+                    <button onClick={() => setRenewStudentTarget(s)} title="Perpanjang Paket" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-gold-600 hover:bg-gray-50 rounded-xl"><RefreshCw size={14} /><span className="hidden sm:inline">Perpanjang</span></button>
                     {s.parentPhone && (
                       <a href={waLink(s.parentPhone, s.parentName, s.fullName)} target="_blank" rel="noopener noreferrer" title="Chat WhatsApp" className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl"><MessageCircle size={14} /><span className="hidden sm:inline">WA</span></a>
                     )}
@@ -191,6 +197,7 @@ export default function AdminDataAnakPage() {
 
           {viewStudent && <StudentDetailModal student={viewStudent} onClose={() => setViewStudent(null)} />}
           {editStudent && <EditModal student={editStudent} branches={branches} packages={packages} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
+          {renewStudentTarget && <PerpanjangPaketModal student={renewStudentTarget} branches={branches} packages={packages} onClose={() => setRenewStudentTarget(null)} onSaved={load} />}
           {showAddStudent && <AddStudentModal branches={branches} packages={packages} isAdmin onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
       ) : (

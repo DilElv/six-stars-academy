@@ -14,7 +14,7 @@ function jerseyNumber(title) {
 
 export default function ProgramCard({ program, index, delayed }) {
   const num = jerseyNumber(program.title)
-  const photo = PROGRAM_PHOTOS[index % PROGRAM_PHOTOS.length]
+  const photo = program.photo || PROGRAM_PHOTOS[index % PROGRAM_PHOTOS.length]
 
   return (
     <Reveal className={delayed ? 'md:translate-y-6' : ''}>

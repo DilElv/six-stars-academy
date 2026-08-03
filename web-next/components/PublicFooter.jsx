@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MapPin, Phone, Mail, ChevronRight, ArrowRight } from 'lucide-react'
+import { MapPin, Phone, Mail, Instagram, ChevronRight, ArrowRight } from 'lucide-react'
 import { REGISTER_WHATSAPP_URL } from '@/lib/whatsapp'
 
 const navLinks = [
@@ -85,6 +85,16 @@ export default function PublicFooter({ settings }) {
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gold-500 shrink-0" /> {settings.ssbEmail}
                 </div>
+              )}
+              {settings?.ssbInstagram && (
+                <a
+                  href={`https://instagram.com/${settings.ssbInstagram.replace(/^@/, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 hover:text-gold-400 transition-colors w-fit"
+                >
+                  <Instagram className="w-4 h-4 text-gold-500 shrink-0" /> {settings.ssbInstagram}
+                </a>
               )}
               <div className="flex gap-5 pt-2">
                 <Link href="/login" className="text-gray-400 hover:text-gold-400 transition-colors">Masuk</Link>

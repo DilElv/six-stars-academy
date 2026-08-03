@@ -184,6 +184,10 @@ export async function updateStudent(id, payload) {
   return request(`/students/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function renewStudent(id, payload) {
+  return request(`/students/${id}/renew`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export async function getMyNotifications() {
   return request('/notifications/me')
 }

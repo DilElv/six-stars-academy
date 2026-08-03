@@ -6,6 +6,8 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getEffectivePrice } from '../lib/pricing.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
+import { computePackagePeriod } from '../lib/packagePeriod.js'
+import { notifyUser, notifyRole } from '../lib/notify.js'
 
 const router = Router()
 
@@ -54,9 +56,12 @@ async function sendQrImage(res, qrCode) {
 // numbers shown on the parent dashboard, reused here so admin/head_coach see
 // the exact same "sesi ke-X dari Y" and attendance breakdown.
 async function computeSessionStats(student) {
-  const totalSessions = student.package
+  // Prefers the stored value — it's set correctly (prorated for a partial
+  // first month, see lib/packagePeriod.js) by every creation/renewal path.
+  // Falls back to the flat estimate only for legacy rows predating that fix.
+  const totalSessions = student.totalSessions ?? (student.package
     ? student.package.sessionsPerWeek * 4 * student.package.durationMonths
-    : 0
+    : 0)
 
   if (!student.packageStartDate || !student.packageEndDate) {
     return { totalSessions, attendedSessions: 0, attendanceSummary: { hadir: 0, izin: 0, sakit: 0, alfa: 0, total: 0 } }
@@ -146,7 +151,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
       const lastNum = lastStudent ? parseInt(lastStudent.studentId.replace('SS-', ''), 10) || 0 : 0
       const studentId = `SS-${String(lastNum + 1).padStart(4, '0')}`
       const startDate = new Date()
-      const endDate = pkg ? new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000) : null
+      const period = pkg ? computePackagePeriod(startDate, pkg) : null
 
       const student = await tx.student.create({
         data: {
@@ -162,8 +167,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           parentEmail,
           address: '',
           packageId: pkg?.id || null,
-          packageStartDate: startDate,
-          packageEndDate: endDate,
+          packageStartDate: pkg ? startDate : null,
+          packageEndDate: period?.packageEndDate || null,
+          totalSessions: period?.totalSessions ?? null,
           branchId: branchId || null,
           sessionsUsed: sessionsUsed ? Math.max(0, Math.round(Number(sessionsUsed))) : 0,
           registrationScholarshipPercent,
@@ -322,13 +328,16 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
           const pkg = await tx.package.findUnique({ where: { id: packageId } })
           if (!pkg) throw Object.assign(new Error('Paket tidak ditemukan'), { status: 400 })
           const startDate = new Date()
+          const period = computePackagePeriod(startDate, pkg)
           data.packageId = packageId
           data.packageStartDate = startDate
-          data.packageEndDate = new Date(startDate.getTime() + pkg.durationMonths * 30 * 24 * 60 * 60 * 1000)
+          data.packageEndDate = period.packageEndDate
+          data.totalSessions = period.totalSessions
         } else {
           data.packageId = null
           data.packageStartDate = null
           data.packageEndDate = null
+          data.totalSessions = null
         }
       }
 
@@ -386,6 +395,105 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
     })
 
     res.json(student)
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Admin-initiated renewal — distinct from PUT /:id's simple package
+// correction: this always creates a real Payment (status success, so it
+// shows up in Keuangan Pemasukan immediately) and resets the session quota.
+// "Anak lama" (isOldMember) students get a hidden, student-specific
+// custom-priced Package (Package.isCustom) instead of ever being matched to
+// the standard Pengaturan catalog — reused across renewals once created.
+router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  const { isOldMember, packageId, customPackage, amount } = req.body
+  try {
+    const student = await prisma.student.findUnique({ where: { id: req.params.id }, include: { package: true } })
+    if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
+
+    let pkg
+    if (customPackage) {
+      const { name, sessionsPerWeek, durationMonths, price } = customPackage
+      if (!name?.trim()) return res.status(400).json({ error: 'Nama paket custom wajib diisi' })
+      if (!sessionsPerWeek || Number(sessionsPerWeek) <= 0) return res.status(400).json({ error: 'Sesi per minggu harus lebih dari 0' })
+      if (!durationMonths || Number(durationMonths) <= 0) return res.status(400).json({ error: 'Durasi (bulan) harus lebih dari 0' })
+      if (price === undefined || Number(price) < 0) return res.status(400).json({ error: 'Harga tidak valid' })
+
+      const customData = {
+        name: name.trim(),
+        sessionsPerWeek: Math.round(Number(sessionsPerWeek)),
+        durationMonths: Math.round(Number(durationMonths)),
+        price: Math.round(Number(price)),
+      }
+      pkg = student.package?.isCustom
+        ? await prisma.package.update({ where: { id: student.package.id }, data: customData })
+        : await prisma.package.create({ data: { ...customData, status: 'inactive', isCustom: true } })
+    } else {
+      if (!packageId) return res.status(400).json({ error: 'Pilih paket terlebih dahulu' })
+      pkg = await prisma.package.findUnique({ where: { id: packageId } })
+      if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
+    }
+
+    const resolvedAmount = amount !== undefined && amount !== ''
+      ? Math.max(0, Math.round(Number(amount)))
+      : (customPackage ? pkg.price : await getEffectivePrice(pkg.id, student.branchId))
+
+    // Renewing early (before the current period expires) starts the new
+    // period the day after the existing end date, not on it — same reasoning
+    // as applyPaymentSuccess in lib/paymentHelpers.js.
+    let base = new Date()
+    if (student.packageEndDate && new Date(student.packageEndDate) > new Date()) {
+      base = new Date(student.packageEndDate)
+      base.setDate(base.getDate() + 1)
+    }
+    const period = computePackagePeriod(base, pkg)
+
+    const [payment] = await prisma.$transaction([
+      prisma.payment.create({
+        data: {
+          studentId: student.id,
+          packageId: pkg.id,
+          amount: resolvedAmount,
+          registrationFee: 0,
+          totalAmount: resolvedAmount,
+          paymentType: 'renewal',
+          status: 'success',
+          paymentMethod: 'manual',
+          paidAt: new Date(),
+        },
+      }),
+      prisma.student.update({
+        where: { id: student.id },
+        data: {
+          packageId: pkg.id,
+          packageStartDate: student.packageStartDate || new Date(),
+          packageEndDate: period.packageEndDate,
+          totalSessions: period.totalSessions,
+          sessionsUsed: 0,
+          status: 'active',
+          isOldMember: isOldMember !== undefined ? !!isOldMember : student.isOldMember,
+        },
+      }),
+    ])
+
+    await notifyUser(student.userId, {
+      type: 'payment_renewal_success',
+      title: 'Perpanjangan Paket Berhasil',
+      message: `Perpanjangan paket untuk ${student.fullName} berhasil. Paket aktif sampai ${period.packageEndDate.toLocaleDateString('id-ID')}.`,
+      link: '/dashboard/pembayaran',
+    })
+    await notifyRole('admin', {
+      type: 'renewal_recorded',
+      title: 'Perpanjangan Paket Dicatat',
+      message: `${student.fullName} diperpanjang oleh ${req.user.role === 'admin' ? 'admin' : 'head coach'} — Rp${resolvedAmount.toLocaleString('id-ID')}.`,
+      link: '/admin/data-anak',
+    })
+
+    const updatedStudent = await prisma.student.findUnique({ where: { id: student.id }, include: { package: true, branch: true } })
+    res.json({ student: updatedStudent, payment, package: pkg })
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)

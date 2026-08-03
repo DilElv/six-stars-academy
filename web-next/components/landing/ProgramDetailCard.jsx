@@ -12,7 +12,7 @@ const FOCUS_LABEL = { teknik: 'Teknik', taktik: 'Taktik', fisik: 'Fisik', mental
 const FOCUS_COLOR = { teknik: 'bg-gold-400', taktik: 'bg-emerald-400', fisik: 'bg-blue-400', mental: 'bg-rose-400' }
 
 export default function ProgramDetailCard({ program, index, detail }) {
-  const photo = PROGRAM_PHOTOS[index % PROGRAM_PHOTOS.length]
+  const photo = program.photo || PROGRAM_PHOTOS[index % PROGRAM_PHOTOS.length]
   const cleanTitle = program.title.replace(/\s*\(.*?\)\s*/, ' ').trim()
 
   return (

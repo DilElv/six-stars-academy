@@ -23,6 +23,7 @@ function initials(name = '') {
 }
 
 function totalSessionsFor(student) {
+  if (student.totalSessions != null) return student.totalSessions
   return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
 }
 

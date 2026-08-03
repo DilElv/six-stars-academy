@@ -25,7 +25,10 @@ router.get('/', async (req, res) => {
 
 router.get('/all', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const packages = await prisma.package.findMany({ orderBy: [{ durationMonths: 'asc' }, { sessionsPerWeek: 'asc' }] })
+    // Hidden per-student legacy packages (Package.isCustom, created via
+    // POST /students/:id/renew for "anak lama") never show in the general
+    // catalog admin manages here.
+    const packages = await prisma.package.findMany({ where: { isCustom: false }, orderBy: [{ durationMonths: 'asc' }, { sessionsPerWeek: 'asc' }] })
     res.json(packages)
   } catch (err) {
     console.error(err)

@@ -1,6 +1,11 @@
 // Mirrors computeSessionStats() in server-next/routes/students.js so list
-// cards can show total sessions without an extra per-student fetch.
+// cards can show total sessions without an extra per-student fetch. Prefers
+// the stored value (set correctly, prorated for a partial first month, by
+// every creation/renewal path — see server-next/lib/packagePeriod.js) and
+// falls back to the flat estimate for preview-only callers that pass a
+// synthetic student (just `{ package }`, no totalSessions/packageStartDate).
 export function totalSessionsFor(student) {
+  if (student.totalSessions != null) return student.totalSessions
   return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
 }
 

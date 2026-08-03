@@ -9,7 +9,8 @@ const DEFAULTS = {
   ssbName: 'SixStars Academy Indonesia',
   ssbAddress: '',
   ssbPhone: '',
-  ssbEmail: '',
+  ssbEmail: 'sixstarsindonesiaacademy@gmail.com',
+  ssbInstagram: '@sisxstarsacademy',
 }
 
 router.get('/', async (req, res) => {

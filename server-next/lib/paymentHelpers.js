@@ -3,6 +3,7 @@ import prisma from './prisma.js'
 import { createBilling, queryPayment } from './rintisan.js'
 import { notifyUser } from './notify.js'
 import { assignAgeGroup } from './ageGroup.js'
+import { computePackagePeriod } from './packagePeriod.js'
 
 function formatDateForRintisan(d) {
   const day = String(d.getDate()).padStart(2, '0')
@@ -87,20 +88,25 @@ export async function applyPaymentSuccess(payment) {
   let renewedUntil = null
   if (payment.paymentType === 'renewal' && updated.package) {
     const student = updated.student
-    const base = student.packageEndDate && new Date(student.packageEndDate) > new Date()
-      ? new Date(student.packageEndDate)
-      : new Date()
-    const newEnd = new Date(base)
-    newEnd.setMonth(newEnd.getMonth() + updated.package.durationMonths)
-    renewedUntil = newEnd
+    // Renewing early (before the current period actually expires) starts the
+    // new period the day AFTER the existing end date — not ON it — so the
+    // month-end proration in computePackagePeriod sees a fresh full month
+    // instead of the tail end of the old one.
+    let base = new Date()
+    if (student.packageEndDate && new Date(student.packageEndDate) > new Date()) {
+      base = new Date(student.packageEndDate)
+      base.setDate(base.getDate() + 1)
+    }
+    const period = computePackagePeriod(base, updated.package)
+    renewedUntil = period.packageEndDate
 
     await prisma.student.update({
       where: { id: student.id },
       data: {
         packageId: updated.package.id,
         packageStartDate: student.packageStartDate || new Date(),
-        packageEndDate: newEnd,
-        totalSessions: updated.package.durationMonths * updated.package.sessionsPerWeek * 4,
+        packageEndDate: period.packageEndDate,
+        totalSessions: period.totalSessions,
         sessionsUsed: 0,
         status: 'active',
       },
@@ -154,8 +160,7 @@ export async function convertPendingRegistration(pending) {
     const studentId = `SS-${String(count + 1).padStart(4, '0')}`
 
     const packageStartDate = new Date()
-    const packageEndDate = new Date(packageStartDate)
-    packageEndDate.setMonth(packageEndDate.getMonth() + pkg.durationMonths)
+    const period = computePackagePeriod(packageStartDate, pkg)
 
     const student = await tx.student.create({
       data: {
@@ -172,8 +177,8 @@ export async function convertPendingRegistration(pending) {
         address: pending.address,
         packageId: pkg.id,
         packageStartDate,
-        packageEndDate,
-        totalSessions: pkg.durationMonths * pkg.sessionsPerWeek * 4,
+        packageEndDate: period.packageEndDate,
+        totalSessions: period.totalSessions,
         branchId: pending.branchId || null,
       },
     })

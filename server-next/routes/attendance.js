@@ -20,12 +20,12 @@ function startOfDay(dateStr) {
 // 'needs_renewal' and every further NEW check-in (any role, no exceptions)
 // is rejected until a renewal payment resets sessionsUsed back to 0 (see
 // applyPaymentSuccess in lib/paymentHelpers.js).
-// Mirrors computeSessionStats() in routes/students.js — the stored
-// Student.totalSessions column is only ever written by renewal/registration
-// flows and can be stale/null (e.g. an admin-added student with a package
-// assigned directly), so quota checks always recompute from the package
-// itself rather than trust that column.
+// Mirrors computeSessionStats() in routes/students.js — prefers the stored
+// value (set correctly, prorated for a partial first month, by every
+// creation/renewal path — see lib/packagePeriod.js) and only falls back to
+// the flat estimate for legacy rows predating that fix.
 function totalSessionsFor(student) {
+  if (student.totalSessions != null) return student.totalSessions
   return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
 }
 
@@ -35,7 +35,7 @@ async function upsertAttendanceAndConsumeSession(studentId, date, data) {
   if (!existing) {
     const student = await prisma.student.findUnique({
       where: { id: studentId },
-      select: { sessionsUsed: true, package: { select: { sessionsPerWeek: true, durationMonths: true } } },
+      select: { sessionsUsed: true, totalSessions: true, package: { select: { sessionsPerWeek: true, durationMonths: true } } },
     })
     const totalSessions = student ? totalSessionsFor(student) : 0
     if (student && totalSessions > 0 && student.sessionsUsed >= totalSessions) {
