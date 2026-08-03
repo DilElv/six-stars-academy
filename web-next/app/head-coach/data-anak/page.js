@@ -184,7 +184,6 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
     fullName: student.fullName,
     dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().slice(0, 10) : '',
     position: student.position,
-    ageGroup: student.ageGroup,
     address: student.address,
     parentName: student.parentName,
     parentPhone: student.parentPhone,
@@ -300,7 +299,8 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Kelompok Umur</label>
-            <AppSelect value={form.ageGroup} onChange={(v) => setForm((f) => ({ ...f, ageGroup: v }))} className="w-full" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+            <p className="text-sm text-navy-900 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">{student.ageGroup}</p>
+            <p className="text-[11px] text-gray-400 mt-1">Otomatis dari tanggal lahir — ubah tanggal lahir kalau perlu dikoreksi.</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Orang Tua</label>

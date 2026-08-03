@@ -319,7 +319,7 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   const {
-    fullName, dateOfBirth, position, ageGroup, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed,
+    fullName, dateOfBirth, position, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed,
     parentEmail, parentPassword, registrationFee, amount, paymentStatus,
   } = req.body
   const isAdmin = req.user.role === 'admin'
@@ -327,7 +327,7 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
   try {
     const student = await prisma.$transaction(async (tx) => {
       const data = {
-        fullName, position, ageGroup, address, parentName, parentPhone, photo, status,
+        fullName, position, address, parentName, parentPhone, photo, status,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
         branchId: branchId !== undefined ? (branchId || null) : undefined,
         sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
@@ -364,6 +364,13 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 
       const current = await tx.student.findUnique({ where: { id: req.params.id } })
       if (!current) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
+
+      // Kelompok umur is always derived from tanggal lahir, never an
+      // independently-editable field — otherwise it silently drifts from
+      // the student's actual age (either because dateOfBirth was corrected
+      // without also updating this, or because time passed and nobody
+      // re-saved the record since their last birthday).
+      data.ageGroup = assignAgeGroup(data.dateOfBirth || current.dateOfBirth)
 
       // Login email lives on both User and Student — keep them in sync, and
       // guard the same way account creation does (domain + uniqueness).
