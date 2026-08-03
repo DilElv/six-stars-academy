@@ -20,6 +20,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
     parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
     fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
     photo: '', sessionsUsed: '0',
+    amount: '',
     registrationFee: '750000',
     paymentStatus: 'pending',
     registrationScholarshipPercent: 0,
@@ -57,7 +58,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
 
   const selectedPackage = effectivePackages.find((p) => p.id === form.packageId)
   const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
-  const pkgAmount = selectedPackage?.price || 0
+  const pkgAmount = form.amount !== '' ? Number(form.amount) : (selectedPackage?.price || 0)
   const regFee = Number(form.registrationFee) || 0
   const subtotal = pkgAmount + regFee
   const discount = Math.round(pkgAmount * form.sppScholarshipPercent / 100) + Math.round(regFee * form.registrationScholarshipPercent / 100)
@@ -172,7 +173,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
                   <AppSelect
                     value={form.packageId}
-                    onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
+                    onChange={(v) => setForm((f) => ({ ...f, packageId: v, amount: '' }))}
                     className="w-full"
                     disabled={!form.branchId}
                     allLabel="- Tanpa Paket -"
@@ -181,6 +182,17 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
                   />
                 </div>
               </div>
+              {form.packageId && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Harga Paket (Rp)</label>
+                  <RupiahInput
+                    value={form.amount !== '' ? form.amount : String(selectedPackage?.price || 0)}
+                    onChange={(n) => setForm((f) => ({ ...f, amount: String(n) }))}
+                    className="w-full"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">Otomatis terisi dari harga paket cabang ini — bisa diubah manual kalau harganya beda dari biasanya.</p>
+                </div>
+              )}
               {form.packageId && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi Saat Ini (opsional)</label>

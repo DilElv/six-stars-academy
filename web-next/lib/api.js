@@ -302,6 +302,14 @@ export async function updatePackage(id, payload) {
   return request(`/packages/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function createPackage(payload) {
+  return request('/packages', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function deletePackage(id) {
+  return request(`/packages/${id}`, { method: 'DELETE' })
+}
+
 export async function getSettings() {
   return request('/settings')
 }

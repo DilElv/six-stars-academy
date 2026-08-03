@@ -18,6 +18,10 @@ export default function AdminPengaturanPage() {
   const [savingBranch, setSavingBranch] = useState('')
   const [savingRegFee, setSavingRegFee] = useState('')
   const [savingPriceCell, setSavingPriceCell] = useState('')
+  const [newPackage, setNewPackage] = useState({ name: '', durationMonths: '1', sessionsPerWeek: '1', price: '' })
+  const [savingPackage, setSavingPackage] = useState(false)
+  const [editingPackage, setEditingPackage] = useState(null)
+  const [savingPackageEdit, setSavingPackageEdit] = useState(false)
   const [message, setMessage] = useState('')
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [savingPassword, setSavingPassword] = useState(false)
@@ -103,6 +107,57 @@ export default function AdminPengaturanPage() {
     }
   }
 
+  async function handleAddPackage(e) {
+    e.preventDefault()
+    if (!newPackage.name.trim() || !newPackage.price) {
+      flash('Nama dan harga paket harus diisi')
+      return
+    }
+    setSavingPackage(true)
+    try {
+      await api.createPackage(newPackage)
+      setNewPackage({ name: '', durationMonths: '1', sessionsPerWeek: '1', price: '' })
+      flash('Paket baru berhasil ditambahkan')
+      load()
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setSavingPackage(false)
+    }
+  }
+
+  async function handleSavePackageEdit() {
+    if (!editingPackage) return
+    setSavingPackageEdit(true)
+    try {
+      await api.updatePackage(editingPackage.id, {
+        name: editingPackage.name,
+        durationMonths: editingPackage.durationMonths,
+        sessionsPerWeek: editingPackage.sessionsPerWeek,
+        price: editingPackage.price,
+        status: editingPackage.status,
+      })
+      setEditingPackage(null)
+      flash('Paket berhasil disimpan')
+      load()
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setSavingPackageEdit(false)
+    }
+  }
+
+  async function handleDeletePackage(id) {
+    if (!confirm('Hapus paket ini? Jika masih dipakai siswa, paket akan dinonaktifkan saja.')) return
+    try {
+      const res = await api.deletePackage(id)
+      flash(res.message === 'Deleted' ? 'Paket dihapus' : res.message)
+      load()
+    } catch (err) {
+      flash(err.message)
+    }
+  }
+
   async function handleSavePassword(e) {
     e.preventDefault()
     if (passwordForm.newPassword.length < 6) return flash('Password baru minimal 6 karakter')
@@ -181,6 +236,74 @@ export default function AdminPengaturanPage() {
         </form>
       </div>
 
+      <div className="glass-card rounded-3xl p-6">
+        <h2 className="font-semibold text-navy-900 text-sm mb-4">Kelola Paket</h2>
+        <div className="space-y-2 mb-4">
+          {packages.map((pkg) => (
+            editingPackage?.id === pkg.id ? (
+              <div key={pkg.id} className="flex items-end gap-2 border-b border-gray-50 last:border-0 pb-3 last:pb-0 flex-wrap">
+                <div className="flex-1 min-w-[140px]">
+                  <label className="block text-[10px] font-semibold text-gray-400 mb-1">Nama</label>
+                  <input value={editingPackage.name} onChange={(e) => setEditingPackage((p) => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs" />
+                </div>
+                <div className="w-20">
+                  <label className="block text-[10px] font-semibold text-gray-400 mb-1">Bulan</label>
+                  <input type="number" min={1} value={editingPackage.durationMonths} onChange={(e) => setEditingPackage((p) => ({ ...p, durationMonths: e.target.value }))} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs" />
+                </div>
+                <div className="w-24">
+                  <label className="block text-[10px] font-semibold text-gray-400 mb-1">Sesi/Minggu</label>
+                  <input type="number" min={1} value={editingPackage.sessionsPerWeek} onChange={(e) => setEditingPackage((p) => ({ ...p, sessionsPerWeek: e.target.value }))} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs" />
+                </div>
+                <div className="w-32">
+                  <label className="block text-[10px] font-semibold text-gray-400 mb-1">Harga</label>
+                  <RupiahInput value={editingPackage.price} onChange={(val) => setEditingPackage((p) => ({ ...p, price: val }))} className="w-full !py-2 !text-xs" />
+                </div>
+                <button onClick={handleSavePackageEdit} disabled={savingPackageEdit} className="text-[10px] font-semibold bg-navy-900 hover:bg-navy-800 text-white px-3 py-2 rounded-xl disabled:opacity-50">
+                  {savingPackageEdit ? <Loader2 size={10} className="animate-spin" /> : 'Simpan'}
+                </button>
+                <button onClick={() => setEditingPackage(null)} className="text-[10px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-xl">Batal</button>
+              </div>
+            ) : (
+              <div key={pkg.id} className="flex items-center justify-between gap-3 border-b border-gray-50 last:border-0 pb-2 last:pb-0">
+                <div>
+                  <div className="text-sm text-navy-900 font-medium flex items-center gap-2">
+                    {pkg.name}
+                    {pkg.status !== 'active' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">Nonaktif</span>}
+                  </div>
+                  <div className="text-xs text-gray-400">{pkg.durationMonths} bulan · {pkg.sessionsPerWeek}x/minggu · {formatRupiah(pkg.price)}</div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEditingPackage({ ...pkg, price: String(pkg.price) })} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg">Edit</button>
+                  <button onClick={() => handleDeletePackage(pkg.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            )
+          ))}
+          {packages.length === 0 && <p className="text-sm text-gray-400">Belum ada paket.</p>}
+        </div>
+        <form onSubmit={handleAddPackage} className="flex items-end gap-2 flex-wrap">
+          <div className="flex-1 min-w-[140px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Paket</label>
+            <input value={newPackage.name} onChange={(e) => setNewPackage((p) => ({ ...p, name: e.target.value }))} placeholder="mis. 2 Bulan" required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+          </div>
+          <div className="w-20">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Bulan</label>
+            <input type="number" min={1} value={newPackage.durationMonths} onChange={(e) => setNewPackage((p) => ({ ...p, durationMonths: e.target.value }))} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+          </div>
+          <div className="w-28">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi/Minggu</label>
+            <input type="number" min={1} value={newPackage.sessionsPerWeek} onChange={(e) => setNewPackage((p) => ({ ...p, sessionsPerWeek: e.target.value }))} required className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+          </div>
+          <div className="w-32">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Harga</label>
+            <RupiahInput value={newPackage.price} onChange={(val) => setNewPackage((p) => ({ ...p, price: val }))} className="w-full" />
+          </div>
+          <button type="submit" disabled={savingPackage} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50">
+            {savingPackage ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Tambah
+          </button>
+        </form>
+      </div>
+
       <div className="glass-card rounded-3xl p-6 overflow-x-auto">
         <h2 className="font-semibold text-navy-900 text-sm mb-4">Harga Paket per Cabang</h2>
         <table className="w-full text-sm">
@@ -193,7 +316,7 @@ export default function AdminPengaturanPage() {
             </tr>
           </thead>
           <tbody>
-            {packages.map((pkg) => (
+            {packages.filter((pkg) => pkg.status === 'active').map((pkg) => (
               <tr key={pkg.id} className="border-b border-gray-50">
                 <td className="py-3 pr-4">
                   <div className="font-medium text-navy-900">{pkg.name}</div>
