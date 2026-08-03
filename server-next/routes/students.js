@@ -52,6 +52,26 @@ async function findExistingCustomPackage(student) {
   return priorPayment?.package || null
 }
 
+// Self-heals `Student.ageGroup` on every read: since brackets are derived
+// purely from dateOfBirth vs. today's date, a record left untouched drifts
+// out of date the moment a birthday passes into a new bracket — there is no
+// "save" event to trigger a recompute. Called from every GET route so (a)
+// existing production rows correct themselves the instant they're fetched
+// (e.g. just opening Data Anak), with zero manual edit required, and (b) the
+// STORED column (not just the response) stays fresh, since other routes
+// filter directly on `where.ageGroup`.
+async function healAgeGroup(student) {
+  if (!student?.dateOfBirth) return student
+  const fresh = assignAgeGroup(student.dateOfBirth)
+  if (fresh === student.ageGroup) return student
+  await prisma.student.update({ where: { id: student.id }, data: { ageGroup: fresh } })
+  return { ...student, ageGroup: fresh }
+}
+
+async function healAgeGroups(students) {
+  return Promise.all(students.map(healAgeGroup))
+}
+
 async function ensureCard(studentId) {
   let card = await prisma.studentCard.findUnique({ where: { studentId } })
   if (!card) {
@@ -239,7 +259,6 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   try {
     const where = {}
-    if (req.query.ageGroup) where.ageGroup = req.query.ageGroup
     if (req.query.branchId) where.branchId = req.query.branchId
 
     if (req.user.role === 'coach') {
@@ -247,7 +266,7 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
       where.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : '__none__'
     }
 
-    const students = await prisma.student.findMany({
+    let students = await prisma.student.findMany({
       where,
       include: {
         package: true,
@@ -256,6 +275,11 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
       },
       orderBy: { fullName: 'asc' },
     })
+    // ageGroup is healed (and re-persisted) before filtering below, so a
+    // stale stored value never hides a student who now belongs to the
+    // requested bracket — see healAgeGroups().
+    students = await healAgeGroups(students)
+    if (req.query.ageGroup) students = students.filter((s) => s.ageGroup === req.query.ageGroup)
     res.json(students)
   } catch (err) {
     console.error(err)
@@ -265,12 +289,13 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
 
 router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   try {
-    const student = await prisma.student.findFirst({
+    let student = await prisma.student.findFirst({
       where: { userId: req.user.id },
       include: { package: true, branch: true },
       orderBy: { createdAt: 'asc' },
     })
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
+    student = await healAgeGroup(student)
 
     const stats = await computeSessionStats(student)
     // For "anak lama", surface their quoted custom package even before it's
@@ -298,7 +323,7 @@ router.get('/me/qrcode.png', authenticate, authorize('parent'), async (req, res)
 
 router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   try {
-    const student = await prisma.student.findUnique({
+    let student = await prisma.student.findUnique({
       where: { id: req.params.id },
       include: {
         package: true,
@@ -309,6 +334,7 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       },
     })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
+    student = await healAgeGroup(student)
     const stats = await computeSessionStats(student)
     res.json({ ...student, ...stats })
   } catch (err) {
