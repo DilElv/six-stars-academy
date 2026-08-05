@@ -2,9 +2,12 @@ import PDFDocument from 'pdfkit'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import { ASSESSMENT_CATEGORIES, scoreCategory, MONTHS } from './assessmentFields.js'
+import { buildRichTextTokens, drawRichText } from './emojiPdf.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.png')
+const FONT_REGULAR = path.join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf')
+const FONT_BOLD = path.join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf')
 
 const PAGE_MARGIN = 40
 const CONTENT_X = 40
@@ -29,11 +32,17 @@ async function fetchImageBuffer(url) {
   }
 }
 
-export async function generateReportPdf({ student, assessment, month, year, settings, headCoachName, attendanceSummary }) {
-  const photoBuffer = await fetchImageBuffer(student.photo)
+export async function generateReportPdf({ student, assessment, month, year, settings, headCoachName, headCoachSignature, attendanceSummary }) {
+  const [photoBuffer, signatureBuffer, commentTokens] = await Promise.all([
+    fetchImageBuffer(student.photo),
+    fetchImageBuffer(headCoachSignature),
+    buildRichTextTokens(assessment.coachComment || '-'),
+  ])
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
+    doc.registerFont('NotoSans', FONT_REGULAR)
+    doc.registerFont('NotoSans-Bold', FONT_BOLD)
     const chunks = []
     doc.on('data', (c) => chunks.push(c))
     doc.on('end', () => resolve(Buffer.concat(chunks)))
@@ -49,14 +58,14 @@ export async function generateReportPdf({ student, assessment, month, year, sett
 
     if (assessment.taktikAvg !== null && assessment.taktikAvg !== undefined) {
       ensureSpace(doc, 20)
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(NAVY)
+      doc.fontSize(9).font('NotoSans-Bold').fillColor(NAVY)
         .text(`Rata-rata Taktik (Attacking + Defending): ${formatScore(assessment.taktikAvg)}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
       doc.moveDown(0.6)
     }
 
     drawOverallBox(doc, assessment)
-    drawComment(doc, assessment)
-    drawFooter(doc, headCoachName)
+    drawComment(doc, commentTokens)
+    drawFooter(doc, headCoachName, signatureBuffer)
 
     doc.end()
   })
@@ -79,9 +88,9 @@ function drawHeader(doc, settings, month, year) {
   } catch {
     // logo optional, continue without it
   }
-  doc.fontSize(16).fillColor(NAVY).font('Helvetica-Bold')
+  doc.fontSize(16).fillColor(NAVY).font('NotoSans-Bold')
     .text(settings.ssbName || 'SixStars Academy Indonesia', 90, 34, { align: 'center', width: 425 })
-  doc.fontSize(9).fillColor('#666666').font('Helvetica')
+  doc.fontSize(9).fillColor('#666666').font('NotoSans')
   const contactLine = [settings.ssbAddress, settings.ssbPhone, settings.ssbEmail].filter(Boolean).join(' | ')
   if (contactLine) doc.text(contactLine, 90, doc.y, { align: 'center', width: 425 })
 
@@ -91,7 +100,7 @@ function drawHeader(doc, settings, month, year) {
   doc.moveTo(CONTENT_X, doc.y).lineTo(CONTENT_X + CONTENT_WIDTH, doc.y).strokeColor(GOLD).lineWidth(2).stroke()
   doc.moveDown(0.5)
 
-  doc.fontSize(14).fillColor(NAVY).font('Helvetica-Bold')
+  doc.fontSize(14).fillColor(NAVY).font('NotoSans-Bold')
     .text(`RAPOR BULANAN — ${MONTHS[month]} ${year}`, CONTENT_X, doc.y, { align: 'center', width: CONTENT_WIDTH })
   doc.moveDown(0.8)
 }
@@ -116,9 +125,9 @@ function drawProfileAndPhoto(doc, student, photoBuffer) {
   }
 
   // Profile info (left side)
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(NAVY).text('PROFIL ANAK', CONTENT_X, top, { width: infoW })
+  doc.fontSize(11).font('NotoSans-Bold').fillColor(NAVY).text('PROFIL ANAK', CONTENT_X, top, { width: infoW })
   doc.moveDown(0.3)
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
+  doc.fontSize(9).font('NotoSans').fillColor(GRAY_TEXT)
 
   const age = student.dateOfBirth
     ? Math.floor((Date.now() - new Date(student.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
@@ -133,8 +142,8 @@ function drawProfileAndPhoto(doc, student, photoBuffer) {
   ]
   for (const [label, value] of rows) {
     const y = doc.y
-    doc.font('Helvetica-Bold').fillColor(GRAY_TEXT).text(`${label}:`, CONTENT_X, y, { width: 100 })
-    doc.font('Helvetica').fillColor(GRAY_TEXT).text(value || '-', CONTENT_X + 100, y, { width: infoW - 100 })
+    doc.font('NotoSans-Bold').fillColor(GRAY_TEXT).text(`${label}:`, CONTENT_X, y, { width: 100 })
+    doc.font('NotoSans').fillColor(GRAY_TEXT).text(value || '-', CONTENT_X + 100, y, { width: infoW - 100 })
   }
 
   doc.y = Math.max(doc.y, top + photoBoxH) + 12
@@ -143,7 +152,7 @@ function drawProfileAndPhoto(doc, student, photoBuffer) {
 
 function drawAttendanceSummary(doc, summary) {
   ensureSpace(doc, 60)
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(NAVY).text('RINGKASAN ABSENSI', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.fontSize(11).font('NotoSans-Bold').fillColor(NAVY).text('RINGKASAN ABSENSI', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   doc.moveDown(0.3)
 
   const cols = [
@@ -160,8 +169,8 @@ function drawAttendanceSummary(doc, summary) {
   cols.forEach((c, i) => {
     const x = CONTENT_X + i * colWidth
     doc.rect(x + 2, top, colWidth - 4, boxHeight).fillAndStroke(ROW_SHADE, GRAY_LINE)
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(c.color).text(String(c.value), x, top + 8, { width: colWidth, align: 'center' })
-    doc.fontSize(8).font('Helvetica').fillColor('#666666').text(c.label, x, top + 27, { width: colWidth, align: 'center' })
+    doc.fontSize(14).font('NotoSans-Bold').fillColor(c.color).text(String(c.value), x, top + 8, { width: colWidth, align: 'center' })
+    doc.fontSize(8).font('NotoSans').fillColor('#666666').text(c.label, x, top + 27, { width: colWidth, align: 'center' })
   })
 
   doc.y = top + boxHeight + 12
@@ -183,7 +192,7 @@ function tableColX() {
 function drawTableHeaderRow(doc, y) {
   const { x0, x1, x2, w1, w2, w3 } = tableColX()
   doc.rect(x0, y, CONTENT_WIDTH, HEADER_HEIGHT).fill(NAVY)
-  doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
+  doc.fontSize(9).font('NotoSans-Bold').fillColor('#ffffff')
   doc.text('Aspek', x0 + 6, y + 6, { width: w1 - 12 })
   doc.text('Nilai', x1, y + 6, { width: w2, align: 'center' })
   doc.text('Keterangan', x2, y + 6, { width: w3 - 6, align: 'center' })
@@ -193,7 +202,7 @@ function drawTableHeaderRow(doc, y) {
 function drawAssessmentTable(doc, category, assessment) {
   ensureSpace(doc, HEADER_HEIGHT + ROW_HEIGHT * 2)
 
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(NAVY).text(category.title, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.fontSize(10).font('NotoSans-Bold').fillColor(NAVY).text(category.title, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   doc.moveDown(0.25)
 
   const { x0, x1, x2, w1, w2, w3 } = tableColX()
@@ -209,7 +218,7 @@ function drawAssessmentTable(doc, category, assessment) {
     const val = assessment[key]
     const info = val !== null && val !== undefined ? scoreCategory(val) : null
 
-    doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
+    doc.fontSize(9).font('NotoSans').fillColor(GRAY_TEXT)
     doc.text(label, x0 + 6, y + 5, { width: w1 - 12 })
     doc.text(val ?? '-', x1, y + 5, { width: w2, align: 'center' })
     if (info) {
@@ -229,7 +238,7 @@ function drawAssessmentTable(doc, category, assessment) {
 
   doc.y = y + 4
   doc.x = CONTENT_X
-  doc.fontSize(9).font('Helvetica-Bold').fillColor(NAVY)
+  doc.fontSize(9).font('NotoSans-Bold').fillColor(NAVY)
     .text(`Rata-rata: ${formatScore(assessment[category.avgKey])}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
   doc.moveDown(0.7)
 }
@@ -239,31 +248,45 @@ function drawOverallBox(doc, assessment) {
   const top = doc.y
   const boxHeight = 40
   doc.rect(CONTENT_X, top, CONTENT_WIDTH, boxHeight).fill(NAVY)
-  doc.fontSize(12).font('Helvetica-Bold').fillColor(GOLD)
+  doc.fontSize(12).font('NotoSans-Bold').fillColor(GOLD)
     .text(`RATA-RATA KESELURUHAN (OVR): ${formatScore(assessment.overallAvg)}`, CONTENT_X + 10, top + 13, { width: CONTENT_WIDTH - 20 })
   doc.y = top + boxHeight + 16
   doc.x = CONTENT_X
 }
 
-function drawComment(doc, assessment) {
+function drawComment(doc, commentTokens) {
   ensureSpace(doc, 60)
-  doc.fontSize(10).font('Helvetica-Bold').fillColor(NAVY).text('PESAN COACH:', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.fontSize(10).font('NotoSans-Bold').fillColor(NAVY).text('PESAN COACH:', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   doc.moveDown(0.3)
   const commentTop = doc.y
-  const text = assessment.coachComment || '-'
-  doc.fontSize(9).font('Helvetica').fillColor(GRAY_TEXT)
-  const textHeight = doc.heightOfString(text, { width: CONTENT_WIDTH - 16 })
-  doc.rect(CONTENT_X, commentTop, CONTENT_WIDTH, textHeight + 16).strokeColor(GRAY_LINE).lineWidth(1).stroke()
-  doc.text(text, CONTENT_X + 8, commentTop + 8, { width: CONTENT_WIDTH - 16 })
-  doc.y = commentTop + textHeight + 16 + 12
+  doc.fontSize(9).font('NotoSans').fillColor(GRAY_TEXT)
+  // Pre-measure by doing a dry layout pass first (drawRichText only draws,
+  // it doesn't report height up front), then draw for real inside the box.
+  const bottomY = drawRichText(doc, commentTokens, CONTENT_X + 8, commentTop + 8, CONTENT_WIDTH - 16, { fontSize: 9 })
+  const textHeight = bottomY - (commentTop + 8)
+  doc.rect(CONTENT_X, commentTop, CONTENT_WIDTH, textHeight + 8).strokeColor(GRAY_LINE).lineWidth(1).stroke()
+  doc.y = commentTop + textHeight + 8 + 12
   doc.x = CONTENT_X
 }
 
-function drawFooter(doc, headCoachName) {
-  ensureSpace(doc, 60)
-  doc.fontSize(8).fillColor('#666666').font('Helvetica')
+function drawFooter(doc, headCoachName, signatureBuffer) {
+  ensureSpace(doc, 80)
+  doc.fontSize(8).fillColor('#666666').font('NotoSans')
   doc.text(`Dibuat: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   if (headCoachName) doc.text(`Head Coach: ${headCoachName}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
-  doc.moveDown(2)
-  doc.text('Tanda Tangan: _____________________', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  doc.moveDown(0.5)
+
+  const signatureBoxW = 160
+  const signatureBoxH = 50
+  const top = doc.y
+  if (signatureBuffer) {
+    try {
+      doc.image(signatureBuffer, CONTENT_X, top, { fit: [signatureBoxW, signatureBoxH] })
+    } catch {
+      // corrupted signature image — fall through to the blank line below
+    }
+  }
+  doc.y = top + signatureBoxH + 2
+  doc.x = CONTENT_X
+  doc.text('Tanda Tangan Head Coach', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
 }

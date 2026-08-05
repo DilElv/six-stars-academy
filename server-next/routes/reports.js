@@ -42,7 +42,7 @@ router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (
     }
 
     const settings = { ssbName: 'SixStars Academy Indonesia', ...(settingsRow?.content || {}) }
-    const pdfBuffer = await generateReportPdf({ student, assessment, month: Number(month), year: Number(year), settings, headCoachName: headCoach?.name, attendanceSummary })
+    const pdfBuffer = await generateReportPdf({ student, assessment, month: Number(month), year: Number(year), settings, headCoachName: headCoach?.name, headCoachSignature: headCoach?.signature, attendanceSummary })
     const fileName = `${student.studentId}-${year}-${month}.pdf`
     fs.writeFileSync(path.join(REPORTS_DIR, fileName), pdfBuffer)
     const pdfUrl = `${req.protocol}://${req.get('host')}/rapor/${fileName}`

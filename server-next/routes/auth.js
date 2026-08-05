@@ -192,9 +192,9 @@ router.get('/me', authenticate, async (req, res) => {
 })
 
 router.put('/me', authenticate, async (req, res) => {
-  const { name, phone, photo, bio, address, email, password } = req.body
+  const { name, phone, photo, signature, bio, address, email, password } = req.body
   try {
-    const data = { name, phone, photo, bio, address }
+    const data = { name, phone, photo, signature, bio, address }
     if (password) {
       if (password.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
       data.password = await bcrypt.hash(password, 10)
