@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import SkillRadar from '@/components/charts/SkillRadar'
 import OvrGauge from '@/components/charts/OvrGauge'
 import AssessmentCategories from '@/components/AssessmentCategories'
+import { formatPeriodLabel } from '@/lib/assessmentFields'
 
 const MONTHS = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
 
@@ -37,8 +38,9 @@ export default function RaporAnakPage() {
   if (error) return <p className="text-sm text-red-500">{error}</p>
   if (!reports) return null
 
-  const pdfForLatest = reports.find((r) => assessment && r.month === assessment.month && r.year === assessment.year)
-  const olderReports = reports.filter((r) => !(assessment && r.month === assessment.month && r.year === assessment.year))
+  const isSamePeriod = (r, a) => r.month === a.month && r.year === a.year && r.endMonth === a.endMonth && r.endYear === a.endYear
+  const pdfForLatest = reports.find((r) => assessment && isSamePeriod(r, assessment))
+  const olderReports = reports.filter((r) => !(assessment && isSamePeriod(r, assessment)))
 
   return (
     <div className="space-y-6">
@@ -64,7 +66,7 @@ export default function RaporAnakPage() {
             <div aria-hidden="true" className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-gold-400/15 blur-[80px]" />
             <div className="relative">
               <div className="text-xs text-gray-300">Rapor Terbaru</div>
-              <div className="font-bold text-lg">{MONTHS[assessment.month]} {assessment.year}</div>
+              <div className="font-bold text-lg">{formatPeriodLabel(MONTHS, assessment.month, assessment.year, assessment.endMonth, assessment.endYear)}</div>
             </div>
             <div className="relative">
               <OvrGauge value={assessment.overallAvg ?? 0} size={56} />
@@ -76,7 +78,7 @@ export default function RaporAnakPage() {
             <SkillRadar assessment={assessment} height={280} />
           </div>
 
-          <AssessmentCategories scores={assessment} editable={false} />
+          <AssessmentCategories scores={assessment} editable={false} position={assessment.position} activeCategories={assessment.activeCategories} />
 
           {assessment.coachComment && (
             <div className="glass-card rounded-3xl p-5">
@@ -102,7 +104,7 @@ export default function RaporAnakPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {olderReports.map((r) => (
                   <div key={r.id} className="glass-card rounded-3xl p-5">
-                    <div className="font-bold text-navy-900 mb-1">{MONTHS[r.month]} {r.year}</div>
+                    <div className="font-bold text-navy-900 mb-1">{formatPeriodLabel(MONTHS, r.month, r.year, r.endMonth, r.endYear)}</div>
                     <div className="text-sm text-gray-500 mb-3">
                       Nilai Rata-rata (OVR): <b className="text-navy-900">{r.assessment?.overallAvg ?? '-'}</b>
                     </div>

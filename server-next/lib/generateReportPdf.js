@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit'
 import { fileURLToPath } from 'url'
 import path from 'path'
-import { ASSESSMENT_CATEGORIES, scoreCategory, MONTHS } from './assessmentFields.js'
+import { getCategoriesForPosition, scoreCategory, formatPeriodLabel } from './assessmentFields.js'
 import { buildRichTextTokens, drawRichText } from './emojiPdf.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -32,12 +32,16 @@ async function fetchImageBuffer(url) {
   }
 }
 
-export async function generateReportPdf({ student, assessment, month, year, settings, headCoachName, headCoachSignature, attendanceSummary }) {
+export async function generateReportPdf({ student, assessment, month, year, endMonth, endYear, settings, headCoachName, headCoachSignature, attendanceSummary }) {
   const [photoBuffer, signatureBuffer, commentTokens] = await Promise.all([
     fetchImageBuffer(student.photo),
     fetchImageBuffer(headCoachSignature),
     buildRichTextTokens(assessment.coachComment || '-'),
   ])
+  const periodEndMonth = endMonth || month
+  const periodEndYear = endYear || year
+  const categories = getCategoriesForPosition(student.position)
+  const activeCategories = categories.filter((c) => (assessment.activeCategories || []).includes(c.key))
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
@@ -48,11 +52,11 @@ export async function generateReportPdf({ student, assessment, month, year, sett
     doc.on('end', () => resolve(Buffer.concat(chunks)))
     doc.on('error', reject)
 
-    drawHeader(doc, settings, month, year)
+    drawHeader(doc, settings, month, year, periodEndMonth, periodEndYear)
     drawProfileAndPhoto(doc, student, photoBuffer)
     if (attendanceSummary) drawAttendanceSummary(doc, attendanceSummary)
 
-    for (const cat of ASSESSMENT_CATEGORIES) {
+    for (const cat of activeCategories) {
       drawAssessmentTable(doc, cat, assessment)
     }
 
@@ -82,7 +86,7 @@ function formatScore(v) {
   return v === null || v === undefined ? '-' : Number(v).toFixed(1)
 }
 
-function drawHeader(doc, settings, month, year) {
+function drawHeader(doc, settings, month, year, endMonth, endYear) {
   try {
     doc.image(LOGO_PATH, CONTENT_X, 30, { width: 42 })
   } catch {
@@ -101,7 +105,7 @@ function drawHeader(doc, settings, month, year) {
   doc.moveDown(0.5)
 
   doc.fontSize(14).fillColor(NAVY).font('NotoSans-Bold')
-    .text(`RAPOR BULANAN — ${MONTHS[month]} ${year}`, CONTENT_X, doc.y, { align: 'center', width: CONTENT_WIDTH })
+    .text(`RAPOR — ${formatPeriodLabel(month, year, endMonth, endYear)}`, CONTENT_X, doc.y, { align: 'center', width: CONTENT_WIDTH })
   doc.moveDown(0.8)
 }
 

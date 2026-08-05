@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Save, Loader2, FileText, Download, Search } from 'lucide-react'
 import * as api from '@/lib/api'
-import { ASSESSMENT_CATEGORIES } from '@/lib/assessmentFields'
+import { getCategoriesForPosition, formatPeriodLabel } from '@/lib/assessmentFields'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
@@ -33,8 +33,12 @@ function PenilaianContent() {
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [year, setYear] = useState(now.getFullYear())
+  const [customPeriod, setCustomPeriod] = useState(false)
+  const [endMonth, setEndMonth] = useState(now.getMonth() + 1)
+  const [endYear, setEndYear] = useState(now.getFullYear())
   const [scores, setScores] = useState({})
   const [comment, setComment] = useState('')
+  const [activeCategories, setActiveCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -57,37 +61,49 @@ function PenilaianContent() {
     })
   }, [students, filterBranch, filterAgeGroup, search])
 
+  const selectedStudent = students.find((s) => s.id === studentId)
+  const categories = useMemo(() => getCategoriesForPosition(selectedStudent?.position), [selectedStudent?.position])
+  const periodEndMonth = customPeriod ? endMonth : month
+  const periodEndYear = customPeriod ? endYear : year
+
   useEffect(() => {
     if (!studentId) { setLoading(false); return }
     setLoading(true)
-    api.getAssessment(studentId, month, year)
+    api.getAssessment(studentId, month, year, periodEndMonth, periodEndYear)
       .then((data) => {
         if (data) {
           const s = {}
-          for (const cat of ASSESSMENT_CATEGORIES) for (const [key] of cat.fields) s[key] = data[key] ?? ''
+          for (const cat of categories) for (const [key] of cat.fields) s[key] = data[key] ?? ''
           setScores(s)
           setComment(data.coachComment || '')
+          setActiveCategories(data.activeCategories?.length ? data.activeCategories : categories.map((c) => c.key))
           setHasAssessment(true)
         } else {
           setScores({})
           setComment('')
+          setActiveCategories(categories.map((c) => c.key))
           setHasAssessment(false)
         }
       })
       .finally(() => setLoading(false))
-    api.getReport(studentId, month, year).then(setReport).catch(() => setReport(null))
-  }, [studentId, month, year])
+    api.getReport(studentId, month, year, periodEndMonth, periodEndYear).then(setReport).catch(() => setReport(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, month, year, periodEndMonth, periodEndYear])
+
+  function toggleCategory(key) {
+    setActiveCategories((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
 
   const liveAssessment = useMemo(() => {
-    const teknikAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[0].fields)
-    const attackingAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[1].fields)
-    const defendingAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[2].fields)
-    const fisikAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[3].fields)
-    const mentalAvg = categoryAvg(scores, ASSESSMENT_CATEGORIES[4].fields)
+    const teknikAvg = categoryAvg(scores, categories[0].fields)
+    const attackingAvg = categoryAvg(scores, categories[1].fields)
+    const defendingAvg = categoryAvg(scores, categories[2].fields)
+    const fisikAvg = categoryAvg(scores, categories[3].fields)
+    const mentalAvg = categoryAvg(scores, categories[4].fields)
     const taktikParts = [attackingAvg, defendingAvg].filter((v) => v > 0)
     const taktikAvg = taktikParts.length ? Math.round((taktikParts.reduce((a, b) => a + b, 0) / taktikParts.length) * 10) / 10 : 0
     return { teknikAvg, taktikAvg, fisikAvg, mentalAvg }
-  }, [scores])
+  }, [scores, categories])
 
   const overallPreview = useMemo(() => {
     const catAverages = [liveAssessment.teknikAvg, liveAssessment.taktikAvg, liveAssessment.fisikAvg, liveAssessment.mentalAvg].filter((v) => v > 0)
@@ -100,10 +116,13 @@ function PenilaianContent() {
     setMessage('')
     try {
       const numericScores = {}
-      for (const cat of ASSESSMENT_CATEGORIES) for (const [key] of cat.fields) {
+      for (const cat of categories) for (const [key] of cat.fields) {
         numericScores[key] = scores[key] === '' || scores[key] === undefined ? null : Number(scores[key])
       }
-      await api.saveAssessment({ studentId, month, year, coachComment: comment, ...numericScores })
+      await api.saveAssessment({
+        studentId, month, year, endMonth: periodEndMonth, endYear: periodEndYear,
+        coachComment: comment, activeCategories, ...numericScores,
+      })
       setHasAssessment(true)
       setMessage('Penilaian berhasil disimpan')
     } catch (err) {
@@ -118,7 +137,7 @@ function PenilaianContent() {
     setGenerating(true)
     setMessage('')
     try {
-      const r = await api.generateReport(studentId, month, year)
+      const r = await api.generateReport(studentId, month, year, periodEndMonth, periodEndYear)
       setReport(r)
       setMessage('Rapor PDF berhasil dibuat')
     } catch (err) {
@@ -129,12 +148,14 @@ function PenilaianContent() {
     }
   }
 
-  const selectedStudent = students.find((s) => s.id === studentId)
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="font-bold text-navy-900 text-lg">Penilaian</h1>
+      </div>
+
+      <div className="glass-card rounded-3xl p-4 space-y-3">
+        <label className="block text-xs font-semibold text-gray-500">Periode Penilaian</label>
         <div className="flex items-center gap-2 flex-wrap">
           <AppSelect
             value={String(month)}
@@ -146,6 +167,30 @@ function PenilaianContent() {
             onChange={(v) => setYear(Number(v))}
             options={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))}
           />
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 cursor-pointer ml-1">
+            <input
+              type="checkbox"
+              checked={customPeriod}
+              onChange={(e) => { setCustomPeriod(e.target.checked); setEndMonth(month); setEndYear(year) }}
+              className="rounded"
+            />
+            Periode custom (rentang bulan)
+          </label>
+          {customPeriod && (
+            <>
+              <span className="text-xs text-gray-400">sampai</span>
+              <AppSelect
+                value={String(endMonth)}
+                onChange={(v) => setEndMonth(Number(v))}
+                options={MONTHS.slice(1).map((m, i) => ({ value: String(i + 1), label: m }))}
+              />
+              <AppSelect
+                value={String(endYear)}
+                onChange={(v) => setEndYear(Number(v))}
+                options={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))}
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -198,7 +243,7 @@ function PenilaianContent() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-semibold text-navy-900 truncate max-w-[140px]">{s.fullName}</div>
-                  <div className="text-[10px] text-gray-400">{s.studentId} · {s.ageGroup}</div>
+                  <div className="text-[10px] text-gray-400">{s.studentId} · {s.ageGroup}{s.position === 'GK' ? ' · GK' : ''}</div>
                 </div>
               </button>
             )
@@ -216,7 +261,7 @@ function PenilaianContent() {
             <div aria-hidden="true" className="absolute -top-10 -right-10 w-56 h-56 rounded-full bg-gold-400/15 blur-[80px]" />
             <div className="relative">
               <div className="font-bold text-lg">{selectedStudent?.fullName}</div>
-              <div className="text-xs text-gray-300">{MONTHS[month]} {year} · {selectedStudent?.position} · {selectedStudent?.ageGroup}</div>
+              <div className="text-xs text-gray-300">{formatPeriodLabel(MONTHS, month, year, periodEndMonth, periodEndYear)} · {selectedStudent?.position} · {selectedStudent?.ageGroup}</div>
             </div>
             <div className="relative text-right">
               <div className="text-xs text-gray-300 mb-0.5">OVR (preview)</div>
@@ -231,7 +276,15 @@ function PenilaianContent() {
 
           {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-          <AssessmentCategories scores={scores} editable onChange={setScores} />
+          <p className="text-xs text-gray-400 -mb-2">Centang kategori yang mau dinilai periode ini — kategori yang tidak dicentang tidak akan tampil ke user maupun di PDF.</p>
+          <AssessmentCategories
+            scores={scores}
+            editable
+            onChange={setScores}
+            position={selectedStudent?.position}
+            activeCategories={activeCategories}
+            onToggleCategory={toggleCategory}
+          />
 
           <div className="glass-card rounded-3xl p-5">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>

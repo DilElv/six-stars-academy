@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { ASSESSMENT_CATEGORIES, scoreCategory } from '@/lib/assessmentFields'
+import { getCategoriesForPosition, scoreCategory } from '@/lib/assessmentFields'
 import { AppSelect } from '@/components/ui/app-select'
 
 function categoryAvg(scores, fields) {
@@ -15,30 +15,58 @@ function categoryAvg(scores, fields) {
  * Same collapsible per-category score breakdown used by head-coach's
  * Penilaian page, reused read-only on the student's Rapor page so both
  * views show identical detail — not just the summary radar/gauge.
+ *
+ * `position` picks field-player vs GK criteria (see lib/assessmentFields).
+ * `activeCategories` (array of category keys) is the coach's per-period
+ * "actually grading this" selection — undefined means "everything active"
+ * (legacy behavior, and the sensible default for a brand-new assessment).
+ * In read-only mode an inactive category is omitted entirely rather than
+ * shown grayed out, since the parent should only ever see what was scored.
  */
-export default function AssessmentCategories({ scores, editable = false, onChange }) {
-  const [openCategory, setOpenCategory] = useState(ASSESSMENT_CATEGORIES[0]?.key)
+export default function AssessmentCategories({ scores, editable = false, onChange, position, activeCategories, onToggleCategory }) {
+  const categories = getCategoriesForPosition(position)
+  const [openCategory, setOpenCategory] = useState(categories[0]?.key)
+  const isActive = (key) => activeCategories === undefined || activeCategories.includes(key)
+  const visibleCategories = editable ? categories : categories.filter((cat) => isActive(cat.key))
 
   return (
     <>
-      {ASSESSMENT_CATEGORIES.map((cat) => {
+      {visibleCategories.map((cat) => {
         const isOpen = openCategory === cat.key
+        const active = isActive(cat.key)
         const avg = categoryAvg(scores, cat.fields)
         return (
-          <div key={cat.key} className="glass-card rounded-3xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setOpenCategory((k) => (k === cat.key ? null : cat.key))}
-              className="w-full flex items-center justify-between gap-3 p-5"
-            >
-              <h2 className="font-semibold text-navy-900 text-sm">{cat.title}</h2>
-              <div className="flex items-center gap-3">
+          <div key={cat.key} className={`glass-card rounded-3xl overflow-hidden ${editable && !active ? 'opacity-60' : ''}`}>
+            <div className="w-full flex items-center justify-between gap-3 p-5">
+              <div className="flex items-center gap-3 min-w-0">
+                {editable && (
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={(e) => { e.stopPropagation(); onToggleCategory?.(cat.key) }}
+                    className="rounded shrink-0"
+                    title="Nilai kategori ini periode ini"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => setOpenCategory((k) => (k === cat.key ? null : cat.key))}
+                  className="flex items-center gap-3 min-w-0 text-left"
+                >
+                  <h2 className="font-semibold text-navy-900 text-sm truncate">{cat.title}</h2>
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenCategory((k) => (k === cat.key ? null : cat.key))}
+                className="flex items-center gap-3 shrink-0"
+              >
                 <span className="text-sm font-bold text-gold-600 tabular-nums">{avg > 0 ? avg : '-'}</span>
                 <ChevronDown size={16} className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-              </div>
-            </button>
+              </button>
+            </div>
             {isOpen && (
-              <div className="px-5 pb-5 grid sm:grid-cols-2 gap-3">
+              <fieldset disabled={editable && !active} className="px-5 pb-5 grid sm:grid-cols-2 gap-3">
                 {cat.fields.map(([key, label]) => {
                   const val = scores[key]
                   const cat2 = val !== '' && val !== undefined && val !== null ? scoreCategory(Number(val)) : null
@@ -63,7 +91,7 @@ export default function AssessmentCategories({ scores, editable = false, onChang
                     </div>
                   )
                 })}
-              </div>
+              </fieldset>
             )}
           </div>
         )

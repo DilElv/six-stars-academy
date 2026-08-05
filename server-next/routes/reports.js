@@ -6,7 +6,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { generateReportPdf } from '../lib/generateReportPdf.js'
 import { notifyUser } from '../lib/notify.js'
-import { MONTHS } from '../lib/assessmentFields.js'
+import { formatPeriodLabel } from '../lib/assessmentFields.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPORTS_DIR = path.join(__dirname, '..', 'uploads', 'rapor')
@@ -14,49 +14,64 @@ fs.mkdirSync(REPORTS_DIR, { recursive: true })
 
 const router = Router()
 
+// A period is single-month when endMonth/endYear are omitted.
+function parsePeriod(body) {
+  const month = Number(body.month)
+  const year = Number(body.year)
+  const endMonth = body.endMonth ? Number(body.endMonth) : month
+  const endYear = body.endYear ? Number(body.endYear) : year
+  return { month, year, endMonth, endYear }
+}
+
 router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { studentId, month, year } = req.body
+  const { studentId } = req.body
+  const { month, year, endMonth, endYear } = parsePeriod(req.body)
   if (!studentId || !month || !year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
     const [student, assessment, settingsRow, headCoach] = await Promise.all([
       prisma.student.findUnique({ where: { id: studentId } }),
-      prisma.assessment.findUnique({ where: { studentId_month_year: { studentId, month: Number(month), year: Number(year) } } }),
+      prisma.assessment.findUnique({ where: { studentId_month_year_endMonth_endYear: { studentId, month, year, endMonth, endYear } } }),
       prisma.cmsContent.findFirst({ where: { section: 'settings' } }),
       prisma.user.findFirst({ where: { role: 'head_coach' } }),
     ])
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
-    if (!assessment) return res.status(400).json({ error: 'Belum ada penilaian untuk bulan ini' })
+    if (!assessment) return res.status(400).json({ error: 'Belum ada penilaian untuk periode ini' })
 
-    const monthStart = new Date(Number(year), Number(month) - 1, 1)
-    const monthEnd = new Date(Number(year), Number(month), 1)
-    const monthAttendances = await prisma.attendance.findMany({
-      where: { studentId, date: { gte: monthStart, lt: monthEnd } },
+    const periodStart = new Date(year, month - 1, 1)
+    const periodEnd = new Date(endYear, endMonth, 1)
+    const periodAttendances = await prisma.attendance.findMany({
+      where: { studentId, date: { gte: periodStart, lt: periodEnd } },
       select: { status: true },
     })
     const attendanceSummary = {
-      hadir: monthAttendances.filter((a) => a.status === 'hadir').length,
-      izin: monthAttendances.filter((a) => a.status === 'izin').length,
-      sakit: monthAttendances.filter((a) => a.status === 'sakit').length,
-      alfa: monthAttendances.filter((a) => a.status === 'alfa').length,
-      total: monthAttendances.length,
+      hadir: periodAttendances.filter((a) => a.status === 'hadir').length,
+      izin: periodAttendances.filter((a) => a.status === 'izin').length,
+      sakit: periodAttendances.filter((a) => a.status === 'sakit').length,
+      alfa: periodAttendances.filter((a) => a.status === 'alfa').length,
+      total: periodAttendances.length,
     }
 
     const settings = { ssbName: 'SixStars Academy Indonesia', ...(settingsRow?.content || {}) }
-    const pdfBuffer = await generateReportPdf({ student, assessment, month: Number(month), year: Number(year), settings, headCoachName: headCoach?.name, headCoachSignature: headCoach?.signature, attendanceSummary })
-    const fileName = `${student.studentId}-${year}-${month}.pdf`
+    const pdfBuffer = await generateReportPdf({
+      student, assessment, month, year, endMonth, endYear, settings,
+      headCoachName: headCoach?.name, headCoachSignature: headCoach?.signature, attendanceSummary,
+    })
+    const fileName = endMonth === month && endYear === year
+      ? `${student.studentId}-${year}-${month}.pdf`
+      : `${student.studentId}-${year}-${month}-to-${endYear}-${endMonth}.pdf`
     fs.writeFileSync(path.join(REPORTS_DIR, fileName), pdfBuffer)
     const pdfUrl = `${req.protocol}://${req.get('host')}/rapor/${fileName}`
 
-    const existing = await prisma.report.findFirst({ where: { studentId, month: Number(month), year: Number(year) } })
+    const existing = await prisma.report.findFirst({ where: { studentId, month, year, endMonth, endYear } })
     const data = { assessmentId: assessment.id, pdfUrl, generatedAt: new Date(), sentToParent: true }
     const report = existing
       ? await prisma.report.update({ where: { id: existing.id }, data })
-      : await prisma.report.create({ data: { studentId, month: Number(month), year: Number(year), ...data } })
+      : await prisma.report.create({ data: { studentId, month, year, endMonth, endYear, ...data } })
 
     await notifyUser(student.userId, {
       type: 'report_ready',
       title: 'Rapor Baru Tersedia',
-      message: `Rapor ${MONTHS[Number(month)]} ${year} untuk ${student.fullName} sudah bisa dilihat.`,
+      message: `Rapor ${formatPeriodLabel(month, year, endMonth, endYear)} untuk ${student.fullName} sudah bisa dilihat.`,
       link: '/dashboard/rapor',
     })
 
@@ -68,10 +83,11 @@ router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (
 })
 
 router.get('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { studentId, month, year } = req.query
-  if (!studentId || !month || !year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
+  const { studentId } = req.query
+  if (!studentId || !req.query.month || !req.query.year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
-    const report = await prisma.report.findFirst({ where: { studentId, month: Number(month), year: Number(year) } })
+    const { month, year, endMonth, endYear } = parsePeriod(req.query)
+    const report = await prisma.report.findFirst({ where: { studentId, month, year, endMonth, endYear } })
     res.json(report)
   } catch (err) {
     console.error(err)

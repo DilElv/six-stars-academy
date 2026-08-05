@@ -200,16 +200,17 @@ export async function markAllNotificationsRead() {
   return request('/notifications/read-all', { method: 'PUT' })
 }
 
-export async function getAssessment(studentId, month, year) {
-  return request(`/assessments?studentId=${studentId}&month=${month}&year=${year}`)
+export async function getAssessment(studentId, month, year, endMonth, endYear) {
+  const end = endMonth && endYear ? `&endMonth=${endMonth}&endYear=${endYear}` : ''
+  return request(`/assessments?studentId=${studentId}&month=${month}&year=${year}${end}`)
 }
 
 export async function saveAssessment(payload) {
   return request('/assessments', { method: 'POST', body: JSON.stringify(payload) })
 }
 
-export async function getMyAssessment(month, year) {
-  const qs = month && year ? `?month=${month}&year=${year}` : ''
+export async function getMyAssessment(month, year, endMonth, endYear) {
+  const qs = month && year ? `?month=${month}&year=${year}${endMonth && endYear ? `&endMonth=${endMonth}&endYear=${endYear}` : ''}` : ''
   return request(`/assessments/me${qs}`)
 }
 
@@ -234,12 +235,13 @@ export async function scanAttendance(qrCode) {
   return request('/attendance/scan', { method: 'POST', body: JSON.stringify({ qrCode }) })
 }
 
-export async function getReport(studentId, month, year) {
-  return request(`/reports?studentId=${studentId}&month=${month}&year=${year}`)
+export async function getReport(studentId, month, year, endMonth, endYear) {
+  const end = endMonth && endYear ? `&endMonth=${endMonth}&endYear=${endYear}` : ''
+  return request(`/reports?studentId=${studentId}&month=${month}&year=${year}${end}`)
 }
 
-export async function generateReport(studentId, month, year) {
-  return request('/reports/generate', { method: 'POST', body: JSON.stringify({ studentId, month, year }) })
+export async function generateReport(studentId, month, year, endMonth, endYear) {
+  return request('/reports/generate', { method: 'POST', body: JSON.stringify({ studentId, month, year, endMonth, endYear }) })
 }
 
 export async function deleteStudent(id) {

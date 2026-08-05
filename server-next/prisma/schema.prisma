@@ -383,10 +383,18 @@ model Assessment {
   student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   coachId        String
   assessmentDate DateTime
+  // Period is a range [month/year, endMonth/endYear] inclusive; a
+  // single-month rapor just has endMonth/endYear equal to month/year.
   month          Int
   year           Int
+  endMonth       Int
+  endYear        Int
+  // Category keys (from FIELD_PLAYER_CATEGORIES/GK_CATEGORIES) the coach
+  // chose to actually grade this period — categories left unchecked are
+  // hidden from the parent view and the PDF, and excluded from overallAvg.
+  activeCategories String[] @default([])
 
-  // TEKNIK
+  // TEKNIK (field player)
   passing           Int?
   control           Int?
   runningWithBall   Int?
@@ -397,7 +405,20 @@ model Assessment {
   oneVsOneDefending Int?
   teknikAvg         Float?
 
-  // TAKTIK - ATTACKING
+  // TEKNIK (goalkeeper) — separate columns since GK technical skills are
+  // entirely different criteria (catching, kicking, throwing, etc.), not a
+  // subset of the field-player list above. Shares teknikAvg above.
+  gkCatching       Int?
+  gkKicking        Int?
+  gkThrowing       Int?
+  gkVolleying      Int?
+  gkDropKick       Int?
+  gkGoalKick       Int?
+  gkFootwork       Int?
+  gkOneVsOneTeknik Int?
+
+  // TAKTIK - ATTACKING (field player fields also reused by GK, which adds
+  // gkPositionAttacking on top and drops a few — see GK_CATEGORIES)
   attackingPrinciples Int?
   possession          Int?
   transitionAttacking Int?
@@ -405,9 +426,10 @@ model Assessment {
   switchingPlay       Int?
   playingOutFromBack  Int?
   finishingFinalThird Int?
+  gkPositionAttacking Int?
   attackingAvg        Float?
 
-  // TAKTIK - DEFENDING
+  // TAKTIK - DEFENDING (field player)
   defendingPrinciples Int?
   zonalDefending      Int?
   retreatRecovery     Int?
@@ -415,6 +437,14 @@ model Assessment {
   transitionDefending Int?
   defendingAvg        Float?
   taktikAvg           Float?
+
+  // TAKTIK - DEFENDING (goalkeeper) — entirely GK-specific scenarios
+  gkPositionDefending Int?
+  gkDealCrossing      Int?
+  gkDealCornerKick    Int?
+  gkDealFreeKick      Int?
+  gkDealLongPass      Int?
+  gkOneVsOneTaktik    Int?
 
   // FISIK
   maximalStrength Int?
@@ -445,7 +475,7 @@ model Assessment {
 
   reports Report[]
 
-  @@unique([studentId, month, year])
+  @@unique([studentId, month, year, endMonth, endYear])
   @@map("assessments")
 }
 
@@ -455,6 +485,8 @@ model Report {
   student      Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   month        Int
   year         Int
+  endMonth     Int
+  endYear      Int
   assessmentId String?
   assessment   Assessment? @relation(fields: [assessmentId], references: [id])
   pdfUrl       String?
