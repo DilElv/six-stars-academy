@@ -6,6 +6,7 @@ import { Users, ClipboardCheck, ClipboardList, Star, ChevronRight, MapPin } from
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
+import StaffCheckinCard from '@/components/StaffCheckinCard'
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -45,6 +46,8 @@ export default function HeadCoachDasborPage() {
           )}
         </div>
       </div>
+
+      <StaffCheckinCard />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="glass-card rounded-3xl p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">

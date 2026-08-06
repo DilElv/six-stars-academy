@@ -34,8 +34,9 @@ model User {
   trainingSessions         TrainingSession[]
   schedules                Schedule[]
   notifications            Notification[]
-  staffAttendances         StaffAttendance[] @relation("StaffAttendanceUser")
-  verifiedStaffAttendances StaffAttendance[] @relation("StaffAttendanceVerifiedBy")
+  staffAttendances                 StaffAttendance[] @relation("StaffAttendanceUser")
+  verifiedStaffAttendances         StaffAttendance[] @relation("StaffAttendanceVerifiedBy")
+  verifiedStaffAttendanceCheckouts StaffAttendance[] @relation("StaffAttendanceCheckoutVerifiedBy")
   events                   Event[]
   passwordResets           PasswordReset[]
   ledgerEntries            LedgerEntry[]
@@ -97,6 +98,21 @@ model StaffAttendance {
   verifiedBy   User?     @relation("StaffAttendanceVerifiedBy", fields: [verifiedById], references: [id])
   verifiedAt   DateTime?
   rejectReason String?
+
+  // Check-out mirrors check-in exactly (own selfie + geolocation + its own
+  // independent admin verification) — null checkOutVerifyStatus means the
+  // person hasn't checked out yet today, as opposed to pending/approved/rejected.
+  checkOutTime         DateTime?
+  checkOutPhoto        String?
+  checkOutLatitude     Float?
+  checkOutLongitude    Float?
+  checkOutLocationName String?
+  checkOutVerifyStatus String?
+  checkOutVerifiedById String?
+  checkOutVerifiedBy   User?     @relation("StaffAttendanceCheckoutVerifiedBy", fields: [checkOutVerifiedById], references: [id])
+  checkOutVerifiedAt   DateTime?
+  checkOutRejectReason String?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -465,6 +481,25 @@ model Assessment {
   communication  Int?
   discipline     Int?
   mentalAvg      Float?
+
+  // LITTLE MAVERICK (U-8 and under, non-GK) — a simpler 4-category form with
+  // no Attacking/Defending split; "Taktik & Pemahaman" below maps onto
+  // attackingAvg so taktikAvg still derives correctly with no new avg column.
+  lmAgility       Int? // Gerak Motorik & Fisik -> fisikAvg
+  lmSpeed         Int?
+  lmStrength      Int?
+  lmCoordination  Int?
+  lmDribbling     Int? // Teknik Dasar Sepakbola -> teknikAvg
+  lmPassing       Int?
+  lmShooting      Int?
+  lmBallControl   Int?
+  lmThrowIn       Int?
+  lmPositioning   Int? // Taktik & Pemahaman -> attackingAvg
+  lmDecisionMaking Int?
+  lmDiscipline    Int? // Mental & Sikap Latihan -> mentalAvg
+  lmMotivation    Int?
+  lmTeamwork      Int?
+  lmResponsiveness Int?
 
   // OVERALL
   overallAvg   Float?

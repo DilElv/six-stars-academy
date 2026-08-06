@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { getCategoriesForPosition, scoreCategory } from '@/lib/assessmentFields'
+import { getCategoriesForStudent, scoreCategory } from '@/lib/assessmentFields'
 import { AppSelect } from '@/components/ui/app-select'
 
 function categoryAvg(scores, fields) {
@@ -16,15 +16,16 @@ function categoryAvg(scores, fields) {
  * Penilaian page, reused read-only on the student's Rapor page so both
  * views show identical detail — not just the summary radar/gauge.
  *
- * `position` picks field-player vs GK criteria (see lib/assessmentFields).
- * `activeCategories` (array of category keys) is the coach's per-period
- * "actually grading this" selection — undefined means "everything active"
- * (legacy behavior, and the sensible default for a brand-new assessment).
- * In read-only mode an inactive category is omitted entirely rather than
- * shown grayed out, since the parent should only ever see what was scored.
+ * `position`+`ageGroup` pick field-player vs GK vs Little Maverick (U-8 and
+ * under) criteria (see lib/assessmentFields). `activeCategories` (array of
+ * category keys) is the coach's per-period "actually grading this"
+ * selection — undefined means "everything active" (legacy behavior, and the
+ * sensible default for a brand-new assessment). In read-only mode an
+ * inactive category is omitted entirely rather than shown grayed out, since
+ * the parent should only ever see what was scored.
  */
-export default function AssessmentCategories({ scores, editable = false, onChange, position, activeCategories, onToggleCategory }) {
-  const categories = getCategoriesForPosition(position)
+export default function AssessmentCategories({ scores, editable = false, onChange, position, ageGroup, activeCategories, onToggleCategory }) {
+  const categories = getCategoriesForStudent(position, ageGroup)
   const [openCategory, setOpenCategory] = useState(categories[0]?.key)
   const isActive = (key) => activeCategories === undefined || activeCategories.includes(key)
   const visibleCategories = editable ? categories : categories.filter((cat) => isActive(cat.key))

@@ -356,6 +356,18 @@ export async function rejectStaffAttendance(id, reason) {
   return request(`/staff-attendance/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) })
 }
 
+export async function checkoutStaff(payload) {
+  return request('/staff-attendance/checkout', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function approveStaffCheckout(id) {
+  return request(`/staff-attendance/${id}/checkout/approve`, { method: 'PUT' })
+}
+
+export async function rejectStaffCheckout(id, reason) {
+  return request(`/staff-attendance/${id}/checkout/reject`, { method: 'PUT', body: JSON.stringify({ reason }) })
+}
+
 export async function getMyStaffAttendance(date) {
   return request(`/staff-attendance/me${date ? `?date=${date}` : ''}`)
 }

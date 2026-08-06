@@ -124,8 +124,66 @@ export const GK_CATEGORIES = [
   FIELD_PLAYER_CATEGORIES[4], // Mental — identical for GK
 ]
 
-export function getCategoriesForPosition(position) {
-  return position === 'GK' ? GK_CATEGORIES : FIELD_PLAYER_CATEGORIES
+// Simpler 4-category form for U-8-and-under players ("Form Rapor LITLE
+// MAVERICK") — no Attacking/Defending split, so "Taktik & Pemahaman" maps
+// onto attackingAvg directly (taktikAvg then derives as just this one part,
+// same as GK's Taktik-Attacking-only edge case already handles).
+export const LITTLE_MAVERICK_CATEGORIES = [
+  {
+    key: 'gerakMotorik',
+    title: 'I. Gerak Motorik & Fisik',
+    avgKey: 'fisikAvg',
+    fields: [
+      ['lmAgility', 'Kelincahan (Agility)'],
+      ['lmSpeed', 'Kecepatan'],
+      ['lmStrength', 'Kekuatan (Strength)'],
+      ['lmCoordination', 'Koordinasi Tubuh'],
+    ],
+  },
+  {
+    key: 'teknikDasar',
+    title: 'II. Teknik Dasar Sepakbola',
+    avgKey: 'teknikAvg',
+    fields: [
+      ['lmDribbling', 'Dribbling'],
+      ['lmPassing', 'Passing'],
+      ['lmShooting', 'Shooting'],
+      ['lmBallControl', 'Ball Control'],
+      ['lmThrowIn', 'Throw In'],
+    ],
+  },
+  {
+    key: 'taktikPemahaman',
+    title: 'III. Taktik & Pemahaman',
+    avgKey: 'attackingAvg',
+    fields: [
+      ['lmPositioning', 'Posisi & Pergerakan'],
+      ['lmDecisionMaking', 'Decision Making'],
+    ],
+  },
+  {
+    key: 'mentalSikap',
+    title: 'IV. Mental & Sikap Latihan',
+    avgKey: 'mentalAvg',
+    fields: [
+      ['lmDiscipline', 'Disiplin Latihan'],
+      ['lmMotivation', 'Semangat & Motivasi'],
+      ['lmTeamwork', 'Kerjasama Tim'],
+      ['lmResponsiveness', 'Respon Terhadap Arahan'],
+    ],
+  },
+]
+
+const YOUNGEST_AGE_GROUPS = ['U-6', 'U-7', 'U-8']
+
+// GK criteria always win regardless of age; otherwise 8-and-under gets the
+// simpler Little Maverick form, everyone else gets the normal field-player
+// form. Reuses Student.ageGroup (self-healing, see routes/students.js)
+// instead of recomputing age here.
+export function getCategoriesForStudent(position, ageGroup) {
+  if (position === 'GK') return GK_CATEGORIES
+  if (YOUNGEST_AGE_GROUPS.includes(ageGroup)) return LITTLE_MAVERICK_CATEGORIES
+  return FIELD_PLAYER_CATEGORIES
 }
 
 export function scoreCategory(value) {

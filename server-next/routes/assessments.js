@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { getCategoriesForPosition } from '../lib/assessmentFields.js'
+import { getCategoriesForStudent } from '../lib/assessmentFields.js'
 
 const router = Router()
 
@@ -39,8 +39,8 @@ router.get('/', authenticate, authorize('head_coach', 'admin'), async (req, res)
 // behind a generated Report/PDF) so the student's Rapor page reflects
 // whatever the head-coach has saved immediately, not only after a PDF has
 // been generated. Defaults to the most recently-scored period. Includes the
-// student's position so the frontend knows whether to render field-player
-// or GK categories.
+// student's position and ageGroup so the frontend knows whether to render
+// field-player, GK, or Little Maverick categories.
 router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   try {
     const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
@@ -52,7 +52,7 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
           return prisma.assessment.findUnique({ where: { studentId_month_year_endMonth_endYear: { studentId: student.id, month, year, endMonth, endYear } } })
         })()
       : await prisma.assessment.findFirst({ where: { studentId: student.id }, orderBy: [{ year: 'desc' }, { month: 'desc' }] })
-    res.json(assessment ? { ...assessment, position: student.position } : null)
+    res.json(assessment ? { ...assessment, position: student.position, ageGroup: student.ageGroup } : null)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -67,7 +67,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
     const student = await prisma.student.findUnique({ where: { id: studentId } })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
 
-    const categories = getCategoriesForPosition(student.position)
+    const categories = getCategoriesForStudent(student.position, student.ageGroup)
     const validKeys = new Set(categories.map((c) => c.key))
     // Unrecognized keys (e.g. leftover from a position change) are dropped
     // rather than trusted, so a stale client payload can't mark a category

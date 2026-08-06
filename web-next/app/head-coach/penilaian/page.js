@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Save, Loader2, FileText, Download, Search } from 'lucide-react'
 import * as api from '@/lib/api'
-import { getCategoriesForPosition, formatPeriodLabel } from '@/lib/assessmentFields'
+import { getCategoriesForStudent, formatPeriodLabel } from '@/lib/assessmentFields'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
@@ -62,7 +62,7 @@ function PenilaianContent() {
   }, [students, filterBranch, filterAgeGroup, search])
 
   const selectedStudent = students.find((s) => s.id === studentId)
-  const categories = useMemo(() => getCategoriesForPosition(selectedStudent?.position), [selectedStudent?.position])
+  const categories = useMemo(() => getCategoriesForStudent(selectedStudent?.position, selectedStudent?.ageGroup), [selectedStudent?.position, selectedStudent?.ageGroup])
   const periodEndMonth = customPeriod ? endMonth : month
   const periodEndYear = customPeriod ? endYear : year
 
@@ -95,12 +95,14 @@ function PenilaianContent() {
   }
 
   const liveAssessment = useMemo(() => {
-    const teknikAvg = categoryAvg(scores, categories[0].fields)
-    const attackingAvg = categoryAvg(scores, categories[1].fields)
-    const defendingAvg = categoryAvg(scores, categories[2].fields)
-    const fisikAvg = categoryAvg(scores, categories[3].fields)
-    const mentalAvg = categoryAvg(scores, categories[4].fields)
-    const taktikParts = [attackingAvg, defendingAvg].filter((v) => v > 0)
+    // Grouped by avgKey rather than fixed positions — category counts differ
+    // per form (Little Maverick has 4, not 5, with no Defending category).
+    const avgByKey = {}
+    for (const cat of categories) avgByKey[cat.avgKey] = categoryAvg(scores, cat.fields)
+    const teknikAvg = avgByKey.teknikAvg || 0
+    const fisikAvg = avgByKey.fisikAvg || 0
+    const mentalAvg = avgByKey.mentalAvg || 0
+    const taktikParts = [avgByKey.attackingAvg, avgByKey.defendingAvg].filter((v) => v > 0)
     const taktikAvg = taktikParts.length ? Math.round((taktikParts.reduce((a, b) => a + b, 0) / taktikParts.length) * 10) / 10 : 0
     return { teknikAvg, taktikAvg, fisikAvg, mentalAvg }
   }, [scores, categories])
@@ -282,6 +284,7 @@ function PenilaianContent() {
             editable
             onChange={setScores}
             position={selectedStudent?.position}
+            ageGroup={selectedStudent?.ageGroup}
             activeCategories={activeCategories}
             onToggleCategory={toggleCategory}
           />

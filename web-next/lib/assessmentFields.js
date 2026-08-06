@@ -1,10 +1,11 @@
 // Mirrors server-next/lib/assessmentFields.js (separate Next.js app, no
-// shared package) — keep field keys/labels in sync with that file and with
-// the Assessment model in server-next/prisma/schema.prisma.
+// shared package) — keep field keys/labels/avgKey in sync with that file and
+// with the Assessment model in server-next/prisma/schema.prisma.
 export const FIELD_PLAYER_CATEGORIES = [
   {
     key: 'teknik',
     title: 'I. Teknik / Skill',
+    avgKey: 'teknikAvg',
     fields: [
       ['passing', 'Passing'],
       ['control', 'Control'],
@@ -19,6 +20,7 @@ export const FIELD_PLAYER_CATEGORIES = [
   {
     key: 'attacking',
     title: 'II.A Taktik — Attacking (Menyerang)',
+    avgKey: 'attackingAvg',
     fields: [
       ['attackingPrinciples', 'Attacking Principles'],
       ['possession', 'Possession'],
@@ -32,6 +34,7 @@ export const FIELD_PLAYER_CATEGORIES = [
   {
     key: 'defending',
     title: 'II.B Taktik — Defending (Bertahan)',
+    avgKey: 'defendingAvg',
     fields: [
       ['defendingPrinciples', 'Defending Principles'],
       ['zonalDefending', 'Zonal Defending'],
@@ -43,6 +46,7 @@ export const FIELD_PLAYER_CATEGORIES = [
   {
     key: 'fisik',
     title: 'III. Fisik',
+    avgKey: 'fisikAvg',
     fields: [
       ['maximalStrength', 'Maximal Strength'],
       ['aerobicCapacity', 'Aerobic Capacity'],
@@ -57,6 +61,7 @@ export const FIELD_PLAYER_CATEGORIES = [
   {
     key: 'mental',
     title: 'IV. Mental',
+    avgKey: 'mentalAvg',
     fields: [
       ['selfConfidence', 'Self Confidence'],
       ['decision', 'Decision'],
@@ -72,6 +77,7 @@ export const GK_CATEGORIES = [
   {
     key: 'teknikGk',
     title: 'I. Teknik / Skill (Kiper)',
+    avgKey: 'teknikAvg',
     fields: [
       ['gkCatching', 'Catching the Ball'],
       ['gkKicking', 'Kicking the Ball'],
@@ -86,6 +92,7 @@ export const GK_CATEGORIES = [
   {
     key: 'attackingGk',
     title: 'II.A Taktik — Attacking (Kiper)',
+    avgKey: 'attackingAvg',
     fields: [
       ['gkPositionAttacking', 'Position'],
       ['attackingPrinciples', 'Attacking Principles'],
@@ -97,6 +104,7 @@ export const GK_CATEGORIES = [
   {
     key: 'defendingGk',
     title: 'II.B Taktik — Defending (Kiper)',
+    avgKey: 'defendingAvg',
     fields: [
       ['gkPositionDefending', 'Position'],
       ['gkDealCrossing', 'Deal with Crossing'],
@@ -110,8 +118,62 @@ export const GK_CATEGORIES = [
   FIELD_PLAYER_CATEGORIES[4], // Mental — identical for GK
 ]
 
-export function getCategoriesForPosition(position) {
-  return position === 'GK' ? GK_CATEGORIES : FIELD_PLAYER_CATEGORIES
+// Simpler 4-category form for U-8-and-under players — no Attacking/Defending
+// split, so "Taktik & Pemahaman" maps onto attackingAvg directly.
+export const LITTLE_MAVERICK_CATEGORIES = [
+  {
+    key: 'gerakMotorik',
+    title: 'I. Gerak Motorik & Fisik',
+    avgKey: 'fisikAvg',
+    fields: [
+      ['lmAgility', 'Kelincahan (Agility)'],
+      ['lmSpeed', 'Kecepatan'],
+      ['lmStrength', 'Kekuatan (Strength)'],
+      ['lmCoordination', 'Koordinasi Tubuh'],
+    ],
+  },
+  {
+    key: 'teknikDasar',
+    title: 'II. Teknik Dasar Sepakbola',
+    avgKey: 'teknikAvg',
+    fields: [
+      ['lmDribbling', 'Dribbling'],
+      ['lmPassing', 'Passing'],
+      ['lmShooting', 'Shooting'],
+      ['lmBallControl', 'Ball Control'],
+      ['lmThrowIn', 'Throw In'],
+    ],
+  },
+  {
+    key: 'taktikPemahaman',
+    title: 'III. Taktik & Pemahaman',
+    avgKey: 'attackingAvg',
+    fields: [
+      ['lmPositioning', 'Posisi & Pergerakan'],
+      ['lmDecisionMaking', 'Decision Making'],
+    ],
+  },
+  {
+    key: 'mentalSikap',
+    title: 'IV. Mental & Sikap Latihan',
+    avgKey: 'mentalAvg',
+    fields: [
+      ['lmDiscipline', 'Disiplin Latihan'],
+      ['lmMotivation', 'Semangat & Motivasi'],
+      ['lmTeamwork', 'Kerjasama Tim'],
+      ['lmResponsiveness', 'Respon Terhadap Arahan'],
+    ],
+  },
+]
+
+const YOUNGEST_AGE_GROUPS = ['U-6', 'U-7', 'U-8']
+
+// GK criteria always win regardless of age; otherwise 8-and-under gets the
+// simpler Little Maverick form, everyone else gets the normal field-player form.
+export function getCategoriesForStudent(position, ageGroup) {
+  if (position === 'GK') return GK_CATEGORIES
+  if (YOUNGEST_AGE_GROUPS.includes(ageGroup)) return LITTLE_MAVERICK_CATEGORIES
+  return FIELD_PLAYER_CATEGORIES
 }
 
 export function scoreCategory(value) {

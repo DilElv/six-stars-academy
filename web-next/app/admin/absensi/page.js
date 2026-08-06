@@ -27,14 +27,18 @@ const VERIFY_COLOR = {
 }
 const VERIFY_ICON = { pending: Clock3, approved: CheckCircle2, rejected: XCircle }
 
-function RejectModal({ record, onClose, onDone }) {
+// `type` picks which event (check-in vs check-out) the modal acts on — the
+// two share identical shapes (photo/time/location/verify fields), just with
+// a `checkOut`-prefixed field set and a separate API endpoint for checkout.
+function RejectModal({ record, type = 'checkin', onClose, onDone }) {
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
 
   async function handleReject() {
     setSaving(true)
     try {
-      await api.rejectStaffAttendance(record.id, reason)
+      if (type === 'checkin') await api.rejectStaffAttendance(record.id, reason)
+      else await api.rejectStaffCheckout(record.id, reason)
       onDone()
     } finally {
       setSaving(false)
@@ -46,7 +50,7 @@ function RejectModal({ record, onClose, onDone }) {
       <div className="fixed inset-0 bg-black/60" onClick={saving ? undefined : onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-navy-900 text-sm">Tolak Absen {record.user?.name}</h3>
+          <h3 className="font-bold text-navy-900 text-sm">Tolak Absen {type === 'checkin' ? 'Masuk' : 'Pulang'} {record.user?.name}</h3>
           {!saving && (
             <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
           )}
@@ -71,23 +75,92 @@ function RejectModal({ record, onClose, onDone }) {
   )
 }
 
-function PhotoPreviewModal({ record, onClose }) {
+function PhotoPreviewModal({ record, type = 'checkin', onClose }) {
+  const photo = type === 'checkin' ? record.photo : record.checkOutPhoto
+  const time = type === 'checkin' ? record.checkInTime : record.checkOutTime
+  const locationName = type === 'checkin' ? record.locationName : record.checkOutLocationName
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/80" onClick={onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-navy-900 text-sm">Foto Selfie {record.user?.name}</h3>
+          <h3 className="font-bold text-navy-900 text-sm">Foto Selfie {type === 'checkin' ? 'Absen Masuk' : 'Absen Pulang'} {record.user?.name}</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
-        <img src={record.photo} alt="" className="w-full rounded-2xl object-cover" />
+        <img src={photo} alt="" className="w-full rounded-2xl object-cover" />
         <div className="mt-3 space-y-1 text-xs text-gray-500">
-          <div>Waktu: {record.checkInTime ? new Date(record.checkInTime).toLocaleString('id-ID') : '-'}</div>
-          {record.locationName && (
-            <div className="flex items-start gap-1"><MapPin size={12} className="shrink-0 mt-0.5" /> {record.locationName}</div>
+          <div>Waktu: {time ? new Date(time).toLocaleString('id-ID') : '-'}</div>
+          {locationName && (
+            <div className="flex items-start gap-1"><MapPin size={12} className="shrink-0 mt-0.5" /> {locationName}</div>
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// One masuk or pulang event within a day's record card. `verifyStatus` is
+// null when that event simply hasn't happened yet (e.g. checked in but not
+// out) — shown as a plain "Belum absen" note rather than a badge.
+function EventBlock({ label, photo, time, locationName, verifyStatus, rejectReason, onPreview, onReject, onApprove, acting }) {
+  const VerifyIcon = VERIFY_ICON[verifyStatus] || Clock3
+  return (
+    <div className="border-t border-gray-100 pt-2.5 first:border-t-0 first:pt-0 space-y-2">
+      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</div>
+      {!time ? (
+        <div className="text-xs text-gray-400">Belum absen</div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2.5">
+            {photo ? (
+              <button onClick={onPreview} className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
+                <img src={photo} alt="" className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0">
+                <UserCheck size={14} className="text-emerald-600" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1 text-xs text-gray-500">
+              <div className="font-semibold text-navy-900">{new Date(time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+            </div>
+          </div>
+
+          {locationName && (
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <MapPin size={11} className="shrink-0" />
+              <span className="truncate">{locationName}</span>
+            </div>
+          )}
+
+          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${VERIFY_COLOR[verifyStatus] || VERIFY_COLOR.pending}`}>
+            <VerifyIcon size={11} /> {VERIFY_LABEL[verifyStatus] || 'Menunggu Verifikasi'}
+          </span>
+
+          {verifyStatus === 'rejected' && rejectReason && (
+            <div className="text-[11px] text-red-600">Alasan: {rejectReason}</div>
+          )}
+
+          {verifyStatus === 'pending' && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={onReject}
+                disabled={acting}
+                className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
+              >
+                <XCircle size={13} /> Tolak
+              </button>
+              <button
+                onClick={onApprove}
+                disabled={acting}
+                className="flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
+              >
+                {acting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Setujui
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -97,11 +170,12 @@ function StaffAttendanceTab() {
   const [month, setMonth] = useState(new Date().getMonth() + 1)
   const [year, setYear] = useState(new Date().getFullYear())
   const [branchId, setBranchId] = useState('')
+  const [eventFilter, setEventFilter] = useState('all') // 'all' | 'checkin' | 'checkout'
   const [branches, setBranches] = useState([])
   const [staffRecords, setStaffRecords] = useState([])
   const [loading, setLoading] = useState(true)
-  const [previewPhoto, setPreviewPhoto] = useState(null)
-  const [rejectTarget, setRejectTarget] = useState(null)
+  const [previewTarget, setPreviewTarget] = useState(null) // { record, type }
+  const [rejectTarget, setRejectTarget] = useState(null) // { record, type }
   const [actingId, setActingId] = useState(null)
 
   useEffect(() => { api.getBranches().then(setBranches) }, [])
@@ -113,10 +187,11 @@ function StaffAttendanceTab() {
 
   useEffect(load, [role, month, year, branchId])
 
-  async function handleApprove(record) {
+  async function handleApprove(record, type) {
     setActingId(record.id)
     try {
-      await api.approveStaffAttendance(record.id)
+      if (type === 'checkin') await api.approveStaffAttendance(record.id)
+      else await api.approveStaffCheckout(record.id)
       load()
     } finally {
       setActingId(null)
@@ -139,6 +214,16 @@ function StaffAttendanceTab() {
           <button onClick={() => setRole('coach')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${role === 'coach' ? 'bg-white shadow-sm text-navy-900' : 'text-gray-500 hover:text-navy-700'}`}>Coach</button>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <AppSelect
+            value={eventFilter}
+            onChange={setEventFilter}
+            className="w-44"
+            options={[
+              { value: 'all', label: 'Semua Jenis Absen' },
+              { value: 'checkin', label: 'Absen Masuk' },
+              { value: 'checkout', label: 'Absen Pulang' },
+            ]}
+          />
           <AppSelect value={month} onChange={(v) => setMonth(Number(v))} className="w-40" options={MONTH_LABELS.map((m, i) => ({ value: i + 1, label: m }))} />
           <AppSelect value={year} onChange={(v) => setYear(Number(v))} className="w-28" options={[year - 1, year, year + 1].map((y) => ({ value: y, label: String(y) }))} />
           <AppSelect value={branchId} onChange={setBranchId} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
@@ -153,7 +238,7 @@ function StaffAttendanceTab() {
         <div className="space-y-4">
           {groups.map((g) => {
             const hadirCount = g.records.filter((r) => r.verifyStatus === 'approved').length
-            const pendingCount = g.records.filter((r) => r.verifyStatus === 'pending').length
+            const pendingCount = g.records.filter((r) => r.verifyStatus === 'pending' || r.checkOutVerifyStatus === 'pending').length
             const sortedRecords = [...g.records].sort((a, b) => new Date(b.date) - new Date(a.date))
             return (
               <div key={g.user?.name} className="glass-card rounded-3xl p-4 sm:p-5">
@@ -175,57 +260,40 @@ function StaffAttendanceTab() {
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {sortedRecords.map((r) => {
-                    const VerifyIcon = VERIFY_ICON[r.verifyStatus] || Clock3
+                    const showCheckin = eventFilter !== 'checkout'
+                    const showCheckout = eventFilter !== 'checkin'
                     return (
-                      <div key={r.id} className="bg-gray-50 rounded-2xl p-3.5 space-y-2.5">
-                        <div className="flex items-center gap-2.5">
-                          {r.photo ? (
-                            <button onClick={() => setPreviewPhoto(r)} className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
-                              <img src={r.photo} alt="" className="w-full h-full object-cover" />
-                            </button>
-                          ) : (
-                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0">
-                              <UserCheck size={14} className="text-emerald-600" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1 text-xs text-gray-500">
-                            <div className="font-semibold text-navy-900">{new Date(r.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</div>
-                            <div>{r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</div>
-                          </div>
+                      <div key={r.id} className="bg-gray-50 rounded-2xl p-3.5 space-y-3">
+                        <div className="text-[11px] font-semibold text-gray-400">
+                          {new Date(r.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </div>
-
-                        {r.locationName && (
-                          <div className="flex items-center gap-1 text-[11px] text-gray-400">
-                            <MapPin size={11} className="shrink-0" />
-                            <span className="truncate">{r.locationName}</span>
-                          </div>
+                        {showCheckin && (
+                          <EventBlock
+                            label="Absen Masuk"
+                            photo={r.photo}
+                            time={r.checkInTime}
+                            locationName={r.locationName}
+                            verifyStatus={r.verifyStatus}
+                            rejectReason={r.rejectReason}
+                            onPreview={() => setPreviewTarget({ record: r, type: 'checkin' })}
+                            onReject={() => setRejectTarget({ record: r, type: 'checkin' })}
+                            onApprove={() => handleApprove(r, 'checkin')}
+                            acting={actingId === r.id}
+                          />
                         )}
-
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${VERIFY_COLOR[r.verifyStatus] || VERIFY_COLOR.pending}`}>
-                          <VerifyIcon size={11} /> {VERIFY_LABEL[r.verifyStatus] || 'Menunggu Verifikasi'}
-                        </span>
-
-                        {r.verifyStatus === 'rejected' && r.rejectReason && (
-                          <div className="text-[11px] text-red-600">Alasan: {r.rejectReason}</div>
-                        )}
-
-                        {r.verifyStatus === 'pending' && (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <button
-                              onClick={() => setRejectTarget(r)}
-                              disabled={actingId === r.id}
-                              className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
-                            >
-                              <XCircle size={13} /> Tolak
-                            </button>
-                            <button
-                              onClick={() => handleApprove(r)}
-                              disabled={actingId === r.id}
-                              className="flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
-                            >
-                              {actingId === r.id ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Setujui
-                            </button>
-                          </div>
+                        {showCheckout && (
+                          <EventBlock
+                            label="Absen Pulang"
+                            photo={r.checkOutPhoto}
+                            time={r.checkOutTime}
+                            locationName={r.checkOutLocationName}
+                            verifyStatus={r.checkOutVerifyStatus}
+                            rejectReason={r.checkOutRejectReason}
+                            onPreview={() => setPreviewTarget({ record: r, type: 'checkout' })}
+                            onReject={() => setRejectTarget({ record: r, type: 'checkout' })}
+                            onApprove={() => handleApprove(r, 'checkout')}
+                            acting={actingId === r.id}
+                          />
                         )}
                       </div>
                     )
@@ -237,10 +305,13 @@ function StaffAttendanceTab() {
         </div>
       )}
 
-      {previewPhoto && <PhotoPreviewModal record={previewPhoto} onClose={() => setPreviewPhoto(null)} />}
+      {previewTarget && (
+        <PhotoPreviewModal record={previewTarget.record} type={previewTarget.type} onClose={() => setPreviewTarget(null)} />
+      )}
       {rejectTarget && (
         <RejectModal
-          record={rejectTarget}
+          record={rejectTarget.record}
+          type={rejectTarget.type}
           onClose={() => setRejectTarget(null)}
           onDone={() => { setRejectTarget(null); load() }}
         />

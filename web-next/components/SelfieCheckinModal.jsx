@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Camera, Loader2, MapPin, RotateCcw, Check } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import ModalPortal from '@/components/ui/modal-portal'
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -61,7 +62,7 @@ function drawWatermark(ctx, width, height, { timeText, locationText }) {
   })
 }
 
-export default function SelfieCheckinModal({ onSuccess, onClose }) {
+export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -160,13 +161,20 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
       const blob = await (await fetch(capturedImage)).blob()
       const file = new File([blob], 'selfie-checkin.jpg', { type: 'image/jpeg' })
       const url = await api.uploadFile(file)
-      const record = await api.checkinStaff({
-        photo: url,
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
-        locationName: locationText,
-        branchId: branchId || undefined,
-      })
+      const record = type === 'checkin'
+        ? await api.checkinStaff({
+            photo: url,
+            latitude: coords?.latitude ?? null,
+            longitude: coords?.longitude ?? null,
+            locationName: locationText,
+            branchId: branchId || undefined,
+          })
+        : await api.checkoutStaff({
+            photo: url,
+            latitude: coords?.latitude ?? null,
+            longitude: coords?.longitude ?? null,
+            locationName: locationText,
+          })
       onSuccess(record)
     } catch (err) {
       setError(err.message || 'Gagal mengirim absen, coba lagi.')
@@ -176,13 +184,14 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <ModalPortal>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/80" onClick={submitting ? undefined : onClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full max-h-[85vh] overflow-y-auto p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Camera size={16} className="text-navy-700" />
-            <h3 className="font-bold text-navy-900 text-sm">Absen Selfie di Lapangan</h3>
+            <h3 className="font-bold text-navy-900 text-sm">{type === 'checkin' ? 'Absen Masuk' : 'Absen Pulang'} — Selfie di Lapangan</h3>
           </div>
           {!submitting && (
             <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
@@ -216,7 +225,7 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
           <span className="truncate">{locationText}</span>
         </div>
 
-        {me?.branches?.length > 0 && (
+        {type === 'checkin' && me?.branches?.length > 0 && (
           <div className="mt-3">
             <label className="block text-xs font-semibold text-gray-500 mb-1">Absen di cabang mana?</label>
             <AppSelect
@@ -249,7 +258,7 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || (me?.role === 'coach' && !branchId)}
+                disabled={submitting || (type === 'checkin' && me?.role === 'coach' && !branchId)}
                 className="flex items-center justify-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-3 rounded-2xl disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
@@ -264,5 +273,6 @@ export default function SelfieCheckinModal({ onSuccess, onClose }) {
         </p>
       </div>
     </div>
+    </ModalPortal>
   )
 }

@@ -124,6 +124,7 @@ export default function JadwalCalendar({
         </div>
         <Calendar
           mode="single"
+          required
           locale={localeId}
           selected={selectedDate}
           onSelect={setSelectedDate}

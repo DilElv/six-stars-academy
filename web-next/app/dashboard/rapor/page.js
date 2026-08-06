@@ -78,7 +78,7 @@ export default function RaporAnakPage() {
             <SkillRadar assessment={assessment} height={280} />
           </div>
 
-          <AssessmentCategories scores={assessment} editable={false} position={assessment.position} activeCategories={assessment.activeCategories} />
+          <AssessmentCategories scores={assessment} editable={false} position={assessment.position} ageGroup={assessment.ageGroup} activeCategories={assessment.activeCategories} />
 
           {assessment.coachComment && (
             <div className="glass-card rounded-3xl p-5">

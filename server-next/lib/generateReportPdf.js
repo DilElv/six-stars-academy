@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit'
 import { fileURLToPath } from 'url'
 import path from 'path'
-import { getCategoriesForPosition, scoreCategory, formatPeriodLabel } from './assessmentFields.js'
+import { getCategoriesForStudent, scoreCategory, formatPeriodLabel } from './assessmentFields.js'
 import { buildRichTextTokens, drawRichText } from './emojiPdf.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -40,7 +40,7 @@ export async function generateReportPdf({ student, assessment, month, year, endM
   ])
   const periodEndMonth = endMonth || month
   const periodEndYear = endYear || year
-  const categories = getCategoriesForPosition(student.position)
+  const categories = getCategoriesForStudent(student.position, student.ageGroup)
   const activeCategories = categories.filter((c) => (assessment.activeCategories || []).includes(c.key))
 
   return new Promise((resolve, reject) => {
@@ -61,9 +61,14 @@ export async function generateReportPdf({ student, assessment, month, year, endM
     }
 
     if (assessment.taktikAvg !== null && assessment.taktikAvg !== undefined) {
+      // Little Maverick has no Defending sub-category, so taktikAvg is just
+      // "Taktik & Pemahaman" alone — the "(Attacking + Defending)" label
+      // only applies to the field-player/GK forms that actually split it.
+      const hasDefending = categories.some((c) => c.avgKey === 'defendingAvg')
+      const taktikLabel = hasDefending ? 'Rata-rata Taktik (Attacking + Defending)' : 'Rata-rata Taktik'
       ensureSpace(doc, 20)
       doc.fontSize(9).font('NotoSans-Bold').fillColor(NAVY)
-        .text(`Rata-rata Taktik (Attacking + Defending): ${formatScore(assessment.taktikAvg)}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
+        .text(`${taktikLabel}: ${formatScore(assessment.taktikAvg)}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH, align: 'right' })
       doc.moveDown(0.6)
     }
 
