@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { UserCheck, Clock3, CheckCircle2, XCircle, Camera, LogOut } from 'lucide-react'
+import { UserCheck, Clock3, CheckCircle2, XCircle, Camera, LogOut, MapPin } from 'lucide-react'
 import * as api from '@/lib/api'
 import SelfieCheckinModal from './SelfieCheckinModal'
 
@@ -39,36 +39,22 @@ function EventStatus({ label, time, photo, verifyStatus, rejectReason }) {
   )
 }
 
-/**
- * Self check-in/check-out widget for coach/head-coach, embedded on their
- * dashboard landing page. Both events reuse SelfieCheckinModal (live camera
- * + watermark + geolocation), parameterized by `type`, and are verified by
- * admin independently — see server-next/routes/staffAttendance.js.
- */
-export default function StaffCheckinCard() {
-  const [record, setRecord] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [modalType, setModalType] = useState(null) // 'checkin' | 'checkout' | null
-
-  function load() {
-    api.getMyStaffAttendance().then(setRecord).finally(() => setLoading(false))
-  }
-
-  useEffect(load, [])
-
-  function handleSuccess(newRecord) {
-    setRecord(newRecord)
-    setModalType(null)
-  }
-
-  if (loading) return null
-
-  const needsCheckin = !record || (!record.checkInTime) || record.verifyStatus === 'rejected'
+// One branch's masuk/pulang pair. A coach/head-coach assigned to several
+// branches gets one of these per branch (see StaffCheckinCard below) since
+// each branch is its own independent check-in/check-out session.
+function BranchAttendance({ branchLabel, record, onOpenModal }) {
   const hasCheckedIn = !!record?.checkInTime
+  const needsCheckin = !record || !hasCheckedIn || record.verifyStatus === 'rejected'
   const needsCheckout = hasCheckedIn && (!record.checkOutTime || record.checkOutVerifyStatus === 'rejected')
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
+      {branchLabel && (
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+          <MapPin size={12} className="text-gold-500 shrink-0" /> {branchLabel}
+        </div>
+      )}
+
       {hasCheckedIn && (
         <EventStatus
           label="Absen Masuk"
@@ -84,11 +70,11 @@ export default function StaffCheckinCard() {
           <div className="flex items-center gap-3">
             <UserCheck size={20} className="text-navy-700 shrink-0" />
             <div className="text-sm text-navy-800">
-              {record?.verifyStatus === 'rejected' ? 'Absen masuk ditolak, silakan absen ulang.' : 'Anda belum absen masuk hari ini.'}
+              {record?.verifyStatus === 'rejected' ? 'Absen masuk ditolak, silakan absen ulang.' : 'Belum absen masuk.'}
             </div>
           </div>
           <button
-            onClick={() => setModalType('checkin')}
+            onClick={() => onOpenModal('checkin')}
             className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
           >
             <Camera size={14} /> Absen Masuk
@@ -111,20 +97,86 @@ export default function StaffCheckinCard() {
           <div className="flex items-center gap-3">
             <LogOut size={20} className="text-navy-700 shrink-0" />
             <div className="text-sm text-navy-800">
-              {record?.checkOutVerifyStatus === 'rejected' ? 'Absen pulang ditolak, silakan absen ulang.' : 'Jangan lupa absen pulang sebelum meninggalkan lapangan.'}
+              {record?.checkOutVerifyStatus === 'rejected' ? 'Absen pulang ditolak, silakan absen ulang.' : 'Jangan lupa absen pulang.'}
             </div>
           </div>
           <button
-            onClick={() => setModalType('checkout')}
+            onClick={() => onOpenModal('checkout')}
             className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
           >
             <Camera size={14} /> Absen Pulang
           </button>
         </div>
       )}
+    </div>
+  )
+}
 
-      {modalType && (
-        <SelfieCheckinModal type={modalType} onSuccess={handleSuccess} onClose={() => setModalType(null)} />
+/**
+ * Self check-in/check-out widget for coach/head-coach, embedded on their
+ * dashboard landing page. A coach/head-coach assigned to multiple branches
+ * checks in/out separately at each one (e.g. branch A in the morning,
+ * branch B in the afternoon) — this renders one independent masuk/pulang
+ * section per assigned branch. Someone with no branch assigned yet falls
+ * back to a single plain section (matches server-next's no-branch path).
+ * Both events reuse SelfieCheckinModal (live camera + watermark +
+ * geolocation) and are verified by admin independently per branch — see
+ * server-next/routes/staffAttendance.js.
+ */
+export default function StaffCheckinCard() {
+  const [branches, setBranches] = useState([])
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(null) // { type, branchId, branchLabel } | null
+
+  function load() {
+    Promise.all([api.getMe(), api.getMyStaffAttendance()])
+      .then(([me, recs]) => {
+        setBranches((me.branches || []).map((b) => b.branch))
+        setRecords(recs)
+      })
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [])
+
+  function handleSuccess(newRecord) {
+    setRecords((prev) => {
+      const others = prev.filter((r) => r.id !== newRecord.id)
+      return [...others, newRecord]
+    })
+    setModal(null)
+  }
+
+  if (loading) return null
+
+  const sections = branches.length > 0
+    ? branches.map((b) => ({
+        branchId: b.id,
+        branchLabel: `${b.name} (${b.code})`,
+        record: records.find((r) => r.branchId === b.id) || null,
+      }))
+    : [{ branchId: null, branchLabel: null, record: records.find((r) => !r.branchId) || null }]
+
+  return (
+    <div className="space-y-4">
+      {sections.map((s) => (
+        <BranchAttendance
+          key={s.branchId || 'no-branch'}
+          branchLabel={sections.length > 1 ? s.branchLabel : null}
+          record={s.record}
+          onOpenModal={(type) => setModal({ type, branchId: s.branchId, branchLabel: s.branchLabel })}
+        />
+      ))}
+
+      {modal && (
+        <SelfieCheckinModal
+          type={modal.type}
+          branchId={modal.branchId}
+          branchLabel={modal.branchLabel}
+          onSuccess={handleSuccess}
+          onClose={() => setModal(null)}
+        />
       )}
     </div>
   )

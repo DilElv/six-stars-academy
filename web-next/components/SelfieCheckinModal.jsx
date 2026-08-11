@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Camera, Loader2, MapPin, RotateCcw, Check } from 'lucide-react'
 import * as api from '@/lib/api'
-import { AppSelect } from '@/components/ui/app-select'
 import ModalPortal from '@/components/ui/modal-portal'
 
 async function reverseGeocode(lat, lng) {
@@ -62,7 +61,11 @@ function drawWatermark(ctx, width, height, { timeText, locationText }) {
   })
 }
 
-export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClose }) {
+// `branchId`/`branchLabel` are resolved by the caller (StaffCheckinCard
+// already knows exactly which branch button was clicked, including the
+// no-branch case for a coach/head-coach with nothing assigned yet), so this
+// modal no longer needs its own branch picker or `getMe()` fetch.
+export default function SelfieCheckinModal({ type = 'checkin', branchId, branchLabel, onSuccess, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -73,15 +76,6 @@ export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClos
   const [locationText, setLocationText] = useState('Mencari lokasi...')
   const [capturedImage, setCapturedImage] = useState(null)
   const [submitting, setSubmitting] = useState(false)
-  const [me, setMe] = useState(null)
-  const [branchId, setBranchId] = useState('')
-
-  useEffect(() => {
-    api.getMe().then((user) => {
-      setMe(user)
-      setBranchId(user.branches?.[0]?.branch?.id || '')
-    })
-  }, [])
 
   useEffect(() => {
     let stopped = false
@@ -161,20 +155,14 @@ export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClos
       const blob = await (await fetch(capturedImage)).blob()
       const file = new File([blob], 'selfie-checkin.jpg', { type: 'image/jpeg' })
       const url = await api.uploadFile(file)
-      const record = type === 'checkin'
-        ? await api.checkinStaff({
-            photo: url,
-            latitude: coords?.latitude ?? null,
-            longitude: coords?.longitude ?? null,
-            locationName: locationText,
-            branchId: branchId || undefined,
-          })
-        : await api.checkoutStaff({
-            photo: url,
-            latitude: coords?.latitude ?? null,
-            longitude: coords?.longitude ?? null,
-            locationName: locationText,
-          })
+      const payload = {
+        photo: url,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        locationName: locationText,
+        branchId: branchId || undefined,
+      }
+      const record = type === 'checkin' ? await api.checkinStaff(payload) : await api.checkoutStaff(payload)
       onSuccess(record)
     } catch (err) {
       setError(err.message || 'Gagal mengirim absen, coba lagi.')
@@ -191,7 +179,9 @@ export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClos
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Camera size={16} className="text-navy-700" />
-            <h3 className="font-bold text-navy-900 text-sm">{type === 'checkin' ? 'Absen Masuk' : 'Absen Pulang'} — Selfie di Lapangan</h3>
+            <h3 className="font-bold text-navy-900 text-sm">
+              {type === 'checkin' ? 'Absen Masuk' : 'Absen Pulang'}{branchLabel ? ` — ${branchLabel}` : ''}
+            </h3>
           </div>
           {!submitting && (
             <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
@@ -225,19 +215,6 @@ export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClos
           <span className="truncate">{locationText}</span>
         </div>
 
-        {type === 'checkin' && me?.branches?.length > 0 && (
-          <div className="mt-3">
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Absen di cabang mana?</label>
-            <AppSelect
-              value={branchId}
-              onChange={setBranchId}
-              className="w-full"
-              placeholder="Pilih cabang..."
-              options={me.branches.map((b) => ({ value: b.branch.id, label: `${b.branch.name} (${b.branch.code})` }))}
-            />
-          </div>
-        )}
-
         <div className="mt-4">
           {!capturedImage ? (
             <button
@@ -258,7 +235,7 @@ export default function SelfieCheckinModal({ type = 'checkin', onSuccess, onClos
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || (type === 'checkin' && me?.role === 'coach' && !branchId)}
+                disabled={submitting}
                 className="flex items-center justify-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-3 rounded-2xl disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}

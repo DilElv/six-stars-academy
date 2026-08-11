@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole, notifyUser } from '../lib/notify.js'
-import { assertBranchAccess } from '../lib/branchAccess.js'
+import { assertBranchAccess, getUserBranchIds } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -12,50 +12,59 @@ function startOfDay(dateStr) {
   return d
 }
 
+// A coach/head-coach with no branches assigned yet (e.g. not set up by
+// admin) falls back to the pre-branch behavior: one plain record a day,
+// branchId left null. Prisma's compound unique lookup rejects a literal
+// null for branchId, so that case can't reuse `userId_date_branchId` and
+// goes through a manual findFirst+create/update instead.
+async function findTodayRecord(userId, day, branchId) {
+  if (branchId) {
+    return prisma.staffAttendance.findUnique({ where: { userId_date_branchId: { userId, date: day, branchId } } })
+  }
+  return prisma.staffAttendance.findFirst({ where: { userId, date: day, branchId: null } })
+}
+
 router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
-  const { photo, latitude, longitude, locationName, branchId } = req.body
+  const { photo, latitude, longitude, locationName } = req.body
+  let { branchId } = req.body
   if (!photo) return res.status(400).json({ error: 'Foto selfie wajib diambil' })
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } })
-    if (req.user.role === 'coach') {
+    // A coach/head-coach assigned to multiple branches checks in separately
+    // at each one, so both roles need branch selection now (it used to be
+    // coach-only, back when a day only ever had one record). Someone with no
+    // branches assigned at all keeps the old no-branch behavior instead of
+    // being locked out.
+    const assignedBranchIds = await getUserBranchIds(req.user.id)
+    if (assignedBranchIds.length > 0) {
       if (!branchId) return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
       await assertBranchAccess(req.user.id, branchId)
+    } else {
+      branchId = null
     }
     const day = startOfDay()
     const now = new Date()
-    const record = await prisma.staffAttendance.upsert({
-      where: { userId_date: { userId: req.user.id, date: day } },
-      update: {
-        status: 'hadir',
-        checkInTime: now,
-        branchId: branchId || null,
-        photo,
-        latitude: latitude ?? null,
-        longitude: longitude ?? null,
-        locationName: locationName || null,
-        verifyStatus: 'pending',
-        verifiedById: null,
-        verifiedAt: null,
-        rejectReason: null,
-      },
-      create: {
-        userId: req.user.id,
-        branchId: branchId || null,
-        date: day,
-        status: 'hadir',
-        checkInTime: now,
-        photo,
-        latitude: latitude ?? null,
-        longitude: longitude ?? null,
-        locationName: locationName || null,
-        verifyStatus: 'pending',
-      },
-    })
+    const existing = await findTodayRecord(req.user.id, day, branchId)
+    const data = {
+      status: 'hadir',
+      checkInTime: now,
+      photo,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      locationName: locationName || null,
+      verifyStatus: 'pending',
+      verifiedById: null,
+      verifiedAt: null,
+      rejectReason: null,
+    }
+    const record = existing
+      ? await prisma.staffAttendance.update({ where: { id: existing.id }, data, include: { branch: true } })
+      : await prisma.staffAttendance.create({ data: { ...data, userId: req.user.id, branchId, date: day }, include: { branch: true } })
 
     await notifyRole('admin', {
       type: 'staff_checkin_pending',
       title: 'Absen Coach Menunggu Verifikasi',
-      message: `${user.name} melakukan absen dan menunggu verifikasi Anda.`,
+      message: `${user.name} melakukan absen${record.branch ? ` di ${record.branch.name}` : ''} dan menunggu verifikasi Anda.`,
       link: '/admin/absensi',
     })
 
@@ -69,13 +78,21 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
 
 router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
   const { photo, latitude, longitude, locationName } = req.body
+  let { branchId } = req.body
   if (!photo) return res.status(400).json({ error: 'Foto selfie wajib diambil' })
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } })
+    const assignedBranchIds = await getUserBranchIds(req.user.id)
+    if (assignedBranchIds.length > 0) {
+      if (!branchId) return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
+      await assertBranchAccess(req.user.id, branchId)
+    } else {
+      branchId = null
+    }
     const day = startOfDay()
-    const existing = await prisma.staffAttendance.findUnique({ where: { userId_date: { userId: req.user.id, date: day } } })
+    const existing = await findTodayRecord(req.user.id, day, branchId)
     if (!existing || !existing.checkInTime) {
-      return res.status(400).json({ error: 'Absen masuk dulu sebelum absen pulang' })
+      return res.status(400).json({ error: 'Absen masuk dulu di cabang ini sebelum absen pulang' })
     }
     const now = new Date()
     const record = await prisma.staffAttendance.update({
@@ -91,12 +108,13 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
         checkOutVerifiedAt: null,
         checkOutRejectReason: null,
       },
+      include: { branch: true },
     })
 
     await notifyRole('admin', {
       type: 'staff_checkout_pending',
       title: 'Absen Pulang Coach Menunggu Verifikasi',
-      message: `${user.name} melakukan absen pulang dan menunggu verifikasi Anda.`,
+      message: `${user.name} melakukan absen pulang${record.branch ? ` di ${record.branch.name}` : ''} dan menunggu verifikasi Anda.`,
       link: '/admin/absensi',
     })
 
@@ -108,11 +126,16 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
   }
 })
 
+// Returns every branch the user has already checked into today (array, not
+// a single record) — a multi-branch coach/head-coach can have more than one.
 router.get('/me', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
   try {
     const day = startOfDay(req.query.date)
-    const record = await prisma.staffAttendance.findUnique({ where: { userId_date: { userId: req.user.id, date: day } } })
-    res.json(record)
+    const records = await prisma.staffAttendance.findMany({
+      where: { userId: req.user.id, date: day },
+      include: { branch: true },
+    })
+    res.json(records)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

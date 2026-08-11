@@ -249,7 +249,6 @@ function StaffAttendanceTab() {
                     </div>
                     <div>
                       <div className="font-semibold text-navy-900 text-sm">{g.user?.name}</div>
-                      <div className="text-xs text-gray-400">{g.branch?.code || '-'}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -264,8 +263,9 @@ function StaffAttendanceTab() {
                     const showCheckout = eventFilter !== 'checkin'
                     return (
                       <div key={r.id} className="bg-gray-50 rounded-2xl p-3.5 space-y-3">
-                        <div className="text-[11px] font-semibold text-gray-400">
-                          {new Date(r.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-gray-400">
+                          <span>{new Date(r.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          {r.branch && <span className="text-gold-600">{r.branch.code}</span>}
                         </div>
                         {showCheckin && (
                           <EventBlock

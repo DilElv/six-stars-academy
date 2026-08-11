@@ -116,7 +116,13 @@ model StaffAttendance {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  @@unique([userId, date])
+  // A coach/head-coach assigned to multiple branches checks in/out
+  // separately per branch (e.g. branch A in the morning, branch B in the
+  // afternoon) — branchId is nullable at the DB level only so pre-existing
+  // historical rows (recorded before this constraint) don't collide, since
+  // Postgres treats NULLs as distinct in a unique index; the app always
+  // supplies a real branchId for every new check-in going forward.
+  @@unique([userId, date, branchId])
   @@map("staff_attendances")
 }
 
