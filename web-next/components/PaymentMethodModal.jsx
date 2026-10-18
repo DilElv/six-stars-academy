@@ -25,7 +25,7 @@ function formatRupiah(n) {
 /**
  * Reusable "pick a payment method → get a Rintisan billing link" flow.
  * `onConfirm(paymentMethod)` must return `{ payment, rintisan }` (see lib/api.js
- * createRenewalPayment / createEventPayment, or auth register()'s response shape).
+ * createEventPayment, or checkoutCart, or auth register()'s response shape).
  *
  * `pollStatus`, if given, is polled every 3s once a billing link/QR is shown:
  * `async (confirmResult) => ({ status: 'pending'|'success'|'failed', paidAt, paymentMethod })`,

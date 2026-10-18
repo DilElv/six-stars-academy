@@ -15,3 +15,16 @@ export async function assertBranchAccess(userId, branchId) {
     throw Object.assign(new Error('Anda tidak memiliki akses ke cabang ini'), { status: 403 })
   }
 }
+
+// Gate read-only report/assessment access for the `coach` role: a coach may
+// only read a student who belongs to one of their assigned branches.
+// head_coach and admin pass through unrestricted. Throws 404/403.
+export async function assertCoachStudentAccess(user, studentId) {
+  if (user.role !== 'coach') return
+  const student = await prisma.student.findUnique({ where: { id: studentId }, select: { branchId: true } })
+  if (!student) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
+  const branchIds = await getUserBranchIds(user.id)
+  if (!student.branchId || !branchIds.includes(student.branchId)) {
+    throw Object.assign(new Error('Anda tidak memiliki akses ke data siswa ini'), { status: 403 })
+  }
+}

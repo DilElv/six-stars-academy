@@ -6,14 +6,16 @@ import * as api from '@/lib/api'
 import SelfieCheckinModal from './SelfieCheckinModal'
 
 const VERIFY_ICON = { pending: Clock3, approved: CheckCircle2, rejected: XCircle }
+// Verifikasi admin sudah dihapus — absen yang tersimpan (approved, atau
+// 'pending' dari data lama) sama-sama sah dan tampil sebagai "Absen Tercatat".
 const VERIFY_TEXT = {
-  approved: { label: 'Absen Disetujui', color: 'text-emerald-800' },
-  pending: { label: 'Menunggu Verifikasi Admin', color: 'text-amber-800' },
+  approved: { label: 'Absen Tercatat', color: 'text-emerald-800' },
+  pending: { label: 'Absen Tercatat', color: 'text-emerald-800' },
   rejected: { label: 'Absen Ditolak', color: 'text-red-800' },
 }
 const VERIFY_BG = {
   approved: 'bg-emerald-50 border-emerald-100',
-  pending: 'bg-amber-50 border-amber-100',
+  pending: 'bg-emerald-50 border-emerald-100',
   rejected: 'bg-red-50 border-red-100',
 }
 
@@ -120,20 +122,23 @@ function BranchAttendance({ branchLabel, record, onOpenModal }) {
  * section per assigned branch. Someone with no branch assigned yet falls
  * back to a single plain section (matches server-next's no-branch path).
  * Both events reuse SelfieCheckinModal (live camera + watermark +
- * geolocation) and are verified by admin independently per branch — see
+ * geolocation). Verifikasi admin sudah dihapus: absen langsung tercatat
+ * (foto + timestamp) di laporan dan payroll — see
  * server-next/routes/staffAttendance.js.
  */
 export default function StaffCheckinCard() {
   const [branches, setBranches] = useState([])
   const [records, setRecords] = useState([])
+  const [eventRows, setEventRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // { type, branchId, branchLabel } | null
 
   function load() {
-    Promise.all([api.getMe(), api.getMyStaffAttendance()])
-      .then(([me, recs]) => {
+    Promise.all([api.getMe(), api.getMyStaffAttendance(), api.getTodayEventStaffAttendance()])
+      .then(([me, recs, events]) => {
         setBranches((me.branches || []).map((b) => b.branch))
         setRecords(recs)
+        setEventRows(events)
       })
       .finally(() => setLoading(false))
   }
@@ -141,6 +146,11 @@ export default function StaffCheckinCard() {
   useEffect(load, [])
 
   function handleSuccess(newRecord) {
+    if (newRecord.eventId) {
+      setEventRows((prev) => prev.map((event) => event.id === newRecord.eventId ? { ...event, myAttendance: newRecord } : event))
+      setModal(null)
+      return
+    }
     setRecords((prev) => {
       const others = prev.filter((r) => r.id !== newRecord.id)
       return [...others, newRecord]
@@ -169,11 +179,32 @@ export default function StaffCheckinCard() {
         />
       ))}
 
+      {eventRows.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <div className="text-xs font-bold uppercase tracking-wide text-navy-700">Absensi Event Hari Ini</div>
+          {eventRows.map((event) => {
+            const allowed = event.branches?.map((row) => row.branch) || []
+            const selectedBranch = allowed.find((branch) => branches.some((mine) => mine.id === branch.id)) || branches[0]
+            return (
+              <div key={event.id} className="rounded-3xl border border-gold-100 bg-gold-50/40 p-4">
+                <div className="font-semibold text-navy-900 text-sm mb-3">{event.title} <span className="text-xs font-normal text-gray-400">· {event.type}</span></div>
+                <BranchAttendance
+                  branchLabel={selectedBranch ? `${selectedBranch.name} (${selectedBranch.code})` : event.location}
+                  record={event.myAttendance}
+                  onOpenModal={(type) => setModal({ type, eventId: event.id, branchId: selectedBranch?.id, branchLabel: event.title })}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {modal && (
         <SelfieCheckinModal
           type={modal.type}
           branchId={modal.branchId}
           branchLabel={modal.branchLabel}
+          eventId={modal.eventId}
           onSuccess={handleSuccess}
           onClose={() => setModal(null)}
         />

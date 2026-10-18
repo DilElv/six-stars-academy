@@ -34,3 +34,8 @@ server-next/uploads/rapor/
 # DB dumps / backups
 backup/
 *.dump
+
+# Stale/aborted local build outputs & scratch files (not part of the app)
+.next-*/
+web-next/build-out.txt
+server-next/tmp-audit.mjs

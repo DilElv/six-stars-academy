@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { RefreshCw, Loader2, MessageCircle, Check } from 'lucide-react'
+import { RefreshCw, Loader2, Check, ReceiptText, Banknote } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
@@ -16,22 +16,25 @@ function formatTanggal(d) {
   return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-function renewalWaLink(phone, parentName, studentName, pkg, amount, endDate) {
-  const normalized = phone.startsWith('62') ? phone : `62${phone.replace(/^0/, '')}`
-  const message = `Halo ${parentName}, ini pengingat dari SixStars Academy untuk perpanjangan paket latihan ${studentName}.\n\nPaket: ${pkg.name} (${pkg.sessionsPerWeek}x/minggu)\nHarga: ${formatRupiah(amount)}\nBerlaku sampai: ${formatTanggal(endDate)}\n\nSilakan lakukan pembayaran perpanjangan agar ${studentName} bisa lanjut latihan. Terima kasih!`
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
-}
+const MANUAL_METHODS = [
+  { value: 'cash', label: 'Tunai (Cash)' },
+  { value: 'transfer_manual', label: 'Transfer Manual' },
+  { value: 'lainnya', label: 'Lainnya' },
+]
 
-// Admin/head-coach-initiated renewal — distinct from EditModal's plain
-// package correction: this always records a real (already-paid) payment,
-// resets the session quota, and lets legacy ("anak lama") members renew on
-// a hidden, student-specific custom price instead of ever being matched to
-// the standard Pengaturan catalog. See server-next/routes/students.js
-// POST /:id/renew.
-export default function PerpanjangPaketModal({ student, branches, packages, onClose, onSaved }) {
+// Admin/head-coach-initiated renewal. Dua kemungkinan aksi:
+//  - "Buat Tagihan" -> tagihan masuk ke daftar tagihan anak, parent membayarnya
+//    lewat menu Perpanjang Paket (belum dihitung sebagai pendapatan, paket
+//    belum aktif).
+//  - "Tandai Lunas" -> pembayaran manual (cash/transfer pribadi) langsung
+//    dicatat lunas + paket langsung diperpanjang.
+// Lihat server-next/routes/students.js POST /:id/renew.
+export default function PerpanjangPaketModal({ student, branches = [], packages = [], onClose, onSaved }) {
   const isCustomPackage = !!student.package?.isCustom
-  const [isOldMember, setIsOldMember] = useState(student.isOldMember || false)
-  const [paymentStatus, setPaymentStatus] = useState('pending')
+  const [memberType, setMemberType] = useState(student.isOldMember ? 'old' : isCustomPackage ? 'custom' : 'new')
+  const isOldMember = memberType === 'old'
+  const usesCustom = memberType !== 'new'
+  const [loadingPrice, setLoadingPrice] = useState(true)
   const [branchId, setBranchId] = useState(student.branchId || '')
   const [packageId, setPackageId] = useState('')
   const [amount, setAmount] = useState('')
@@ -39,24 +42,42 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
   const [customSessions, setCustomSessions] = useState(isCustomPackage ? String(student.package.sessionsPerWeek) : '1')
   const [customDuration, setCustomDuration] = useState(isCustomPackage ? String(student.package.durationMonths) : '1')
   const [customPrice, setCustomPrice] = useState(isCustomPackage ? String(student.package.price) : '')
+  const [note, setNote] = useState('')
+  const [manualMethod, setManualMethod] = useState('cash')
   const [branchPackages, setBranchPackages] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
 
   useEffect(() => {
-    if (!branchId || isOldMember) return setBranchPackages(null)
+    if (!branchId || usesCustom) return setBranchPackages(null)
     api.getPackages(branchId).then(setBranchPackages).catch(() => setBranchPackages(null))
-  }, [branchId, isOldMember])
+  }, [branchId, usesCustom])
+
+  useEffect(() => {
+    let active = true
+    api.getStudent(student.id).then((fresh) => {
+      if (!active) return
+      const pkg = fresh.customPackage
+      setMemberType(fresh.isOldMember ? 'old' : pkg ? 'custom' : 'new')
+      if (pkg) {
+        setCustomName(pkg.name)
+        setCustomSessions(String(pkg.sessionsPerWeek))
+        setCustomDuration(String(pkg.durationMonths))
+        setCustomPrice(String(pkg.price))
+      }
+      setLoadingPrice(false)
+    }).catch((err) => { if (active) setError(err.message) })
+    return () => { active = false }
+  }, [student.id])
 
   const effectivePackages = branchPackages || packages
   const selectedPackage = effectivePackages?.find((p) => p.id === packageId)
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function submit(mode) {
     setError('')
-    const payload = { isOldMember, paymentStatus }
-    if (isOldMember) {
+    const payload = { isOldMember, mode, note: note.trim() || undefined }
+    if (usesCustom) {
       if (!customName.trim()) return setError('Nama paket wajib diisi')
       if (!customPrice) return setError('Harga wajib diisi')
       payload.customPackage = {
@@ -70,7 +91,8 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
       payload.packageId = packageId
       if (amount !== '') payload.amount = Number(amount)
     }
-    setSaving(true)
+    if (mode === 'paid') payload.paymentMethod = manualMethod
+    setSaving(mode)
     try {
       const res = await api.renewStudent(student.id, payload)
       setResult(res)
@@ -78,46 +100,33 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
     } catch (err) {
       setError(err.message)
     } finally {
-      setSaving(false)
+      setSaving('')
     }
   }
 
   if (result) {
     const pkg = result.package
-    const waHref = student.parentPhone
-      ? renewalWaLink(student.parentPhone, student.parentName, student.fullName, pkg, result.payment.amount, result.quote.packageEndDate)
-      : null
+    const isInvoice = !!result.invoice
     return (
       <ModalPortal>
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 ${result.paid ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-              <Check size={24} className={result.paid ? 'text-emerald-600' : 'text-amber-600'} />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 ${isInvoice ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+              {isInvoice ? <ReceiptText size={24} className="text-amber-600" /> : <Check size={24} className="text-emerald-600" />}
             </div>
-            <h3 className="font-bold text-navy-900">{result.paid ? 'Perpanjangan Berhasil' : 'Perpanjangan Dicatat — Menunggu Pembayaran'}</h3>
+            <h3 className="font-bold text-navy-900">{isInvoice ? 'Tagihan Dibuat' : 'Perpanjangan Berhasil'}</h3>
             <p className="text-sm text-gray-500 mt-1">
-              {student.fullName} — {pkg.name} ({pkg.sessionsPerWeek}x/minggu) — {formatRupiah(result.payment.amount)}
+              {student.fullName} — {pkg.name} ({pkg.sessionsPerWeek}x/minggu) — {formatRupiah(isInvoice ? result.amount : result.payment.amount)}
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              {result.paid ? 'Berlaku sampai' : 'Kalau sudah bayar, berlaku sampai'} {formatTanggal(result.quote.packageEndDate)}
-            </p>
-            {!result.paid && (
-              <p className="text-[11px] text-amber-600 mt-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                Sesi & paket BELUM aktif. Tandai lunas di Keuangan Pemasukan setelah orang tua membayar.
+            {isInvoice ? (
+              <p className="text-xs text-gray-400 mt-1">
+                Belum dihitung sebagai pendapatan. Tagihan muncul di menu Perpanjang Paket orang tua; paket aktif setelah dibayar.
               </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">Berlaku sampai {formatTanggal(result.quote.packageEndDate)}</p>
             )}
-            {waHref && (
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl"
-              >
-                <MessageCircle size={16} /> Kirim Reminder WA
-              </a>
-            )}
-            <button onClick={onClose} className="mt-2 w-full text-sm font-semibold text-gray-500 hover:text-navy-700 py-2">Tutup</button>
+            <button onClick={onClose} className="mt-4 w-full text-sm font-semibold text-gray-500 hover:text-navy-700 py-2">Tutup</button>
           </div>
         </div>
       </ModalPortal>
@@ -133,32 +142,33 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
             <h3 className="font-bold text-navy-900 flex items-center gap-2"><RefreshCw size={16} /> Perpanjang Paket</h3>
             <p className="text-xs text-gray-400 mt-0.5">{student.fullName} ({student.studentId})</p>
           </div>
-          <form onSubmit={handleSubmit} className="p-5 space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); submit('invoice') }} className="p-5 space-y-3">
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
 
-            <div className="flex gap-2">
+            <fieldset disabled={loadingPrice || !!saving} className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setIsOldMember(false)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${!isOldMember ? 'bg-navy-900 text-white border-navy-900' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                onClick={() => setMemberType('new')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${memberType === 'new' ? 'bg-navy-900 text-white border-navy-900' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
               >
                 Anak Baru
               </button>
               <button
                 type="button"
-                onClick={() => setIsOldMember(true)}
+                onClick={() => setMemberType('old')}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all ${isOldMember ? 'bg-navy-900 text-white border-navy-900' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
               >
                 Anak Lama
               </button>
-            </div>
+              <button type="button" onClick={() => setMemberType('custom')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${memberType === 'custom' ? 'bg-navy-900 text-white border-navy-900' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                Custom
+              </button>
+            </fieldset>
 
-            {isOldMember ? (
+            {usesCustom ? (
               <div className="space-y-3">
                 <p className="text-[11px] text-gray-400">
-                  {isCustomPackage
-                    ? 'Paket harga lama anak ini — ubah kalau harganya berubah, tetap dipakai otomatis di perpanjangan berikutnya.'
-                    : 'Belum ada paket custom untuk anak ini — isi sekali, akan tersimpan otomatis untuk perpanjangan berikutnya.'}
+                  Harga khusus tersimpan untuk anak ini dan otomatis digunakan pada perpanjangan berikutnya. Harga berlaku per durasi paket.
                 </p>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Nama Paket</label>
@@ -219,23 +229,33 @@ export default function PerpanjangPaketModal({ student, branches, packages, onCl
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Status Pembayaran</label>
-              <AppSelect
-                value={paymentStatus}
-                onChange={setPaymentStatus}
-                className="w-full"
-                options={[{ value: 'pending', label: 'Belum Lunas' }, { value: 'success', label: 'Lunas' }]}
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Keterangan (opsional)</label>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="mis. Anak berprestasi, keringanan, titipan orang tua"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
               />
-              <p className="text-[11px] text-gray-400 mt-1">
-                {paymentStatus === 'pending'
-                  ? 'Paket & sesi baru BELUM aktif sampai pembayaran ditandai lunas (verifikasi di Keuangan Pemasukan).'
-                  : 'Paket & sesi baru langsung aktif sekarang.'}
-              </p>
             </div>
 
-            <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
-              {saving && <Loader2 size={14} className="animate-spin" />} {paymentStatus === 'pending' ? 'Simpan & Kirim Reminder' : 'Perpanjang & Tandai Lunas'}
+            <button type="submit" disabled={!!saving || loadingPrice} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
+              {saving === 'invoice' ? <Loader2 size={14} className="animate-spin" /> : <ReceiptText size={14} />} Buat Tagihan (Belum Dibayar)
             </button>
+
+            <div className="rounded-2xl border border-gray-200 p-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500">
+                <Banknote size={12} /> Sudah dibayar tunai / transfer pribadi? Tandai lunas sekarang
+              </div>
+              <AppSelect value={manualMethod} onChange={setManualMethod} className="w-full" options={MANUAL_METHODS} />
+              <button
+                type="button"
+                onClick={() => submit('paid')}
+                disabled={!!saving || loadingPrice}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50"
+              >
+                {saving === 'paid' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Tandai Lunas
+              </button>
+            </div>
           </form>
         </div>
       </div>

@@ -46,10 +46,24 @@ async function main() {
     data: { name: 'Admin SixStars', email: 'admin@ssb.com', password: await bcrypt.hash('admin123', 10), role: 'admin' },
   })
   const headCoach = await prisma.user.create({
-    data: { name: 'Budi Santoso', email: 'headcoach@ssb.com', password: await bcrypt.hash('headcoach123', 10), role: 'head_coach', phone: '081234567890', branchId: bsd.id },
+    data: {
+      name: 'Budi Santoso',
+      email: 'headcoach@ssb.com',
+      password: await bcrypt.hash('headcoach123', 10),
+      role: 'head_coach',
+      phone: '081234567890',
+      branches: { create: { branchId: bsd.id } },
+    },
   })
   const coach = await prisma.user.create({
-    data: { name: 'Andi Wijaya', email: 'coach@ssb.com', password: await bcrypt.hash('coach123', 10), role: 'coach', phone: '081234567891', branchId: bsd.id },
+    data: {
+      name: 'Andi Wijaya',
+      email: 'coach@ssb.com',
+      password: await bcrypt.hash('coach123', 10),
+      role: 'coach',
+      phone: '081234567891',
+      branches: { create: { branchId: bsd.id } },
+    },
   })
   const parent = await prisma.user.create({
     data: { name: 'Siti Rahayu', email: 'parent@ssb.com', password: await bcrypt.hash('parent123', 10), role: 'parent', phone: '081234567892' },

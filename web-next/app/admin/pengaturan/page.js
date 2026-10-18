@@ -1,13 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Save, Loader2, Plus, Trash2, Lock } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, Lock, HeartPulse, MessageCircle } from 'lucide-react'
 import * as api from '@/lib/api'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 
 function formatRupiah(n) {
   return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
 }
+
+// Fitur yang belum ikut dirilis. Kodenya sudah lengkap di file ini — cukup
+// diubah menjadi true saat fitur tersebut dinaikkan ke VPS.
+const SHOW_BPJS_SETTINGS = false
+const SHOW_WA_ADMIN_BUTTON = false
 
 export default function AdminPengaturanPage() {
   const [settings, setSettings] = useState(null)
@@ -25,12 +30,23 @@ export default function AdminPengaturanPage() {
   const [message, setMessage] = useState('')
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [savingPassword, setSavingPassword] = useState(false)
+  const [bpjsForm, setBpjsForm] = useState({ enabled: false, amount: 0, day: 1 })
+  const [bpjsStatus, setBpjsStatus] = useState(null)
+  const [savingBpjs, setSavingBpjs] = useState(false)
+  const [runningBpjs, setRunningBpjs] = useState(false)
+  const [waForm, setWaForm] = useState({ number: '' })
+  const [savingWa, setSavingWa] = useState(false)
 
   function load() {
-    api.getSettings().then(setSettings)
+    api.getSettings().then((s) => {
+      setSettings(s)
+      setBpjsForm({ enabled: !!s.bpjsEnabled, amount: s.bpjsAmount || 0, day: s.bpjsDay || 1 })
+      setWaForm({ number: s.waAdminNumber || '' })
+    })
     api.getAllPackages().then(setPackages)
     api.getBranches().then(setBranches)
     api.getAllBranchPackages().then(setBranchPrices)
+    api.getBpjsStatus().then(setBpjsStatus).catch(() => {})
   }
 
   useEffect(load, [])
@@ -171,6 +187,48 @@ export default function AdminPengaturanPage() {
       flash(err.message)
     } finally {
       setSavingPassword(false)
+    }
+  }
+
+  async function handleSaveBpjs() {
+    setSavingBpjs(true)
+    try {
+      const updated = await api.updateSettings({ ...settings, bpjsEnabled: bpjsForm.enabled, bpjsAmount: bpjsForm.amount, bpjsDay: bpjsForm.day })
+      setSettings(updated)
+      flash('Pengaturan BPJS disimpan')
+      api.getBpjsStatus().then(setBpjsStatus).catch(() => {})
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setSavingBpjs(false)
+    }
+  }
+
+  async function handleRunBpjs() {
+    setRunningBpjs(true)
+    try {
+      const res = await api.runBpjsBilling({})
+      if (res.created > 0) flash(`${res.created} tagihan ${res.label} dibuat`)
+      else if (res.reason === 'amount_not_set') flash('Isi nominal BPJS terlebih dahulu')
+      else flash(`Semua anak sudah tertagih untuk ${res.label}`)
+      api.getBpjsStatus().then(setBpjsStatus).catch(() => {})
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setRunningBpjs(false)
+    }
+  }
+
+  async function handleSaveWa() {
+    setSavingWa(true)
+    try {
+      const updated = await api.updateSettings({ ...settings, waAdminNumber: waForm.number })
+      setSettings(updated)
+      flash('Nomor WhatsApp admin disimpan')
+    } catch (err) {
+      flash(err.message)
+    } finally {
+      setSavingWa(false)
     }
   }
 
@@ -350,6 +408,80 @@ export default function AdminPengaturanPage() {
         </table>
         <p className="text-xs text-gray-400 mt-2">Kosongkan input untuk menggunakan harga default dari paket.</p>
       </div>
+
+      {/* Kartu BPJS disembunyikan sampai rilis fitur Billing BPJS berikutnya.
+          Kode & handler-nya tetap disimpan di file ini; cukup ubah flag di bawah
+          menjadi true saat fitur itu dirilis. */}
+      {SHOW_BPJS_SETTINGS && (
+      <div className="glass-card rounded-3xl p-6 space-y-4">
+        <div className="flex items-center gap-1.5">
+          <HeartPulse size={15} className="text-gold-500" />
+          <h2 className="font-semibold text-navy-900 text-sm">BPJS</h2>
+        </div>
+        <p className="text-xs text-gray-400">
+          Nominal BPJS yang sama ditagih otomatis setiap bulan ke semua anak terdaftar (status bukan Nonaktif). Tagihan muncul sebagai tagihan belum dibayar di akun orang tua, dan baru dihitung sebagai pendapatan setelah dibayar.
+        </p>
+
+        <label className="flex items-center gap-2 text-sm text-navy-800">
+          <input type="checkbox" checked={bpjsForm.enabled} onChange={(e) => setBpjsForm((f) => ({ ...f, enabled: e.target.checked }))} className="rounded" />
+          Aktifkan penagihan BPJS otomatis
+        </label>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Nominal per Bulan</label>
+            <RupiahInput value={bpjsForm.amount} onChange={(val) => setBpjsForm((f) => ({ ...f, amount: val }))} className="w-full" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal Penagihan (1-28)</label>
+            <input type="number" min={1} max={28} value={bpjsForm.day} onChange={(e) => setBpjsForm((f) => ({ ...f, day: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+          </div>
+        </div>
+
+        {bpjsStatus && (
+          <div className="text-xs text-gray-500 bg-gray-50 rounded-2xl px-3 py-2">
+            Periode <span className="font-semibold text-navy-800">{bpjsStatus.label}</span> · {bpjsStatus.billed} dari {bpjsStatus.eligible} anak sudah tertagih
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={handleSaveBpjs} disabled={savingBpjs} className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50">
+            {savingBpjs ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan Pengaturan BPJS
+          </button>
+          <button onClick={handleRunBpjs} disabled={runningBpjs} className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50">
+            {runningBpjs ? <Loader2 size={14} className="animate-spin" /> : <HeartPulse size={14} />} Tagih Sekarang
+          </button>
+        </div>
+      </div>
+      )}
+
+      {/* Kartu "Tombol WhatsApp Admin" disembunyikan bersama tombolnya sampai
+          rilis berikutnya (lihat SHOW_WA_ADMIN_BUTTON). */}
+      {SHOW_WA_ADMIN_BUTTON && (
+      <div className="glass-card rounded-3xl p-6 space-y-4">
+        <div className="flex items-center gap-1.5">
+          <MessageCircle size={15} className="text-gold-500" />
+          <h2 className="font-semibold text-navy-900 text-sm">Tombol WhatsApp Admin</h2>
+        </div>
+        <p className="text-xs text-gray-400">
+          Tombol &quot;Chat Admin&quot; mengambang di dashboard parent/coach/head coach mengarah ke nomor ini. Boleh format 08… atau 62…; kosongkan untuk memakai nomor bawaan.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Nomor WhatsApp Admin</label>
+            <input
+              value={waForm.number}
+              onChange={(e) => setWaForm({ number: e.target.value })}
+              placeholder="6285215021228"
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums"
+            />
+          </div>
+          <button onClick={handleSaveWa} disabled={savingWa} className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-50">
+            {savingWa ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan Nomor
+          </button>
+        </div>
+      </div>
+      )}
 
       <form onSubmit={handleSavePassword} className="glass-card rounded-3xl p-6 space-y-4">
         <h2 className="font-semibold text-navy-900 text-sm flex items-center gap-1.5"><Lock size={15} /> Ganti Password</h2>

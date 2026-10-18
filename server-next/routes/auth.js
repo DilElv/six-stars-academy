@@ -4,14 +4,15 @@ import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
 import { createBillingFor, convertPendingRegistration, failPendingRegistration } from '../lib/paymentHelpers.js'
-import { queryPayment } from '../lib/rintisan.js'
+import { queryPayment, isSupportedPaymentMethod } from '../lib/rintisan.js'
 
 const router = Router()
 
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body
+  const { email, password } = req.body || {}
+  if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' })
   try {
-    const user = await prisma.user.findUnique({ where: { email } })
+    const user = await prisma.user.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' } } })
     if (!user) return res.status(401).json({ error: 'Email atau password salah' })
 
     const valid = await bcrypt.compare(password, user.password)
@@ -50,6 +51,9 @@ router.post('/register', async (req, res) => {
   } = req.body
 
   try {
+    if (!paymentMethod || !isSupportedPaymentMethod(paymentMethod)) {
+      return res.status(400).json({ error: 'Pilih metode pembayaran Rintisan yang valid' })
+    }
     if (!email || !email.toLowerCase().endsWith('@sixstars.id')) {
       return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
     }
@@ -91,32 +95,31 @@ router.post('/register', async (req, res) => {
       },
     })
 
-    let rintisan = null
-    if (paymentMethod) {
-      try {
-        const result = await createBillingFor({
-          id: pending.id,
-          totalAmount: pending.totalAmount,
-          paymentMethod,
-          toName: parentName,
-          toEmail: email,
-          toPhone: parentPhone,
-          toAddress: address,
-          note: `Pendaftaran ${fullName}`,
-        })
-        await prisma.pendingRegistration.update({
-          where: { id: pending.id },
-          data: {
-            transactionId: result.trx_id || null,
-            paymentLink: result.rintisan_billing_link || result.payment_link || null,
-            qrString: result.qr_string || null,
-          },
-        })
-        rintisan = result
-      } catch (err) {
-        console.error('Rintisan checkout error saat registrasi:', err.message)
-        // Pending registration tetap tersimpan; parent bisa coba lagi (belum ada akun/token untuk itu saat ini).
-      }
+    let rintisan
+    try {
+      const result = await createBillingFor({
+        id: pending.id,
+        totalAmount: pending.totalAmount,
+        paymentMethod,
+        toName: parentName,
+        toEmail: email,
+        toPhone: parentPhone,
+        toAddress: address,
+        note: `Pendaftaran ${fullName}`,
+      })
+      await prisma.pendingRegistration.update({
+        where: { id: pending.id },
+        data: {
+          transactionId: result.trx_id || null,
+          paymentLink: result.rintisan_billing_link || result.payment_link || null,
+          qrString: result.qr_string || null,
+        },
+      })
+      rintisan = result
+    } catch (err) {
+      await prisma.pendingRegistration.deleteMany({ where: { id: pending.id, status: 'pending' } })
+      console.error('Rintisan checkout error saat registrasi:', err.message)
+      return res.status(400).json({ error: err.message || 'Gagal membuat tagihan Rintisan' })
     }
 
     res.status(201).json({ pendingRegistrationId: pending.id, totalAmount: pending.totalAmount, rintisan })

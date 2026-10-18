@@ -3,6 +3,9 @@
 import { Home, Users, Shield, UserCog, Wallet, ClipboardList, Calendar, Trophy, Globe, Settings, ShieldCheck } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
+// Fitur yang belum ikut dirilis disembunyikan dari menu — kodenya masih ada,
+// cukup tambahkan kembali barisnya saat fitur tersebut dinaikkan ke VPS:
+// Toko (katalog merchandise), Audit, Payroll, Absensi Coach.
 const navItems = [
   { href: '/admin', label: 'Dasbor', icon: Home },
   { href: '/admin/data-anak', label: 'Data Anak', icon: Users },

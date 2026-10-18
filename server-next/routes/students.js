@@ -4,30 +4,17 @@ import bcrypt from 'bcryptjs'
 import QRCode from 'qrcode'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { getEffectivePrice } from '../lib/pricing.js'
+import { findExistingCustomPackage, resolveCustomPackage } from '../lib/studentCustomPackage.js'
+import { logPaymentAudit } from '../lib/paymentAudit.js'
+import { getEffectivePrice, resolvePackagePrice } from '../lib/pricing.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
-import { computePackagePeriod } from '../lib/packagePeriod.js'
+import { computePackagePeriod, parsePackageDates } from '../lib/packagePeriod.js'
 import { notifyUser, notifyRole } from '../lib/notify.js'
 import { applyPaymentSuccess } from '../lib/paymentHelpers.js'
 import { assignAgeGroup } from '../lib/ageGroup.js'
+import { ensureCurrentSessionMonth, monthlySessionLimit } from '../lib/sessionQuota.js'
 
 const router = Router()
-
-// Finds a student's existing hidden custom package (Package.isCustom),
-// whether or not it's currently their ACTIVE package — needed because a
-// pending (unpaid) renewal never writes Student.packageId, so relying on
-// `student.package?.isCustom` alone would create a duplicate custom package
-// on every subsequent quote until the parent actually pays. Falls back to
-// the most recent Payment (any status) that targeted a custom package.
-async function findExistingCustomPackage(student) {
-  if (student.package?.isCustom) return student.package
-  const priorPayment = await prisma.payment.findFirst({
-    where: { studentId: student.id, package: { isCustom: true } },
-    orderBy: { createdAt: 'desc' },
-    include: { package: true },
-  })
-  return priorPayment?.package || null
-}
 
 // Self-heals `Student.ageGroup` on every read: since brackets are derived
 // purely from dateOfBirth vs. today's date, a record left untouched drifts
@@ -73,9 +60,7 @@ async function computeSessionStats(student) {
   // Prefers the stored value — it's set correctly (prorated for a partial
   // first month, see lib/packagePeriod.js) by every creation/renewal path.
   // Falls back to the flat estimate only for legacy rows predating that fix.
-  const totalSessions = student.totalSessions ?? (student.package
-    ? student.package.sessionsPerWeek * 4 * student.package.durationMonths
-    : 0)
+  const totalSessions = student.totalSessions ?? monthlySessionLimit(student.package)
 
   if (!student.packageStartDate || !student.packageEndDate) {
     return { totalSessions, attendedSessions: 0, attendanceSummary: { hadir: 0, izin: 0, sakit: 0, alfa: 0, total: 0 } }
@@ -127,9 +112,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
   // Beasiswa is admin-only — head_coach can create/edit students same as
   // always, but never sets a scholarship percent, same pattern as branchId
   // being stripped for coach/head_coach in routes/auth.js.
-  const isAdmin = req.user.role === 'admin'
-  const registrationScholarshipPercent = isAdmin ? Math.max(0, Math.min(100, Number(req.body.registrationScholarshipPercent) || 0)) : 0
-  const sppScholarshipPercent = isAdmin ? Math.max(0, Math.min(100, Number(req.body.sppScholarshipPercent) || 0)) : 0
+  const canManageScholarship = ['admin', 'head_coach'].includes(req.user.role)
+  const registrationScholarshipPercent = canManageScholarship ? Math.max(0, Math.min(100, Number(req.body.registrationScholarshipPercent) || 0)) : 0
+  const sppScholarshipPercent = canManageScholarship ? Math.max(0, Math.min(100, Number(req.body.sppScholarshipPercent) || 0)) : 0
 
   try {
     if (!parentEmail || !parentEmail.toLowerCase().endsWith('@sixstars.id')) {
@@ -141,6 +126,8 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     if (existing) return res.status(400).json({ error: 'Email sudah terdaftar' })
 
     const pkg = packageId ? await prisma.package.findUnique({ where: { id: packageId } }) : null
+    const initialSessions = sessionsUsed === undefined || sessionsUsed === '' ? 0 : Number(sessionsUsed)
+    if (!Number.isInteger(initialSessions) || initialSessions < 0 || (pkg && initialSessions > monthlySessionLimit(pkg))) return res.status(400).json({ error: 'Sesi awal harus berada dalam batas kuota paket' })
     // Resolves to the branch's BranchPackage override (Pengaturan > Harga
     // Paket) when one exists, matching what the picker actually displayed —
     // `amount` from the body is a rare explicit override, not the norm.
@@ -183,7 +170,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           packageId: pkg?.id || null,
           packageStartDate: pkg ? startDate : null,
           packageEndDate: period?.packageEndDate || null,
-          totalSessions: period?.totalSessions ?? null,
+          totalSessions: pkg ? monthlySessionLimit(pkg) : null,
+          sessionMonth: pkg ? startDate.getMonth() + 1 : null,
+          sessionYear: pkg ? startDate.getFullYear() : null,
           branchId: branchId || null,
           sessionsUsed: sessionsUsed ? Math.max(0, Math.round(Number(sessionsUsed))) : 0,
           registrationScholarshipPercent,
@@ -206,6 +195,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
             paymentType: 'registration',
             status: paymentStatus || 'pending',
             paidAt: paymentStatus === 'success' ? new Date() : null,
+            effectsAppliedAt: paymentStatus === 'success' ? new Date() : null,
           },
         })
       }
@@ -256,6 +246,9 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
     // stale stored value never hides a student who now belongs to the
     // requested bracket — see healAgeGroups().
     students = await healAgeGroups(students)
+    const refreshedStudents = []
+    for (const student of students) refreshedStudents.push(await ensureCurrentSessionMonth(student))
+    students = refreshedStudents
     if (req.query.ageGroup) students = students.filter((s) => s.ageGroup === req.query.ageGroup)
     res.json(students)
   } catch (err) {
@@ -273,13 +266,33 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
     })
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
     student = await healAgeGroup(student)
+    student = await ensureCurrentSessionMonth(student)
 
     const stats = await computeSessionStats(student)
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const attendanceDates = await prisma.attendance.findMany({
+      where: { studentId: student.id, date: { gte: monthStart, lt: todayStart } },
+      select: { date: true },
+    })
+    const dateKey = (value) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+    const recordedDates = new Set(attendanceDates.map((row) => dateKey(row.date)))
+    const schedules = student.branchId ? await prisma.schedule.findMany({
+      where: {
+        branchId: student.branchId,
+        status: 'active',
+        date: { gte: monthStart, lt: todayStart },
+      },
+      select: { date: true, startTime: true, endTime: true, location: true },
+      orderBy: { date: 'asc' },
+    }) : []
+    const missedAttendanceDates = schedules.filter((row) => !recordedDates.has(dateKey(row.date)))
     // For "anak lama", surface their quoted custom package even before it's
     // paid/activated (Student.packageId only updates once paid) — the
     // renewal UI needs this to know a custom price already exists.
-    const customPackage = student.isOldMember ? await findExistingCustomPackage(student) : null
-    res.json({ ...student, ...stats, customPackage })
+    const customPackage = await findExistingCustomPackage(student)
+    res.json({ ...student, ...stats, customPackage, missedAttendanceDates })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -298,6 +311,49 @@ router.get('/me/qrcode.png', authenticate, authorize('parent'), async (req, res)
   }
 })
 
+router.post('/sessions/reset-all', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
+  try {
+    const where = {}
+    const requestedBranchId = req.body?.branchId || null
+    if (req.user.role === 'head_coach') {
+      const branchIds = await getUserBranchIds(req.user.id)
+      if (requestedBranchId && !branchIds.includes(requestedBranchId)) {
+        return res.status(403).json({ error: 'Anda hanya dapat mereset sesi anak di cabang Anda' })
+      }
+      where.branchId = requestedBranchId || { in: branchIds }
+    } else if (requestedBranchId) {
+      where.branchId = requestedBranchId
+    }
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const result = await prisma.$transaction(async (tx) => {
+      const reset = await tx.student.updateMany({
+        where,
+        data: { sessionsUsed: 0, sessionMonth: now.getMonth() + 1, sessionYear: now.getFullYear() },
+      })
+      await tx.student.updateMany({
+        where: {
+          ...where,
+          status: { not: 'inactive' },
+          packageId: { not: null },
+          OR: [{ packageEndDate: null }, { packageEndDate: { gte: today } }],
+        },
+        data: { status: 'active' },
+      })
+      await tx.student.updateMany({
+        where: { ...where, status: { not: 'inactive' }, packageEndDate: { lt: today } },
+        data: { status: 'needs_renewal' },
+      })
+      return reset
+    })
+    res.json({ count: result.count, sessionsUsed: 0, month: now.getMonth() + 1, year: now.getFullYear() })
+  } catch (err) {
+    console.error('Reset all student sessions failed:', err)
+    res.status(500).json({ error: 'Gagal mereset sesi anak' })
+  }
+})
+
 router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   try {
     let student = await prisma.student.findUnique({
@@ -312,8 +368,9 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
     })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
     student = await healAgeGroup(student)
+    student = await ensureCurrentSessionMonth(student)
     const stats = await computeSessionStats(student)
-    res.json({ ...student, ...stats })
+    res.json({ ...student, ...stats, customPackage: await findExistingCustomPackage(student) })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -322,32 +379,39 @@ router.get('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
   const {
-    fullName, dateOfBirth, position, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed,
+    fullName, dateOfBirth, position, address, parentName, parentPhone, photo, status, branchId, packageId, sessionsUsed, totalSessions,
     parentEmail, parentPassword, registrationFee, amount, paymentStatus,
   } = req.body
-  const isAdmin = req.user.role === 'admin'
+  const canManageScholarship = ['admin', 'head_coach'].includes(req.user.role)
   const { registrationScholarshipPercent, sppScholarshipPercent } = req.body
+  for (const value of [sessionsUsed, totalSessions]) {
+    if (value !== undefined && value !== '' && (!Number.isInteger(Number(value)) || Number(value) < 0)) return res.status(400).json({ error: 'Sesi harus berupa bilangan bulat minimal 0' })
+  }
   try {
     const student = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.params.id}))`
+      const current = await tx.student.findUnique({ where: { id: req.params.id } })
+      if (!current) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
       const data = {
         fullName, position, address, parentName, parentPhone, photo, status,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
         branchId: branchId !== undefined ? (branchId || null) : undefined,
         sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,
+        totalSessions: totalSessions !== undefined && totalSessions !== '' ? Math.max(0, Math.round(Number(totalSessions))) : undefined,
       }
       // Beasiswa is admin-only — a head_coach's request simply never sets
       // these keys, so `undefined` leaves the student's existing values untouched.
-      if (isAdmin && registrationScholarshipPercent !== undefined) {
+      if (canManageScholarship && registrationScholarshipPercent !== undefined) {
         data.registrationScholarshipPercent = Math.max(0, Math.min(100, Number(registrationScholarshipPercent) || 0))
       }
-      if (isAdmin && sppScholarshipPercent !== undefined) {
+      if (canManageScholarship && sppScholarshipPercent !== undefined) {
         data.sppScholarshipPercent = Math.max(0, Math.min(100, Number(sppScholarshipPercent) || 0))
       }
 
       // Changing the package re-derives the end date from today (same as a
       // fresh assignment) — this is a correction to what package the student
       // is on, not a renewal, so it doesn't touch Payment records.
-      if (packageId !== undefined) {
+      if (packageId !== undefined && packageId !== current.packageId) {
         if (packageId) {
           const pkg = await tx.package.findUnique({ where: { id: packageId } })
           if (!pkg) throw Object.assign(new Error('Paket tidak ditemukan'), { status: 400 })
@@ -356,7 +420,10 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
           data.packageId = packageId
           data.packageStartDate = startDate
           data.packageEndDate = period.packageEndDate
-          data.totalSessions = period.totalSessions
+          data.totalSessions = monthlySessionLimit(pkg)
+          data.sessionsUsed = 0
+          data.sessionMonth = startDate.getMonth() + 1
+          data.sessionYear = startDate.getFullYear()
         } else {
           data.packageId = null
           data.packageStartDate = null
@@ -365,8 +432,18 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
         }
       }
 
-      const current = await tx.student.findUnique({ where: { id: req.params.id } })
-      if (!current) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
+      const effectiveUsed = data.sessionsUsed ?? current.sessionsUsed
+      const effectiveTotal = data.totalSessions ?? current.totalSessions
+      if (effectiveTotal != null && effectiveUsed > effectiveTotal) {
+        throw Object.assign(new Error('Sesi terpakai tidak boleh melebihi total sesi'), { status: 400 })
+      }
+      if (data.sessionsUsed !== undefined || data.totalSessions !== undefined) {
+        data.sessionMonth = new Date().getMonth() + 1
+        data.sessionYear = new Date().getFullYear()
+        const endDate = data.packageEndDate === undefined ? current.packageEndDate : data.packageEndDate
+        const expired = endDate && new Date(endDate) < new Date(new Date().setHours(0, 0, 0, 0))
+        data.status = (status ?? current.status) === 'inactive' ? 'inactive' : expired || (effectiveTotal != null && effectiveUsed >= effectiveTotal) ? 'needs_renewal' : 'active'
+      }
 
       // Kelompok umur is always derived from tanggal lahir, never an
       // independently-editable field — otherwise it silently drifts from
@@ -398,7 +475,7 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       // beasiswa discount — same fields Tambah Anak sets, editable here as a
       // correction, not a new transaction.
       if (registrationFee !== undefined || amount !== undefined || paymentStatus !== undefined
-        || (isAdmin && (registrationScholarshipPercent !== undefined || sppScholarshipPercent !== undefined))) {
+        || (canManageScholarship && (registrationScholarshipPercent !== undefined || sppScholarshipPercent !== undefined))) {
         const payment = await tx.payment.findFirst({ where: { studentId: req.params.id, paymentType: 'registration' } })
         if (payment) {
           const newAmount = amount !== undefined && amount !== '' ? Math.max(0, Math.round(Number(amount))) : payment.amount
@@ -433,56 +510,79 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
   }
 })
 
+router.put('/:id/package-period', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    let dates
+    try { dates = parsePackageDates(req.body.packageStartDate, req.body.packageEndDate) }
+    catch (err) { return res.status(400).json({ error: err.message }) }
+    const student = await prisma.student.findUnique({ where: { id: req.params.id } })
+    if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
+    if (req.user.role === 'head_coach' && !(await getUserBranchIds(req.user.id)).includes(student.branchId)) {
+      return res.status(403).json({ error: 'Anda hanya dapat mengedit periode anak di cabang Anda' })
+    }
+    if (!student.packageId) return res.status(400).json({ error: 'Anak belum memiliki paket' })
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const exhausted = student.totalSessions != null && student.sessionsUsed >= student.totalSessions
+    const status = student.status === 'inactive' ? 'inactive' : dates.packageEndDate < today || exhausted ? 'needs_renewal' : 'active'
+    const updated = await prisma.student.update({ where: { id: student.id }, data: { ...dates, status }, include: { package: true, branch: true } })
+    res.json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal menyimpan periode paket' })
+  }
+})
+
 // Admin-initiated renewal — distinct from PUT /:id's simple package
-// correction: this creates a real Payment record and, once it's actually
-// paid, resets the session quota. Defaults to `paymentStatus: 'pending'` —
-// the common case is admin quoting a price and sending a WA reminder before
-// the parent has paid, so the session/package must NOT activate yet; only
-// once admin later marks it paid (via applyPaymentSuccess, either here
-// immediately or through Keuangan Pemasukan's "Verifikasi" button) does the
-// renewal actually take effect. "Anak lama" (isOldMember) students get a
-// hidden, student-specific custom-priced Package (Package.isCustom) instead
-// of ever being matched to the standard Pengaturan catalog — reused across
-// renewals once created, independent of payment status.
+// correction. Dua mode (mode: 'invoice' | 'paid'):
+//
+//  - 'invoice': membuat TAGIHAN yang belum dibayar — item masuk ke daftar
+//    tagihan anak dan parent dapat notifikasi. Tidak ada Payment, tidak ada
+//    pendapatan, paket belum diperpanjang. Parent membayarnya dari menu
+//    Perpanjang Paket (satu checkout, otomatis lunas saat gateway mengonfirmasi).
+//  - 'paid' (default, demi kompatibilitas): menandai LANGSUNG LUNAS untuk
+//    pembayaran manual (cash / transfer pribadi / kebijakan khusus). Membuat
+//    Payment lunas + menerapkan efek paket + mencatat keterangan & jejak audit.
+//
+// "Anak lama" (isOldMember) dan "Custom" memakai hidden, student-specific
+// custom-priced Package (Package.isCustom) yang dibuat sekali lalu dipakai
+// ulang, bukan dicocokkan ke katalog Pengaturan.
 router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
-  const { isOldMember, packageId, customPackage, amount, paymentStatus } = req.body
+  const { isOldMember, packageId, customPackage, amount, mode, paymentMethod, note } = req.body
+  const invoiceMode = mode === 'invoice'
   try {
     const student = await prisma.student.findUnique({ where: { id: req.params.id }, include: { package: true } })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
 
+    if (req.user.role === 'head_coach' && !(await getUserBranchIds(req.user.id)).includes(student.branchId)) {
+      return res.status(403).json({ error: 'Anda hanya dapat memperpanjang paket anak di cabang Anda' })
+    }
+    if (amount !== undefined && amount !== '' && (!Number.isSafeInteger(Number(amount)) || Number(amount) < 0 || Number(amount) > 2147483647)) return res.status(400).json({ error: 'Harga tidak valid' })
     let pkg
     if (customPackage) {
       const { name, sessionsPerWeek, durationMonths, price } = customPackage
       if (!name?.trim()) return res.status(400).json({ error: 'Nama paket custom wajib diisi' })
-      if (!sessionsPerWeek || Number(sessionsPerWeek) <= 0) return res.status(400).json({ error: 'Sesi per minggu harus lebih dari 0' })
-      if (!durationMonths || Number(durationMonths) <= 0) return res.status(400).json({ error: 'Durasi (bulan) harus lebih dari 0' })
-      if (price === undefined || Number(price) < 0) return res.status(400).json({ error: 'Harga tidak valid' })
+      if (!Number.isSafeInteger(Number(sessionsPerWeek)) || Number(sessionsPerWeek) <= 0) return res.status(400).json({ error: 'Sesi per minggu harus lebih dari 0' })
+      if (!Number.isSafeInteger(Number(durationMonths)) || Number(durationMonths) <= 0) return res.status(400).json({ error: 'Durasi (bulan) harus lebih dari 0' })
+      if (price === undefined || price === '' || !Number.isSafeInteger(Number(price)) || Number(price) < 0 || Number(price) > 2147483647) return res.status(400).json({ error: 'Harga tidak valid' })
 
-      const customData = {
+      pkg = await resolveCustomPackage(student, {
         name: name.trim(),
         sessionsPerWeek: Math.round(Number(sessionsPerWeek)),
         durationMonths: Math.round(Number(durationMonths)),
         price: Math.round(Number(price)),
-      }
-      const existingCustom = await findExistingCustomPackage(student)
-      pkg = existingCustom
-        ? await prisma.package.update({ where: { id: existingCustom.id }, data: customData })
-        : await prisma.package.create({ data: { ...customData, status: 'inactive', isCustom: true } })
+      })
     } else {
       if (!packageId) return res.status(400).json({ error: 'Pilih paket terlebih dahulu' })
       pkg = await prisma.package.findUnique({ where: { id: packageId } })
-      if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
+      if (!pkg || pkg.isCustom || pkg.status !== 'active') return res.status(400).json({ error: 'Pilih paket standar yang aktif atau gunakan Custom' })
     }
 
     const resolvedAmount = amount !== undefined && amount !== ''
       ? Math.max(0, Math.round(Number(amount)))
-      : (customPackage ? pkg.price : await getEffectivePrice(pkg.id, student.branchId))
+      : await resolvePackagePrice(pkg, student)
 
-    const isPaid = paymentStatus === 'success'
-
-    // Quoted period for display (e.g. the WA reminder) even when this
-    // renewal is left pending — only actually written to the student once
-    // paid, via applyPaymentSuccess below.
+    // Period quoted for the success/notification screen.
     let quoteBase = new Date()
     if (student.packageEndDate && new Date(student.packageEndDate) > new Date()) {
       quoteBase = new Date(student.packageEndDate)
@@ -494,6 +594,60 @@ router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async 
       await prisma.student.update({ where: { id: student.id }, data: { isOldMember: !!isOldMember } })
     }
 
+    const invoiceLabel = `Perpanjangan Paket — ${pkg.name}`
+
+    // ---- Mode TAGIHAN: dibukukan sebagai tagihan, tidak ada pendapatan dulu ----
+    if (invoiceMode) {
+      const [existing, pendingCheckout] = await Promise.all([
+        prisma.cartItem.findFirst({ where: { studentId: student.id, type: 'package', status: 'open' } }),
+        prisma.payment.findFirst({
+          where: { studentId: student.id, paymentType: 'cart', status: 'pending', cartItems: { some: { type: 'package' } } },
+          select: { id: true },
+        }),
+      ])
+      if (existing) {
+        return res.status(400).json({ error: 'Sudah ada tagihan perpanjangan paket yang belum dibayar untuk anak ini.' })
+      }
+      if (pendingCheckout) {
+        return res.status(400).json({ error: 'Masih ada pembayaran perpanjangan paket yang belum selesai untuk anak ini.' })
+      }
+      const cartItem = await prisma.cartItem.create({
+        data: {
+          studentId: student.id,
+          type: 'package',
+          label: invoiceLabel,
+          category: 'Perpanjangan Paket',
+          amount: resolvedAmount,
+          metadata: { packageId: pkg.id, packageName: pkg.name, custom: !!pkg.isCustom, note: note?.trim() || null },
+          addedById: req.user.id,
+          status: 'open',
+        },
+      })
+
+      await notifyUser(student.userId, {
+        type: 'cart_item_added',
+        title: 'Tagihan Perpanjangan Paket',
+        message: `Tagihan ${invoiceLabel} sebesar Rp${resolvedAmount.toLocaleString('id-ID')} sudah dibuat. Silakan buka menu Perpanjang Paket untuk membayar.`,
+        link: '/dashboard/pembayaran',
+      })
+      await logPaymentAudit({
+        studentId: student.id,
+        action: 'invoice_created',
+        actor: req.user,
+        amount: resolvedAmount,
+        note: `${invoiceLabel}${note?.trim() ? ` — ${note.trim()}` : ''}`,
+      })
+      return res.status(201).json({
+        invoice: true,
+        cartItem,
+        package: pkg,
+        amount: resolvedAmount,
+        quote,
+        student: await prisma.student.findUnique({ where: { id: student.id }, include: { package: true, branch: true } }),
+      })
+    }
+
+    // ---- Mode LANGSUNG LUNAS (cash / transfer manual) ----
     let payment = await prisma.payment.create({
       data: {
         studentId: student.id,
@@ -502,25 +656,47 @@ router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async 
         registrationFee: 0,
         totalAmount: resolvedAmount,
         paymentType: 'renewal',
-        status: isPaid ? 'success' : 'pending',
-        paymentMethod: 'manual',
-        paidAt: isPaid ? new Date() : null,
+        status: 'success',
+        paymentMethod: paymentMethod?.trim() || 'manual',
+        note: note?.trim() || null,
+        paidAt: new Date(),
       },
     })
 
-    if (isPaid) {
-      payment = await applyPaymentSuccess(payment)
-    }
+    payment = await applyPaymentSuccess(payment)
+
+    // Batalkan tagihan/checkout lain untuk perpanjangan ini supaya parent
+    // tidak membayar periode yang sama dua kali.
+    await prisma.$transaction(async (tx) => {
+      await tx.cartItem.deleteMany({ where: { studentId: student.id, type: 'package', status: 'open' } })
+      const pending = await tx.payment.findMany({ where: { studentId: student.id, paymentType: 'cart', status: 'pending' }, include: { cartItems: true } })
+      for (const p of pending) {
+        const packageItems = p.cartItems.filter((c) => c.type === 'package')
+        if (packageItems.length) await tx.cartItem.deleteMany({ where: { id: { in: packageItems.map((c) => c.id) } } })
+        await tx.cartItem.updateMany({ where: { paymentId: p.id }, data: { paymentId: null, status: 'open' } })
+        await tx.payment.delete({ where: { id: p.id } })
+      }
+    })
+
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'mark_paid_manual',
+      actor: req.user,
+      studentId: student.id,
+      amount: resolvedAmount,
+      after: { status: payment.status, paymentMethod: payment.paymentMethod, totalAmount: payment.totalAmount },
+      note: payment.note || `Perpanjangan dicatat lunas oleh ${req.user.role}`,
+    })
 
     await notifyRole('admin', {
       type: 'renewal_recorded',
-      title: isPaid ? 'Perpanjangan Paket Dicatat' : 'Perpanjangan Paket Menunggu Pembayaran',
-      message: `${student.fullName} diperpanjang oleh ${req.user.role === 'admin' ? 'admin' : 'head coach'} — Rp${resolvedAmount.toLocaleString('id-ID')}${isPaid ? '' : ' (belum dibayar)'}.`,
+      title: 'Perpanjangan Paket Dicatat',
+      message: `${student.fullName} diperpanjang oleh ${req.user.role === 'admin' ? 'admin' : 'head coach'} — Rp${resolvedAmount.toLocaleString('id-ID')}${payment.note ? ` (${payment.note})` : ''}.`,
       link: '/admin/data-anak',
     })
 
     const updatedStudent = await prisma.student.findUnique({ where: { id: student.id }, include: { package: true, branch: true } })
-    res.json({ student: updatedStudent, payment, package: pkg, paid: isPaid, quote })
+    res.json({ student: updatedStudent, payment, package: pkg, paid: true, quote })
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)

@@ -6,7 +6,7 @@
 // synthetic student (just `{ package }`, no totalSessions/packageStartDate).
 export function totalSessionsFor(student) {
   if (student.totalSessions != null) return student.totalSessions
-  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+  return student.package ? student.package.sessionsPerWeek * 4 : 0
 }
 
 export const PAYMENT_STATUS_BADGE = {

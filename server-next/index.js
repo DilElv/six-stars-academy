@@ -26,6 +26,13 @@ import staffAttendanceRoutes from './routes/staffAttendance.js'
 import passwordResetRoutes from './routes/passwordReset.js'
 import branchPackagesRoutes from './routes/branchPackages.js'
 import ledgerRoutes from './routes/ledger.js'
+import eventStaffAttendanceRoutes from './routes/eventStaffAttendance.js'
+import cartRoutes from './routes/cart.js'
+import productsRoutes from './routes/products.js'
+import payrollRoutes from './routes/payroll.js'
+import { startMonthlySessionReset } from './lib/sessionQuota.js'
+import { startPaymentReconciler } from './lib/paymentReconcile.js'
+import { startBpjsBilling } from './lib/bpjsBilling.js'
 
 const app = express()
 
@@ -56,6 +63,10 @@ app.use('/api/staff-attendance', staffAttendanceRoutes)
 app.use('/api/password-reset', passwordResetRoutes)
 app.use('/api/branch-packages', branchPackagesRoutes)
 app.use('/api/ledger', ledgerRoutes)
+app.use('/api/event-staff-attendance', eventStaffAttendanceRoutes)
+app.use('/api/cart', cartRoutes)
+app.use('/api/products', productsRoutes)
+app.use('/api/payroll', payrollRoutes)
 
 app.use((err, req, res, next) => {
   console.error(err)
@@ -65,3 +76,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3002
 const HOST = process.env.HOST || '0.0.0.0'
 app.listen(PORT, HOST, () => console.log(`Server-next running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`))
+startMonthlySessionReset()
+startPaymentReconciler()
+startBpjsBilling()

@@ -3,6 +3,8 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole, notifyUser } from '../lib/notify.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
+import { applyPaymentSuccess } from '../lib/paymentHelpers.js'
+import { logPaymentAudit } from '../lib/paymentAudit.js'
 
 const router = Router()
 
@@ -246,27 +248,29 @@ router.delete('/:id/participants/:studentId', authenticate, authorize('head_coac
 // previously this only flipped EventParticipant.paymentStatus in isolation,
 // leaving admin's payment view out of sync with manually-confirmed events.
 router.put('/:id/participants/:studentId', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { paymentStatus, status, paymentMethod } = req.body
+  const { paymentStatus, status, paymentMethod, note } = req.body
   if (paymentStatus === 'paid' && !paymentMethod) {
     return res.status(400).json({ error: 'Metode pembayaran wajib dipilih saat mengubah status ke lunas' })
   }
   try {
-    const participant = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const current = await tx.eventParticipant.findUnique({
         where: { eventId_studentId: { eventId: req.params.id, studentId: req.params.studentId } },
         include: { event: true, student: { include: { user: true } }, payment: true },
       })
       if (!current) throw Object.assign(new Error('Peserta tidak ditemukan'), { status: 404 })
 
+      let paidPaymentId = null
       if (paymentStatus !== undefined) {
         if (paymentStatus === 'paid') {
           if (current.payment) {
             await tx.payment.update({
               where: { id: current.payment.id },
-              data: { status: 'success', paymentMethod, paidAt: new Date() },
+              data: { status: 'success', paymentMethod, paidAt: new Date(), note: note?.trim() || null },
             })
+            paidPaymentId = current.payment.id
           } else {
-            await tx.payment.create({
+            const created = await tx.payment.create({
               data: {
                 studentId: current.studentId,
                 eventParticipantId: current.id,
@@ -275,21 +279,43 @@ router.put('/:id/participants/:studentId', authenticate, authorize('head_coach',
                 paymentType: 'event',
                 status: 'success',
                 paymentMethod,
+                note: note?.trim() || null,
                 paidAt: new Date(),
               },
             })
+            paidPaymentId = created.id
           }
         } else if (current.payment) {
           await tx.payment.update({ where: { id: current.payment.id }, data: { status: 'pending', paidAt: null } })
         }
       }
 
-      return tx.eventParticipant.update({
+      const participant = await tx.eventParticipant.update({
         where: { eventId_studentId: { eventId: req.params.id, studentId: req.params.studentId } },
         data: { paymentStatus: paymentStatus || undefined, status: status || undefined },
         include: { event: true, student: { include: { user: true } }, payment: true },
       })
+      return { participant, paidPaymentId }
     })
+
+    const participant = result.participant
+
+    if (result.paidPaymentId) {
+      // applyPaymentSuccess menandai effectsAppliedAt + menyalakan
+      // EventParticipant.paymentStatus, supaya pembayaran event yang
+      // dikonfirmasi manual tidak muncul sebagai anomali "lunas tanpa efek".
+      const payment = await prisma.payment.findUnique({ where: { id: result.paidPaymentId } })
+      if (payment && !payment.effectsAppliedAt) await applyPaymentSuccess(payment)
+      await logPaymentAudit({
+        paymentId: result.paidPaymentId,
+        action: paymentStatus === 'paid' ? 'mark_paid_manual' : 'edit',
+        actor: req.user,
+        studentId: participant.studentId,
+        amount: participant.payment?.totalAmount || participant.event.fee,
+        after: { status: 'success', paymentMethod },
+        note: note?.trim() || `Pembayaran event dikonfirmasi manual (${paymentMethod})`,
+      })
+    }
 
     if (paymentStatus === 'paid') {
       await notifyUser(participant.student.userId, {

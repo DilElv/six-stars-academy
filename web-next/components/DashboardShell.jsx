@@ -6,8 +6,13 @@ import Link from 'next/link'
 import { LogOut, X, Grid2x2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import NotificationBell from './NotificationBell'
+import WhatsAppFloatingButton from './WhatsAppFloatingButton'
 
 const MAX_TABS = 4
+
+// Tombol mengambang "Chat Admin" (WhatsApp) disembunyikan sampai rilis
+// berikutnya — cukup ubah menjadi true untuk mengaktifkannya kembali.
+const SHOW_WA_ADMIN_BUTTON = false
 
 const ROLE_LABEL = {
   admin: 'Admin',
@@ -27,6 +32,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
   const [loading, setLoading] = useState(true)
   const [moreOpen, setMoreOpen] = useState(false)
   const [branchLabel, setBranchLabel] = useState('')
+  const [waAdminNumber, setWaAdminNumber] = useState('')
 
   useEffect(() => {
     api
@@ -38,6 +44,9 @@ export default function DashboardShell({ role, title, navItems, children }) {
         }
         setUser(profile)
         setLoading(false)
+        if (role !== 'admin') {
+          api.getSettings().then((s) => setWaAdminNumber(s?.waAdminNumber || '')).catch(() => {})
+        }
         if (profile.branch) {
           setBranchLabel(`${profile.branch.name} (${profile.branch.code})`)
         } else if (role === 'parent') {
@@ -54,7 +63,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
   // pending/expired payment can't reach other dashboard pages by clicking a
   // nav link after the first redirect.
   useEffect(() => {
-    if (user?.access === 'payment-only' && pathname !== '/dashboard/pembayaran') {
+    if (user?.access === 'payment-only' && !['/dashboard/pembayaran', '/dashboard/event'].includes(pathname)) {
       router.replace('/dashboard/pembayaran')
     }
   }, [pathname, user, router])
@@ -135,15 +144,15 @@ export default function DashboardShell({ role, title, navItems, children }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white/60 backdrop-blur-xl border-b border-white/50 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 shadow-sm shadow-gray-100/50">
-          <Link href="/" className="flex items-center gap-2 lg:hidden min-w-0">
+        <header className="min-h-16 bg-white/60 backdrop-blur-xl border-b border-white/50 flex items-center justify-between gap-2 px-4 sm:px-6 sticky top-0 z-30 shadow-sm shadow-gray-100/50 overflow-x-auto overscroll-x-contain touch-pan-x scrollbar-none">
+          <Link href="/" className="flex items-center gap-2 lg:hidden min-w-max shrink-0">
             <img src="/logo.png" alt="SixStars Academy" className="h-9 w-auto object-contain shrink-0" />
             <span className="font-bold text-sm text-navy-900 truncate">{title}</span>
           </Link>
           <div className="hidden lg:block text-sm text-gray-400">
             Halo, <span className="font-semibold text-navy-800">{user.name.split(' ')[0]}</span> 👋
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <NotificationBell />
             <button
               onClick={handleLogout}
@@ -153,7 +162,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
             </button>
           </div>
         </header>
-        <main className="relative flex-1 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8 overflow-hidden">
+        <main className="relative flex-1 min-w-0 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-8 overflow-x-clip">
           <div aria-hidden="true" className="absolute -top-24 right-[-4rem] w-72 h-72 rounded-full bg-gold-400/[0.06] blur-[100px] pointer-events-none" />
           <div key={pathname} className="relative page-fade-in">
             {children}
@@ -238,6 +247,16 @@ export default function DashboardShell({ role, title, navItems, children }) {
             </div>
           </div>
         </div>
+      )}
+      {/* Tombol Chat Admin (semua dashboard kecuali admin) */}
+      {SHOW_WA_ADMIN_BUTTON && role !== 'admin' && !moreOpen && (
+        <WhatsAppFloatingButton
+          number={waAdminNumber}
+          hideOnDashboard={false}
+          label="Chat Admin"
+          positionClass="bottom-24 lg:bottom-6 right-4 lg:right-6"
+          message={`Halo Admin SixStars, saya ${user.name} (${ROLE_LABEL[role]})${branchLabel ? ` — ${branchLabel}` : ''}. Saya ingin bertanya: `}
+        />
       )}
     </div>
   )

@@ -18,7 +18,7 @@ function Row({ label, value }) {
 
 const PAYMENT_STATUS_LABEL = { success: 'Lunas', pending: 'Menunggu', failed: 'Gagal' }
 
-export default function StudentDetailModal({ student: initialStudent, onClose, onEdit, onRenew }) {
+export default function StudentDetailModal({ student: initialStudent, onClose, onEdit, onRenew, onSaved }) {
   const [student, setStudent] = useState(initialStudent)
   const [loading, setLoading] = useState(true)
   const [qrUrl, setQrUrl] = useState('')
@@ -28,6 +28,33 @@ export default function StudentDetailModal({ student: initialStudent, onClose, o
     api.getStudent(initialStudent.id).then(setStudent).catch(() => {}).finally(() => setLoading(false))
     api.getStudentQrCodeUrl(initialStudent.id).then(setQrUrl).catch(() => {})
   }, [initialStudent.id])
+
+  const [editingPeriod, setEditingPeriod] = useState(false)
+  const [period, setPeriod] = useState({ packageStartDate: '', packageEndDate: '' })
+  const [periodSaving, setPeriodSaving] = useState(false)
+  const [periodError, setPeriodError] = useState('')
+  function openPeriod() {
+    const dateValue = (value) => {
+      if (!value) return ''
+      const d = new Date(value)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+    setPeriod({ packageStartDate: dateValue(student.packageStartDate), packageEndDate: dateValue(student.packageEndDate) })
+    setPeriodError('')
+    setEditingPeriod(true)
+  }
+  async function savePeriod(e) {
+    e.preventDefault()
+    setPeriodSaving(true)
+    setPeriodError('')
+    try {
+      await api.updateStudentPackagePeriod(student.id, period)
+      setStudent(await api.getStudent(student.id))
+      setEditingPeriod(false)
+      onSaved?.()
+    } catch (err) { setPeriodError(err.message) }
+    finally { setPeriodSaving(false) }
+  }
 
   const latestPayment = student.payments?.[0]
   const sessionPct = student.totalSessions > 0
@@ -56,14 +83,14 @@ export default function StudentDetailModal({ student: initialStudent, onClose, o
           <p className="text-xs text-gray-300">{student.studentId}</p>
         </div>
         {(onEdit || onRenew) && (
-          <div className="flex items-center gap-2 p-3 border-b border-gray-100">
+          <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
             {onEdit && (
-              <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-navy-700 border border-gray-200 px-3 py-2.5 rounded-2xl">
+              <button onClick={onEdit} className="flex-1 min-w-[30%] flex items-center justify-center gap-1.5 text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-navy-700 border border-gray-200 px-3 py-2.5 rounded-2xl">
                 <Edit3 size={13} /> Edit
               </button>
             )}
             {onRenew && (
-              <button onClick={onRenew} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold bg-navy-900 hover:bg-navy-800 text-white px-3 py-2.5 rounded-2xl">
+              <button onClick={onRenew} className="flex-1 min-w-[30%] flex items-center justify-center gap-1.5 text-xs font-semibold bg-navy-900 hover:bg-navy-800 text-white px-3 py-2.5 rounded-2xl">
                 <RefreshCw size={13} /> Perpanjang Paket
               </button>
             )}
@@ -79,6 +106,28 @@ export default function StudentDetailModal({ student: initialStudent, onClose, o
           <Row label="Alamat" value={student.address} />
           <Row label="Paket" value={student.package?.name} />
           <Row label="Status" value={student.status} />
+          <Row label="Mulai Paket" value={student.packageStartDate && new Date(student.packageStartDate).toLocaleDateString('id-ID')} />
+          <Row label="Akhir Paket" value={student.packageEndDate && new Date(student.packageEndDate).toLocaleDateString('id-ID')} />
+          {onSaved && student.packageId && !loading && (
+            <div className="mt-3">
+              {!editingPeriod ? <button onClick={openPeriod} className="text-sm font-semibold text-navy-700 underline">Edit Periode Paket</button> : (
+                <form onSubmit={savePeriod} className="space-y-3 rounded-2xl bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">Sesuaikan tanggal paket aktif, misalnya sampai 31 Desember. Tidak membuat tagihan atau mereset sesi.</p>
+                  <label className="block text-xs font-semibold">Tanggal Mulai
+                    <input aria-label="Tanggal mulai paket" type="date" required value={period.packageStartDate} onChange={(e) => setPeriod({ ...period, packageStartDate: e.target.value })} className="block w-full border rounded-lg p-2 mt-1" />
+                  </label>
+                  <label className="block text-xs font-semibold">Tanggal Akhir
+                    <input aria-label="Tanggal akhir paket" type="date" required min={period.packageStartDate} value={period.packageEndDate} onChange={(e) => setPeriod({ ...period, packageEndDate: e.target.value })} className="block w-full border rounded-lg p-2 mt-1" />
+                  </label>
+                  {periodError && <p role="alert" className="text-xs text-red-600">{periodError}</p>}
+                  <div className="flex gap-2">
+                    <button disabled={periodSaving} className="rounded-lg bg-navy-900 text-white text-xs px-3 py-2 disabled:opacity-50">{periodSaving ? 'Menyimpan...' : 'Simpan Periode'}</button>
+                    <button type="button" disabled={periodSaving} onClick={() => setEditingPeriod(false)} className="text-xs px-3 py-2">Batal</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="py-6 text-center text-sm text-gray-400 flex items-center justify-center gap-2">

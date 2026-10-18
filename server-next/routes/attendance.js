@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser, notifyRole } from '../lib/notify.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
+import { ensureCurrentSessionMonth, isDateInCurrentMonth, monthlySessionLimit } from '../lib/sessionQuota.js'
 
 const router = Router()
 
@@ -17,51 +18,65 @@ function startOfDay(dateStr) {
 // already-recorded day's status does not consume another session.
 //
 // Once sessionsUsed reaches totalSessions, the student flips to
-// 'needs_renewal' and every further NEW check-in (any role, no exceptions)
-// is rejected until a renewal payment resets sessionsUsed back to 0 (see
-// applyPaymentSuccess in lib/paymentHelpers.js).
+// 'needs_renewal'. Further attendance is still recorded, but the package
+// counter remains capped until renewal.
 // Mirrors computeSessionStats() in routes/students.js — prefers the stored
 // value (set correctly, prorated for a partial first month, by every
 // creation/renewal path — see lib/packagePeriod.js) and only falls back to
 // the flat estimate for legacy rows predating that fix.
 function totalSessionsFor(student) {
   if (student.totalSessions != null) return student.totalSessions
-  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+  return monthlySessionLimit(student.package)
 }
 
 async function upsertAttendanceAndConsumeSession(studentId, date, data) {
-  const existing = await prisma.attendance.findUnique({ where: { studentId_date: { studentId, date } } })
+  const affectsCurrentQuota = isDateInCurrentMonth(date)
+  const result = await prisma.$transaction(async (tx) => {
+    // Serialize attendance writes per student so simultaneous manual/QR
+    // requests cannot both pass the quota check.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`
+    const existing = await tx.attendance.findUnique({ where: { studentId_date: { studentId, date } } })
 
-  if (!existing) {
-    const student = await prisma.student.findUnique({
-      where: { id: studentId },
-      select: { sessionsUsed: true, totalSessions: true, package: { select: { sessionsPerWeek: true, durationMonths: true } } },
-    })
-    const totalSessions = student ? totalSessionsFor(student) : 0
-    if (student && totalSessions > 0 && student.sessionsUsed >= totalSessions) {
-      throw Object.assign(
-        new Error('Paket latihan anak telah habis. Orang tua harus melakukan perpanjangan paket sebelum dapat mengikuti latihan berikutnya.'),
-        { status: 409 }
-      )
+    let renewalRequired = false
+    if (!existing && affectsCurrentQuota) {
+      let student = await tx.student.findUnique({
+        where: { id: studentId },
+        include: { package: { select: { sessionsPerWeek: true, durationMonths: true } } },
+      })
+      student = await ensureCurrentSessionMonth(student, tx)
+      const totalSessions = student ? totalSessionsFor(student) : 0
+      const packageExpired = student?.packageEndDate && new Date(student.packageEndDate) < startOfDay()
+      renewalRequired = !!(student && (packageExpired || (student.totalSessions != null && student.sessionsUsed >= totalSessions)))
+      if (renewalRequired && student.status !== 'needs_renewal') {
+        await tx.student.update({ where: { id: studentId }, data: { status: 'needs_renewal' } })
+      }
     }
-  }
 
-  const row = await prisma.attendance.upsert({
-    where: { studentId_date: { studentId, date } },
-    update: data,
-    create: { studentId, date, ...data },
+    const row = await tx.attendance.upsert({
+      where: { studentId_date: { studentId, date } },
+      update: data,
+      create: { studentId, date, ...data },
+    })
+
+    let quotaReached = null
+    if (!existing && affectsCurrentQuota && !renewalRequired) {
+      const updated = await tx.student.update({
+        where: { id: studentId },
+        data: { sessionsUsed: { increment: 1 } },
+        include: { package: { select: { sessionsPerWeek: true, durationMonths: true } } },
+      })
+      const totalSessions = totalSessionsFor(updated)
+      if (totalSessions > 0 && updated.sessionsUsed >= totalSessions && updated.status !== 'needs_renewal') {
+        await tx.student.update({ where: { id: studentId }, data: { status: 'needs_renewal' } })
+        quotaReached = { updated, totalSessions }
+      }
+    }
+
+    return { row, existing, quotaReached, renewalRequired }
   })
 
-  if (!existing) {
-    const updated = await prisma.student.update({
-      where: { id: studentId },
-      data: { sessionsUsed: { increment: 1 } },
-      include: { package: { select: { sessionsPerWeek: true, durationMonths: true } } },
-    })
-    const totalSessions = totalSessionsFor(updated)
-
-    if (totalSessions > 0 && updated.sessionsUsed >= totalSessions && updated.status !== 'needs_renewal') {
-      await prisma.student.update({ where: { id: studentId }, data: { status: 'needs_renewal' } })
+  if (result.quotaReached) {
+      const { updated, totalSessions } = result.quotaReached
 
       await notifyUser(updated.userId, {
         type: 'quota_exhausted',
@@ -76,10 +91,9 @@ async function upsertAttendanceAndConsumeSession(studentId, date, data) {
         notifyRole('head_coach', { type: 'student_quota_reached', title: 'Kuota Siswa Habis', message: adminMessage, link: '/head-coach/data-anak' }),
         notifyRole('coach', { type: 'student_quota_reached', title: 'Kuota Siswa Habis', message: adminMessage, link: '/coach/absensi' }),
       ])
-    }
   }
 
-  return { ...row, alreadyRecorded: !!existing }
+  return { ...result.row, alreadyRecorded: !!result.existing, renewalWarning: result.renewalRequired || !!result.quotaReached }
 }
 
 router.get('/summary', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
@@ -209,6 +223,8 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
   if (!Array.isArray(records)) return res.status(400).json({ error: 'records harus array' })
   try {
     const day = startOfDay(date)
+    if (!date || Number.isNaN(day.getTime()) || day > startOfDay()) return res.status(400).json({ error: 'Tanggal absensi tidak valid atau masih di masa depan' })
+    if (records.some((r) => !r.studentId || !['hadir', 'izin', 'sakit', 'alfa'].includes(r.status))) return res.status(400).json({ error: 'Status absensi tidak valid' })
 
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
@@ -225,6 +241,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
     const results = []
     const skipped = []
     const alreadyRecorded = []
+    const renewalWarnings = []
     for (const r of records) {
       try {
         const row = await upsertAttendanceAndConsumeSession(r.studentId, day, {
@@ -232,6 +249,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
         })
         results.push(row)
         if (row.alreadyRecorded) alreadyRecorded.push(r.studentId)
+        if (row.renewalWarning) renewalWarnings.push(r.studentId)
       } catch (err) {
         if (!err.status) throw err
         skipped.push({ studentId: r.studentId, error: err.message })
@@ -246,7 +264,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
       link: '/admin/absensi',
     })
 
-    res.json({ message: 'Absensi terkirim', count: results.length, skipped, alreadyRecorded })
+    res.json({ message: 'Absensi terkirim', count: results.length, skipped, alreadyRecorded, renewalWarnings })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

@@ -60,12 +60,42 @@ Per-branch price override for a specific `Package` (unique on `[branchId, packag
 The payment gateway is **Rintisan** (Indonesian aggregator: QRIS, VA Mandiri/BNI/BRI, Tokopedia/Blibli), integrated in `lib/rintisan.js` (low-level signed HTTP client) + `lib/paymentHelpers.js` (business logic). See `lib/rintisan.js` for the RSA-signature scheme (`RINTISAN_*` env vars + the two PEM keys above).
 
 ### `Payment` (`payments`)
-One row per billable event: `paymentType` is `'registration'` | `'renewal'` | `'event'`. `status` is `'pending'` | `'success'` | `'failed'`.
+One row per billable event: `paymentType` is `'registration'` | `'renewal'` | `'event'` | `'cart'`. `status` is `'pending'` | `'success'` | `'failed'`.
 - `transactionId`/`paymentLink`/`qrString` — filled in after `createBilling()` succeeds against Rintisan.
 - `callbackPayload` — raw JSON from Rintisan's webhook, stored for audit.
-- Renewal and event payments are created directly against an **existing** `Student` (`POST /payments/renewal`, `POST /payments/event`). Registration payments are **not** created directly — see `PendingRegistration` below.
-- `applyPaymentSuccess()` / `applyPaymentFailed()` in `lib/paymentHelpers.js` are the only place side effects happen: renewal extends `packageEndDate` + resets the session quota; event marks `EventParticipant.paymentStatus = 'paid'`; both send a notification.
-- ⚠️ **Known gap**: the admin manual override (`PUT /payments/:id`) sets `status` directly and does **not** call `applyPaymentSuccess`/`applyPaymentFailed` — so manually marking a payment "success" in the admin panel skips the renewal/event side effects. Only the real Rintisan webhook triggers those.
+- `note` — free-text payment keterangan (`"Cash"`, `"Transfer Manual"`, `"Anak Berprestasi"`, ...). Set by the admin/head_coach "Tandai Lunas" flow and by the admin edit form; shown next to the row in Keuangan > Pemasukan.
+- Event payments are created directly against an **existing** `Student` (`POST /payments/event`). Registration payments are **not** created directly — see `PendingRegistration` below.
+- `POST /payments/renewal` is **disabled** (returns 400): package renewal now has a single write path — the cart (see `CartItem` below). It used to mint a second Payment for a period the admin may already have billed, which is exactly how duplicate transactions arose.
+- `applyPaymentSuccess()` / `applyPaymentFailed()` in `lib/paymentHelpers.js` are the only place side effects happen: renewal extends `packageEndDate` + resets the session quota; event marks `EventParticipant.paymentStatus = 'paid'`; `cart` applies each item it carries (a `package` item extends the period, a catalog `merchandise` item decrements `Product.stock`; BPJS/manual items are just recorded as paid); all send a notification.
+- No manual admin "verification" step exists anymore: a parent payment becomes `success` as soon as Rintisan reports it (webhook `POST /payments/rintisan/callback` or polling `GET /payments/:id/sync`, plus the background reconciler in `lib/paymentReconcile.js`), and admin/head_coach `POST /students/:id/renew` with `mode: 'paid'` records the payment as already paid. The admin override (`PUT /payments/:id`) is now only a correction tool, and it also calls `applyPaymentSuccess`/`applyPaymentFailed` so side effects stay consistent.
+
+### `CartItem` (`cart_items`) — Tagihan & pembayaran gabungan
+The cart table is the **single "tagihan" mechanism**: an unpaid line item lives here until someone pays it, and it is never counted as income while `status: 'open'`. One row per line for a student. `type` is `'package'` | `'bpjs'` | `'merchandise'`, and `category` is the income category shown in Keuangan > Pemasukan (`'Perpanjangan Paket'` | `'BPJS'` | `'Merchandise'`). `metadata` is a per-type JSON payload (`{ packageId, packageName, custom, note }` for `package`, `{ productId, ... , note }` for merchandise, `{ note }` for BPJS). BPJS lines also carry `periodMonth`/`periodYear` as real columns (not only in `metadata`) so the monthly auto-billing job can dedupe with an indexed query.
+
+> **Release scope:** the parent-facing Keranjang/Toko screens are hidden for now (next release); the tagihan mechanism below stays active. Parents see and pay every open line — including ones placed by admin — from the **Perpanjang Paket** screen (`GET /cart/me` + `POST /cart/checkout`), not from a shopping-cart page.
+- `paymentId` is `NULL` while the item is still unpaid (`status: 'open'`); on checkout (`POST /cart/checkout`) all of a student's open items are attached to one new `Payment` (`paymentType: 'cart'`, `totalAmount` = sum of the items) and flip to `status: 'checked_out'`.
+- **One transaction, many categories:** `GET /ledger/pemasukan` expands a `cart` Payment into one ledger row per `CartItem` (`category` + `amount` + `note`), so revenue still splits by category even though it was paid together in a single checkout.
+- **Anti-duplication:** one student may only have one `status: 'open'` `package` item (and one open BPJS item per period). `POST /cart` rejects a second one, and `POST /cart/checkout` refuses to check out two package items — so a period can never be billed twice.
+- **Admin "Buat Tagihan":** `POST /students/:id/renew` with `mode: 'invoice'` (or `POST /cart` for other types) creates an open `CartItem` and notifies the parent. No `Payment`, no income, no package extension yet — the tagihan just appears in the parent's **Perpanjang Paket** screen (and as a "Tagihan Belum Dibayar" card on the parent dashboard) as **Belum Dibayar**. Still one tagihan per period: a second `POST /cart` package line is rejected while one is open *or* while a `pending` cart payment contains a package line.
+- **Admin "Tandai Lunas" (cash / transfer pribadi):** `POST /cart/mark-paid` (admin/head_coach) creates one `Payment` for the selected open items, marks it `success`, applies the effects immediately and stores the officer, time and `note` in `PaymentAuditLog`/`Payment.note` — no "Menunggu Verifikasi" queue. If the paid set contains a package item, other pending cart checkouts for that student are cancelled so the same period cannot be paid twice.
+- **CRUD:** admin/head_coach can edit an open item's label/amount/keterangan (`PATCH /cart/:id`) and delete it (`DELETE /cart/:id`); parents may delete items in their own cart (including ones the admin placed for them).
+- `GET /cart/outstanding` (admin/head_coach, branch-scoped) lists every unpaid tagihan for the Keuangan "Tagihan Belum Dibayar" panel. Parents can cancel a still-`pending` cart payment (`DELETE /payments/:id`), which returns its items to `status: 'open'`.
+
+### `Product` (`products`) — Katalog Merchandise
+One row per merchandise item the club sells (jersey, aksesori, dll). `category` is free text with `'Jersey'` | `'Aksesori'` | `'Lainnya'` as defaults, and `imageUrl` points at the Cloudinary upload. `stock` is `NULL` for unlimited stock; otherwise it is decremented by one per unit sold (on cart payment success). `isActive` hides a product from the parent catalog without deleting it.
+- `CartItem.productId` links a cart/order line back to the product it came from (`ON DELETE SET NULL`, so history survives). When a parent buys from the catalog, the line's `label`/`amount` are always taken from the product row (never from the client), and the item is rejected when it is inactive or out of stock.
+- Managed by admin only (`GET /products/all`, `POST/PUT/DELETE /products`); the parent catalog reads the public `GET /products` (active products only). Deleting a product that has ever been in a cart deactivates it instead of removing the row.
+
+### Billing BPJS otomatis
+A single global BPJS premium (Pengaturan > BPJS: `bpjsEnabled`, `bpjsAmount`, `bpjsDay`, stored in the CMS `settings` blob) is billed to every student whose `status` is not `'inactive'` (i.e. `active` + `needs_renewal`). `lib/bpjsBilling.js` owns this:
+- `runBpjsBilling()` adds one `CartItem` (`type: 'bpjs'`, `category: 'BPJS'`, label `BPJS <Bulan> <Tahun>`) per eligible student for the period and notifies the parent. It is idempotent — a student who already has a BPJS line for that period is skipped — so a manual admin BPJS addition and the job never double-bill the same month.
+- `startBpjsBilling()` runs at startup and then hourly; it only acts on/after `bpjsDay` and only when the feature is enabled with an amount > 0. Because the insert is idempotent, a student enrolled mid-month still gets billed on the next sweep.
+- Admin endpoints: `GET /settings/bpjs/status` (eligible vs. billed counts for a period) and `POST /settings/bpjs/run` (`{ month?, year?, amount?, studentIds? }`) — the latter backs Pengaturan's "Tagih Sekarang" button.
+
+### Audit Pembayaran (`payment_audit_logs`)
+`lib/paymentAudit.js` powers the admin Audit page (`GET /payments/audit`, `POST /payments/audit/:id/sync`). It does two things:
+- **Anomaly detection** (`detectPaymentAnomalies`) over payments from the last N days *plus* any still-`pending` row: a `pending` older than 24 h (`stuck_pending`), a `success` with no `effectsAppliedAt` on a renewal/event/cart (`success_no_effects`), a `cart` payment whose `totalAmount` ≠ the sum of its `CartItem.amount` (`cart_total_mismatch`), a pending row with no `transactionId` (`missing_gateway_ref`), and duplicate pending rows for the same student/type/amount (`duplicate_pending`).
+- **Change trail** — one `PaymentAuditLog` row per notable action: admin `edit`/`delete`, parent `cancel`, gateway `callback_paid`/`callback_failed`, background `reconcile_paid`, and manual admin `sync_paid`. Each stores `actorId`/`actorRole`, `studentId`, `amount`, a `before`/`after` snapshot (for edits) and a human-readable `note`. `paymentId` is a plain column (no FK) so the trail survives a hard-deleted payment; `actorId` is `ON DELETE SET NULL`.
 
 ### `PendingRegistration` (`pending_registrations`)
 **A new student's account does not exist until their first payment succeeds.** When someone fills out the public registration wizard (`POST /auth/register`), this table stores all their wizard data (name, DOB, parent info, hashed password, chosen package, computed amounts, promo code) plus the Rintisan billing link — keyed by this row's own `id` (used as Rintisan's `partner_trx_id`). No `User`/`Student`/`Payment` row exists yet.
@@ -120,7 +150,10 @@ Age-group-based recurring training schedule (day/time/location/coach/branch), ma
 A coach's log of what was actually covered in a session (topic/objective/equipment), not the schedule itself.
 
 ### `StaffAttendance` (`staff_attendances`)
-Coach/staff self-check-in (selfie + geolocation), separate from student `Attendance`. Needs `verifyStatus` approval (`'pending'` → `'approved'`/`'rejected'`) by an admin.
+Coach/staff self-check-in (selfie + geolocation), separate from student `Attendance`. **Verifikasi admin dihapus** — absen masuk/pulang coach & head coach langsung tersimpan dengan `verifyStatus`/`checkOutVerifyStatus = 'approved'`, jadi langsung masuk laporan (foto + timestamp) dan payroll tanpa antrean verifikasi. Migration `20261018190000_staff_attendance_auto_approve` men-*backfill* baris `'pending'` lama menjadi `'approved'` (baris `'rejected'` dibiarkan). Endpoint `PUT /staff-attendance/:id/approve|reject` dan `PUT /staff-attendance/:id/checkout/approve|reject` tetap ada sebagai jalur koreksi manual bila sebuah selfie terbukti palsu. `EventStaffAttendance` (`event_staff_attendances`, absen per event) mengikuti aturan yang sama.
+
+### `CoachPayroll` (`coach_payrolls`) — Payroll Coach
+Slip honor bulanan per coach (`@@unique([coachId, month, year])`). `User.dailyRate` (honor harian, rupiah) × `daysPresent` (jumlah **hari** dengan absen masuk `verifyStatus = 'approved'` pada bulan itu — check-in ke dua cabang di hari yang sama tetap 1 hari) + `bonus` − `deduction`, diklem di ≥ 0 menjadi `total`. `dailyRate` disalin saat generated supaya slip lama tidak ikut berubah bila tarif diubah kemudian. `status` = `draft` | `paid`; slip yang sudah `paid` tidak ditimpa oleh generate ulang. Logika ada di `lib/payroll.js`, endpoint admin-only di `routes/payroll.js` (`GET/POST /payroll`, `POST /payroll/generate`, `PUT /payroll/:id`, `POST /payroll/:id/pay`, `DELETE /payroll/:id`). Rekap kehadiran yang sama juga disajikan menu Absensi Coach lewat `GET /staff-attendance/recap?month&year[&branchId]` (admin & head coach, head coach dibatasi cabangnya) — satu grup per coach berisi `stats` + `records` harian (jam masuk/pulang, cabang, foto, lokasi).
 
 ---
 
@@ -132,7 +165,7 @@ Generic "one JSON blob per `section` string" table — no FK to anything, `conte
 Known sections in use:
 | section | shape | consumed by |
 |---|---|---|
-| `settings` | `{ registrationFee, ssbName, ssbAddress, ssbPhone, ssbEmail, ... }` | registration fee fallback, rapor header |
+| `settings` | `{ registrationFee, ssbName, ssbAddress, ssbPhone, ssbEmail, bpjsEnabled, bpjsAmount, bpjsDay, waAdminNumber, ... }` | registration fee fallback, rapor header, BPJS billing, tombol "Chat Admin" di dashboard |
 | `quickStats` | list | landing page stats |
 | `programs` | list of `{ title, desc }` | `/program` |
 | `schedulePreview` | list of `{ branch (free text), ageGroup, day, time, location, mapsUrl }` | `/jadwal` (marketing page — **not** linked to real `Branch`/`Schedule` records) |
@@ -160,7 +193,12 @@ In-app notifications per `User`, `link` points at the relevant frontend page, `r
 | Flow | Route | Creates Payment? | Notes |
 |---|---|---|---|
 | New registration | `POST /auth/register` | No — creates `PendingRegistration` | `Payment` only created (status `'success'`) inside `convertPendingRegistration()` after webhook confirms |
-| Package renewal | `POST /payments/renewal` | Yes, `status: 'pending'` | Existing `Student` required |
+| Admin "Buat Tagihan" (perpanjangan) | `POST /students/:id/renew` with `mode: 'invoice'` | **No** | Creates an open `CartItem` + notifies the parent; income only after checkout |
+| Admin "Tandai Lunas" (cash/transfer) | `POST /students/:id/renew` with `mode: 'paid'`, or `POST /cart/mark-paid` | Yes, `status: 'success'` | Applies effects immediately, stores officer/time/`note`; cancels competing open/pending package items |
+| Package renewal (parent) | `POST /cart/checkout` | Yes, `paymentType: 'cart'`, `status: 'pending'` | `POST /payments/renewal` is disabled (400) — the cart is the only renewal path |
 | Event fee | `POST /payments/event` | Yes, `status: 'pending'` | `amount` always = `Event.fee`, never client-supplied |
-| Admin manual override | `PUT /payments/:id` | No (updates existing) | Does **not** trigger renewal/event side effects — see gap noted above |
+| Admin manual override | `PUT /payments/:id` | No (updates existing) | Correction tool; calls `applyPaymentSuccess`/`applyPaymentFailed`, so it **does** apply renewal/event/cart side effects; accepts `note` |
+| Cart checkout | `POST /cart/checkout` | Yes, `paymentType: 'cart'`, `status: 'pending'` | One Payment for all of the student's open `CartItem`s |
 | Rintisan webhook | `POST /payments/rintisan/callback` | Depends | Looks up `partner_trx_id` in `Payment` first, then `PendingRegistration` if not found |
+
+Unpaid rows (any `CartItem` with `status: 'open'`, and any `Payment` with `status: 'pending'`) are **never** counted in Keuangan > Pemasukan — `GET /ledger/pemasukan` only reads `status: 'success'`. Failed/cancelled/abandoned transactions therefore cannot activate a package or inflate income.

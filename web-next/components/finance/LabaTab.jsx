@@ -84,26 +84,28 @@ export default function LabaTab() {
       </div>
 
       <div className="glass-card rounded-3xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Bulan</th>
-              <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Pemasukan</th>
-              <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Pengeluaran</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Laba / Rugi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {trend.map((t) => (
-              <tr key={t.label} className="hover:bg-gray-50/60">
-                <td className="px-4 py-3 font-medium text-navy-900">{t.label}</td>
-                <td className="px-3 py-3 text-right text-emerald-600 font-semibold">{formatRupiah(t.income)}</td>
-                <td className="px-3 py-3 text-right text-red-600 font-semibold">{formatRupiah(t.expense)}</td>
-                <td className={`px-4 py-3 text-right font-bold ${t.laba >= 0 ? 'text-navy-900' : 'text-red-600'}`}>{formatRupiah(t.laba)}</td>
+        <div className="overflow-x-auto modal-scroll">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Bulan</th>
+                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Pemasukan</th>
+                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Pengeluaran</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Laba / Rugi</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {trend.map((t) => (
+                <tr key={t.label} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-3 font-medium text-navy-900 whitespace-nowrap">{t.label}</td>
+                  <td className="px-3 py-3 text-right text-emerald-600 font-semibold whitespace-nowrap">{formatRupiah(t.income)}</td>
+                  <td className="px-3 py-3 text-right text-red-600 font-semibold whitespace-nowrap">{formatRupiah(t.expense)}</td>
+                  <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${t.laba >= 0 ? 'text-navy-900' : 'text-red-600'}`}>{formatRupiah(t.laba)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="glass-card rounded-3xl p-5 text-sm text-gray-500">

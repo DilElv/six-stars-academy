@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Loader2, TrendingUp, Clock, Plus, Trash2, Pencil, FileSpreadsheet, FileText, Search } from 'lucide-react'
+import { TrendingUp, Plus, Trash2, Pencil, FileSpreadsheet, FileText, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import DailyLedgerChart from '@/components/charts/DailyLedgerChart'
 import CategoryBreakdownChart from '@/components/charts/CategoryBreakdownChart'
 import LedgerEntryModal from '@/components/finance/LedgerEntryModal'
+import PaymentEditModal from '@/components/finance/PaymentEditModal'
 import { exportLedgerToCSV, exportLedgerToPDF } from '@/lib/financeExport'
 import { AppSelect } from '@/components/ui/app-select'
 import { MONTH_LABELS, MonthFilter, useMonthFilter, formatRupiah } from '@/components/finance/shared'
 
-export default function PemasukanTab({ canVerifyPayments = false }) {
+export default function PemasukanTab() {
   const { month, setMonth, year, setYear } = useMonthFilter()
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -22,38 +23,31 @@ export default function PemasukanTab({ canVerifyPayments = false }) {
   const [editEntry, setEditEntry] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
 
-  const [pendingPayments, setPendingPayments] = useState([])
-  const [verifying, setVerifying] = useState('')
-
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
 
   function load() {
     setLoading(true)
     api.getPemasukan({ month, year }).then((res) => { setItems(res.items); setTotal(res.total); setBreakdown(res.breakdown || []) }).finally(() => setLoading(false))
-    if (canVerifyPayments) api.getAllPayments('pending').then(setPendingPayments).catch(() => {})
   }
 
   useEffect(load, [month, year])
   useEffect(() => { setCategoryFilter('') }, [month, year])
 
-  async function handleVerify(id) {
-    setVerifying(id)
-    try {
-      await api.updatePayment(id, { status: 'success', paymentMethod: 'transfer' })
-      load()
-    } finally {
-      setVerifying('')
-    }
-  }
-
-  async function handleDelete(id) {
-    if (!confirm('Hapus catatan pemasukan manual ini?')) return
-    await api.deleteLedgerEntry(id)
+  async function handleDelete(item) {
+    const warning = item.source === 'payment'
+      ? 'Hapus transaksi pembayaran ini? Paket atau sesi yang pernah aktif tidak akan dibatalkan otomatis.'
+      : 'Hapus catatan pemasukan manual ini?'
+    if (!confirm(warning)) return
+    if (item.source === 'payment') await api.deletePaymentAdmin(item.id)
+    else await api.deleteLedgerEntry(item.id)
     load()
   }
 
   const daysInMonth = new Date(year, month, 0).getDate()
-  const canEdit = (item) => item.source === 'manual' && (currentUser?.role === 'admin' || item.createdById === currentUser?.id)
+  const canEdit = (item) => currentUser?.role === 'admin' || (item.source === 'manual' && item.createdById === currentUser?.id)
+  // Combined-cart rows are one line of a bigger Payment; editing their nominal
+  // here would overwrite the whole transaction, so only deletion is offered.
+  const canEditEntry = (item) => canEdit(item) && !item.isCartLine
 
   const categoryOptions = useMemo(() => {
     const set = new Set(items.map((i) => i.category).filter(Boolean))
@@ -102,23 +96,6 @@ export default function PemasukanTab({ canVerifyPayments = false }) {
         </div>
       </div>
 
-      {canVerifyPayments && pendingPayments.length > 0 && (
-        <div className="glass-card rounded-3xl p-4 space-y-2 border border-amber-100">
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-700"><Clock size={14} /> Menunggu Verifikasi ({pendingPayments.length})</div>
-          {pendingPayments.map((p) => (
-            <div key={p.id} className="flex items-center gap-3 bg-amber-50 rounded-2xl p-3">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-navy-900 text-sm truncate">{p.student?.fullName}</div>
-                <div className="text-xs text-gray-500">{formatRupiah(p.totalAmount)} · {p.package?.name || '-'}</div>
-              </div>
-              <button onClick={() => handleVerify(p.id)} disabled={verifying === p.id} className="shrink-0 flex items-center gap-1 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl disabled:opacity-50">
-                {verifying === p.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Verifikasi
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -156,22 +133,24 @@ export default function PemasukanTab({ canVerifyPayments = false }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredItems.map((item) => (
-                  <tr key={`${item.source}-${item.id}`} className="hover:bg-gray-50/60">
+                  <tr key={item.lineKey || `${item.source}-${item.id}`} className="hover:bg-gray-50/60">
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</td>
                     <td className="px-3 py-3">
                       <div className="font-medium text-navy-900 flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.source === 'payment' ? 'bg-navy-400' : 'bg-emerald-500'}`} />
                         {item.description}
                       </div>
-                      <div className="text-[11px] text-gray-400 ml-3.5">{item.category}{item.branch ? ` · ${item.branch.code}` : ''}</div>
+                      <div className="text-[11px] text-gray-400 ml-3.5">{item.category}{item.branch ? ` · ${item.branch.code}` : ''}{item.note ? ` · ${item.note}` : ''}</div>
                     </td>
                     <td className="px-3 py-3 text-gray-500">{item.source === 'payment' ? 'Otomatis' : `Manual${item.createdBy ? ` (${item.createdBy})` : ''}`}</td>
                     <td className="px-3 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">{formatRupiah(item.amount)}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {canEdit(item) && (
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => setEditEntry(item)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Pencil size={13} /></button>
-                          <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={13} /></button>
+                          {canEditEntry(item) && (
+                            <button onClick={() => setEditEntry(item)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Pencil size={13} /></button>
+                          )}
+                          <button onClick={() => handleDelete(item)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={13} /></button>
                         </div>
                       )}
                     </td>
@@ -191,7 +170,8 @@ export default function PemasukanTab({ canVerifyPayments = false }) {
       )}
 
       {showAdd && <LedgerEntryModal type="income" onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load() }} />}
-      {editEntry && <LedgerEntryModal type="income" entry={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}
+      {editEntry?.source === 'manual' && <LedgerEntryModal type="income" entry={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}
+      {editEntry?.source === 'payment' && <PaymentEditModal payment={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}
     </div>
   )
 }

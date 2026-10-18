@@ -65,7 +65,7 @@ function drawWatermark(ctx, width, height, { timeText, locationText }) {
 // already knows exactly which branch button was clicked, including the
 // no-branch case for a coach/head-coach with nothing assigned yet), so this
 // modal no longer needs its own branch picker or `getMe()` fetch.
-export default function SelfieCheckinModal({ type = 'checkin', branchId, branchLabel, onSuccess, onClose }) {
+export default function SelfieCheckinModal({ type = 'checkin', branchId, branchLabel, eventId, onSuccess, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -124,8 +124,11 @@ export default function SelfieCheckinModal({ type = 'checkin', branchId, branchL
     const canvas = canvasRef.current
     if (!video || !canvas) return
 
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    const maxWidth = 960
+    const maxHeight = 1280
+    const scale = Math.min(1, maxWidth / video.videoWidth, maxHeight / video.videoHeight)
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale))
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale))
     const ctx = canvas.getContext('2d')
 
     ctx.save()
@@ -140,7 +143,7 @@ export default function SelfieCheckinModal({ type = 'checkin', branchId, branchL
     })
     drawWatermark(ctx, canvas.width, canvas.height, { timeText, locationText })
 
-    setCapturedImage(canvas.toDataURL('image/jpeg', 0.92))
+    setCapturedImage(canvas.toDataURL('image/jpeg', 0.78))
   }
 
   function handleRetake() {
@@ -161,8 +164,11 @@ export default function SelfieCheckinModal({ type = 'checkin', branchId, branchL
         longitude: coords?.longitude ?? null,
         locationName: locationText,
         branchId: branchId || undefined,
+        eventId: eventId || undefined,
       }
-      const record = type === 'checkin' ? await api.checkinStaff(payload) : await api.checkoutStaff(payload)
+      const record = eventId
+        ? (type === 'checkin' ? await api.checkinEventStaff(payload) : await api.checkoutEventStaff(payload))
+        : (type === 'checkin' ? await api.checkinStaff(payload) : await api.checkoutStaff(payload))
       onSuccess(record)
     } catch (err) {
       setError(err.message || 'Gagal mengirim absen, coba lagi.')
@@ -246,7 +252,7 @@ export default function SelfieCheckinModal({ type = 'checkin', branchId, branchL
         </div>
 
         <p className="text-[11px] text-gray-400 mt-3 text-center">
-          Foto akan diberi watermark waktu &amp; lokasi, lalu dikirim ke admin untuk diverifikasi.
+          Foto akan diberi watermark waktu &amp; lokasi, lalu langsung tercatat sebagai absen Anda.
         </p>
       </div>
     </div>

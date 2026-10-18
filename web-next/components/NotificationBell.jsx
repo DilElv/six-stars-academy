@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell } from 'lucide-react'
 import * as api from '@/lib/api'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function timeAgo(dateStr) {
   const diffMs = Date.now() - new Date(dateStr).getTime()
@@ -21,6 +22,7 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const containerRef = useRef(null)
+  const panelRef = useRef(null)
 
   function load() {
     api.getMyNotifications().then((data) => {
@@ -37,7 +39,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+      if (containerRef.current && !containerRef.current.contains(e.target) && !panelRef.current?.contains(e.target)) setOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -75,7 +77,8 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-3xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+        <ModalPortal>
+        <div ref={panelRef} className="fixed top-20 right-3 w-80 max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-7rem)] flex flex-col bg-white rounded-3xl shadow-2xl border border-gray-100 z-[250] overflow-hidden" role="dialog" aria-label="Notifikasi">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <span className="font-semibold text-sm text-navy-900">Notifikasi</span>
             {unreadCount > 0 && (
@@ -84,7 +87,7 @@ export default function NotificationBell() {
               </button>
             )}
           </div>
-          <div className="max-h-96 overflow-y-auto">
+          <div className="min-h-0 overflow-y-auto overscroll-contain">
             {notifications.length === 0 ? (
               <div className="p-6 text-center text-sm text-gray-400">Belum ada notifikasi.</div>
             ) : (
@@ -96,7 +99,7 @@ export default function NotificationBell() {
                 >
                   <div className="flex items-start gap-2">
                     {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-gold-400 mt-1.5 shrink-0" />}
-                    <div className={!n.read ? '' : 'pl-3.5'}>
+                    <div className={`min-w-0 break-words ${!n.read ? '' : 'pl-3.5'}`}>
                       <div className="text-sm font-semibold text-navy-900">{n.title}</div>
                       <div className="text-xs text-gray-500 mt-0.5">{n.message}</div>
                       <div className="text-[10px] text-gray-400 mt-1">{timeAgo(n.createdAt)}</div>
@@ -107,6 +110,7 @@ export default function NotificationBell() {
             )}
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   )

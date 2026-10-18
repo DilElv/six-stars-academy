@@ -15,3 +15,17 @@ export function computePackagePeriod(startDate, pkg) {
 
   return { packageEndDate, totalSessions }
 }
+
+export function parsePackageDates(start, end) {
+  const parse = (value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Tanggal periode tidak valid')
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    if (year < 2000 || year > 2200 || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) throw new Error('Tanggal periode tidak valid')
+    return date
+  }
+  const packageStartDate = parse(start)
+  const packageEndDate = parse(end)
+  if (packageEndDate < packageStartDate) throw new Error('Tanggal akhir harus sama atau setelah tanggal mulai')
+  return { packageStartDate, packageEndDate }
+}

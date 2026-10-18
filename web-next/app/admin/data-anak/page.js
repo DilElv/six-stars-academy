@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Trash2, Loader2, Check, X, RefreshCw, ShieldAlert, MessageSquare, MessageCircle, UserPlus, Search, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
-import { AGE_GROUPS } from '@/lib/ageGroups'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
@@ -14,6 +13,7 @@ import ScholarshipField from '@/components/ScholarshipField'
 import { DatePicker } from '@/components/ui/date-picker'
 import ModalPortal from '@/components/ui/modal-portal'
 import { totalSessionsFor, PAYMENT_STATUS_BADGE, STUDENT_STATUS_BADGE } from '@/lib/sessionInfo'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -42,6 +42,7 @@ export default function AdminDataAnakPage() {
   const [packages, setPackages] = useState([])
   const [requests, setRequests] = useState([])
   const [requestsLoading, setRequestsLoading] = useState(false)
+  const [resettingSessions, setResettingSessions] = useState(false)
 
   function load() {
     setLoading(true)
@@ -65,6 +66,21 @@ export default function AdminDataAnakPage() {
       load()
     } catch (err) {
       alert(err.message)
+    }
+  }
+
+  async function handleResetAllSessions() {
+    const scope = filterBranch ? `di cabang ${branches.find((b) => b.id === filterBranch)?.name || 'terpilih'}` : 'di semua cabang'
+    if (!confirm(`Reset sesi terpakai seluruh anak ${scope} menjadi 0? Total sesi paket dan riwayat absensi tidak akan dihapus.`)) return
+    setResettingSessions(true)
+    try {
+      const result = await api.resetAllStudentSessions(filterBranch)
+      load()
+      alert(`${result.count} data anak berhasil direset.`)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setResettingSessions(false)
     }
   }
 
@@ -106,6 +122,9 @@ export default function AdminDataAnakPage() {
               <button onClick={() => setShowAddStudent(true)} className="flex items-center gap-1 bg-gold-400 hover:bg-gold-500 text-navy-900 text-xs font-bold px-3 py-1.5 rounded-xl">
                 <UserPlus size={14} /> Tambah Anak
               </button>
+              <button onClick={handleResetAllSessions} disabled={resettingSessions} className="flex items-center gap-1 bg-white hover:bg-gray-50 border border-gray-200 text-navy-800 text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50">
+                <RefreshCw size={14} className={resettingSessions ? 'animate-spin' : ''} /> Reset Semua Sesi
+              </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
@@ -117,7 +136,7 @@ export default function AdminDataAnakPage() {
                   className="pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-gold-200 w-full sm:w-56"
                 />
               </div>
-              <AppSelect value={filterAgeGroup} onChange={setFilterAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+              <AgeGroupFilter value={filterAgeGroup} onChange={setFilterAgeGroup} allowAll allLabel="Semua Umur" />
               <AppSelect value={filterPosition} onChange={setFilterPosition} allLabel="Semua Posisi" placeholder="Semua Posisi" options={POSITIONS.map((p) => ({ value: p, label: p }))} />
               <AppSelect
                 value={filterStatus}
@@ -195,6 +214,7 @@ export default function AdminDataAnakPage() {
           {viewStudent && (
             <StudentDetailModal
               student={viewStudent}
+              onSaved={load}
               onClose={() => setViewStudent(null)}
               onEdit={() => { setEditStudent(viewStudent); setViewStudent(null) }}
               onRenew={() => { setRenewStudentTarget(viewStudent); setViewStudent(null) }}
@@ -202,7 +222,7 @@ export default function AdminDataAnakPage() {
           )}
           {editStudent && <EditModal student={editStudent} branches={branches} packages={packages} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
           {renewStudentTarget && <PerpanjangPaketModal student={renewStudentTarget} branches={branches} packages={packages} onClose={() => setRenewStudentTarget(null)} onSaved={load} />}
-          {showAddStudent && <AddStudentModal branches={branches} packages={packages} isAdmin onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
+          {showAddStudent && <AddStudentModal branches={branches} packages={packages} canManageScholarship onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
       ) : (
         <div className="space-y-4">
@@ -285,6 +305,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
     branchId: student.branchId || '',
     packageId: student.packageId || '',
     sessionsUsed: student.sessionsUsed != null ? String(student.sessionsUsed) : '0',
+    totalSessions: student.totalSessions != null ? String(student.totalSessions) : '0',
     parentEmail: student.parentEmail || '',
     parentPassword: '',
     registrationFee: '750000',
@@ -307,7 +328,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
 
   const effectivePackages = branchPackages || packages
   const selectedPackage = effectivePackages?.find((p) => p.id === form.packageId)
-  const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
+  const packageSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
 
   useEffect(() => {
     api.getStudent(student.id).then((detail) => {
@@ -347,6 +368,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
       const payload = {
         ...form,
         sessionsUsed: Number(form.sessionsUsed) || 0,
+        totalSessions: Number(form.totalSessions) || 0,
         registrationFee: Number(form.registrationFee) || 0,
         amount: Number(form.amount) || 0,
       }
@@ -441,7 +463,10 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
               <label className="block text-xs font-semibold text-gray-500 mb-1">Paket</label>
               <AppSelect
                 value={form.packageId}
-                onChange={(v) => setForm((f) => ({ ...f, packageId: v }))}
+                onChange={(v) => {
+                  const pkg = effectivePackages?.find((p) => p.id === v)
+                  setForm((f) => ({ ...f, packageId: v, totalSessions: String(pkg ? totalSessionsFor({ package: pkg }) : 0), sessionsUsed: v === student.packageId ? f.sessionsUsed : '0' }))
+                }}
                 className="w-full"
                 allLabel="- Tanpa Paket -"
                 placeholder="- Tanpa Paket -"
@@ -455,17 +480,16 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
             </p>
           )}
           {form.packageId && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi Terpakai</label>
-              <input
-                type="number"
-                min={0}
-                max={totalSessions || undefined}
-                value={form.sessionsUsed}
-                onChange={(e) => setForm((f) => ({ ...f, sessionsUsed: e.target.value }))}
-                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">Dari total {totalSessions} sesi paket ini.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Sesi Terpakai</label>
+                <input type="number" min={0} max={Number(form.totalSessions) || undefined} value={form.sessionsUsed} onChange={(e) => setForm((f) => ({ ...f, sessionsUsed: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Total Sesi</label>
+                <input type="number" min={0} value={form.totalSessions} onChange={(e) => setForm((f) => ({ ...f, totalSessions: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              </div>
+              <p className="col-span-2 text-[11px] text-gray-400">Default paket: {packageSessions} sesi per bulan. Keduanya dapat dikoreksi manual.</p>
             </div>
           )}
           {regPayment && (

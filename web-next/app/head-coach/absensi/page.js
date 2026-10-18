@@ -8,6 +8,7 @@ import QrScannerModal from '@/components/QrScannerModal'
 import StaffCheckinCard from '@/components/StaffCheckinCard'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 
 const STATUS_OPTIONS = [
   { value: 'hadir', label: 'Hadir', color: 'bg-emerald-500 text-white' },
@@ -16,7 +17,7 @@ const STATUS_OPTIONS = [
   { value: 'alfa', label: 'Alfa', color: 'bg-red-500 text-white' },
 ]
 
-const today = new Date().toISOString().slice(0, 10)
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -24,7 +25,7 @@ function initials(name = '') {
 
 function totalSessionsFor(student) {
   if (student.totalSessions != null) return student.totalSessions
-  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+  return student.package ? student.package.sessionsPerWeek * 4 : 0
 }
 
 export default function HeadCoachAbsensiPage() {
@@ -68,9 +69,12 @@ export default function HeadCoachAbsensiPage() {
     setSending(true)
     try {
       const result = await api.submitAttendance(date, records)
+      if (result.skipped?.length) return setMessage(`${result.count} tersimpan; ${result.skipped.length} ditolak: ${result.skipped[0].error}`)
       setMessage(
-        result.alreadyRecorded?.length > 0
-          ? `Absensi berhasil disimpan (${result.alreadyRecorded.length} siswa sudah tercatat hari ini, sesi tidak bertambah)`
+        result.renewalWarnings?.length > 0
+          ? `Absensi berhasil disimpan. ${result.renewalWarnings.length} anak belum memperpanjang paket; sesi tidak ditambah.`
+          : result.alreadyRecorded?.length > 0
+          ? `Absensi berhasil disimpan (${result.alreadyRecorded.length} siswa sudah tercatat pada tanggal ini, sesi tidak bertambah)`
           : 'Absensi berhasil disimpan'
       )
     } catch (err) {
@@ -89,7 +93,9 @@ export default function HeadCoachAbsensiPage() {
       const result = await api.scanAttendance(qrCode)
       setStatusMap((m) => ({ ...m, [result.student.id]: 'hadir' }))
       setMessage(
-        result.attendance?.alreadyRecorded
+        result.attendance?.renewalWarning
+          ? `${result.student.fullName} berhasil absen, tetapi paket belum diperpanjang; sesi tidak ditambah`
+          : result.attendance?.alreadyRecorded
           ? `${result.student.fullName} sudah tercatat hari ini — sesi tidak bertambah lagi`
           : `${result.student.fullName} berhasil absen (Hadir)`
       )
@@ -110,15 +116,17 @@ export default function HeadCoachAbsensiPage() {
           <h1 className="font-bold text-navy-900 text-lg">Absensi</h1>
           <p className="text-sm text-gray-400">Head Coach bisa lihat &amp; koreksi absensi semua kelompok umur, termasuk tanggal sebelumnya.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 min-w-0">
           <button
             onClick={() => setShowScanner(true)}
+            disabled={date !== today}
+            title={date !== today ? 'Scan QR hanya untuk absensi hari ini' : 'Scan QR'}
             className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-3 py-2 rounded-2xl"
           >
             <QrCode size={16} /> Scan QR
           </button>
           <DatePicker value={date} max={today} onChange={setDate} />
-          <AppSelect value={ageGroup} onChange={setAgeGroup} options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+          <AgeGroupFilter value={ageGroup} onChange={setAgeGroup} />
           <AppSelect
             value={branchId}
             onChange={setBranchId}
@@ -159,14 +167,9 @@ export default function HeadCoachAbsensiPage() {
                   {totalSessionsFor(s) > 0 && <span className="ml-2 text-gray-500 font-medium">{s.sessionsUsed}/{totalSessionsFor(s)} sesi</span>}
                 </div>
                 {s.status === 'needs_renewal' && (
-                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Kuota Habis</span>
+                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Belum Perpanjang Paket</span>
                 )}
               </div>
-              {s.status === 'needs_renewal' ? (
-                <div className="text-xs font-semibold text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-1.5 shrink-0">
-                  Perlu Perpanjang
-                </div>
-              ) : (
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   {STATUS_OPTIONS.map((opt) => (
                     <button
@@ -180,7 +183,6 @@ export default function HeadCoachAbsensiPage() {
                     </button>
                   ))}
                 </div>
-              )}
             </div>
           ))}
 

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Trophy, Calendar, MapPin, Wallet, Users, X, Check, Loader2, CreditCard } from 'lucide-react'
 import * as api from '@/lib/api'
 import PaymentMethodModal from '@/components/PaymentMethodModal'
+import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
   return 'Rp' + (n || 0).toLocaleString('id-ID')
@@ -70,12 +71,16 @@ function ParentEventContent() {
                   {p.event.location && <span className="flex items-center gap-1"><MapPin size={12} /> {p.event.location}</span>}
                 </div>
               </div>
+              {p.paymentStatus !== 'paid' && p.event.fee > 0 && (
+                <button onClick={(e) => { e.stopPropagation(); setSelected(p); setShowPayment(true) }} className="shrink-0 rounded-xl bg-gold-400 px-3 py-2 text-xs font-bold text-navy-900">Bayar Event</button>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {selected && (
+        <ModalPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setSelected(null)}>
           <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -135,6 +140,7 @@ function ParentEventContent() {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {showPayment && selected && (

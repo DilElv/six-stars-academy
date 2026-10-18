@@ -26,6 +26,9 @@ model User {
   bio       String?
   address   String?
   status    String   @default("active")
+  // Honor harian coach (rupiah). Dipakai menu Payroll untuk menghitung
+  // honor = hari hadir terverifikasi x tarif, ditambah bonus/potongan manual.
+  dailyRate Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -37,10 +40,17 @@ model User {
   staffAttendances                 StaffAttendance[] @relation("StaffAttendanceUser")
   verifiedStaffAttendances         StaffAttendance[] @relation("StaffAttendanceVerifiedBy")
   verifiedStaffAttendanceCheckouts StaffAttendance[] @relation("StaffAttendanceCheckoutVerifiedBy")
+  eventStaffAttendances            EventStaffAttendance[] @relation("EventStaffAttendanceUser")
+  verifiedEventStaffAttendances    EventStaffAttendance[] @relation("EventStaffAttendanceVerifiedBy")
+  verifiedEventStaffCheckouts      EventStaffAttendance[] @relation("EventStaffAttendanceCheckoutVerifiedBy")
   events                   Event[]
   passwordResets           PasswordReset[]
   ledgerEntries            LedgerEntry[]
   branches                 UserBranch[]
+  cartItemsAdded           CartItem[]        @relation("CartItemAddedBy")
+  paymentAudits            PaymentAuditLog[] @relation("PaymentAuditActor")
+  payrolls                 CoachPayroll[]    @relation("CoachPayrollCoach")
+  generatedPayrolls        CoachPayroll[]    @relation("CoachPayrollGeneratedBy")
 
   @@map("users")
 }
@@ -71,6 +81,7 @@ model Branch {
   students         Student[]
   schedules        Schedule[]
   staffAttendances StaffAttendance[]
+  eventStaffAttendances EventStaffAttendance[]
   fields           Field[]
   trainingSessions TrainingSession[]
   events           EventBranch[]
@@ -126,6 +137,45 @@ model StaffAttendance {
   @@map("staff_attendances")
 }
 
+model EventStaffAttendance {
+  id           String  @id @default(cuid())
+  eventId      String
+  event        Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User    @relation("EventStaffAttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch? @relation(fields: [branchId], references: [id])
+  date         DateTime
+  status       String  @default("hadir")
+  checkInTime  DateTime?
+  photo        String?
+  latitude     Float?
+  longitude    Float?
+  locationName String?
+  verifyStatus String  @default("pending")
+  verifiedById String?
+  verifiedBy   User?   @relation("EventStaffAttendanceVerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt   DateTime?
+  rejectReason String?
+
+  checkOutTime         DateTime?
+  checkOutPhoto        String?
+  checkOutLatitude     Float?
+  checkOutLongitude    Float?
+  checkOutLocationName String?
+  checkOutVerifyStatus String?
+  checkOutVerifiedById String?
+  checkOutVerifiedBy   User?     @relation("EventStaffAttendanceCheckoutVerifiedBy", fields: [checkOutVerifiedById], references: [id])
+  checkOutVerifiedAt   DateTime?
+  checkOutRejectReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, userId])
+  @@map("event_staff_attendances")
+}
+
 model Field {
   id        String   @id @default(cuid())
   name      String
@@ -172,6 +222,8 @@ model Student {
   packageEndDate                 DateTime?
   totalSessions                  Int?
   sessionsUsed                   Int       @default(0)
+  sessionMonth                   Int?
+  sessionYear                    Int?
   status                         String    @default("active")
   branchId                       String?
   branch                         Branch?   @relation(fields: [branchId], references: [id])
@@ -192,6 +244,7 @@ model Student {
   reports           Report[]
   studentCard       StudentCard?
   eventParticipants EventParticipant[]
+  cartItems         CartItem[]
 
   @@map("students")
 }
@@ -247,14 +300,20 @@ model Payment {
   paymentType        String
   status             String            @default("pending")
   paymentMethod      String?
+  // Keterangan pembayaran yang diisi admin/head_coach: "Cash", "Transfer
+  // Manual", "Anak Berprestasi", dsb. Ikut tampil di Keuangan > Pemasukan.
+  note               String?
   transactionId      String?
   paymentLink        String?
   qrString           String?
   failReason         String?
   callbackPayload    Json?
   paidAt             DateTime?
+  effectsAppliedAt   DateTime?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
+
+  cartItems          CartItem[]
 
   @@map("payments")
 }
@@ -351,6 +410,7 @@ model Event {
 
   participants EventParticipant[]
   branches     EventBranch[]
+  staffAttendances EventStaffAttendance[]
 
   @@map("events")
 }
@@ -604,4 +664,121 @@ model StudentCard {
   createdAt  DateTime @default(now())
 
   @@map("student_cards")
+}
+
+// Keranjang belanja per anak ("Keranjang & Pembayaran Gabungan").
+// Sebelum checkout: status "open" + paymentId NULL — daftar item yang menunggu
+// dibayar. Setelah checkout dibuat, semua item anak itu dikaitkan ke satu
+// Payment (paymentId terisi, status "checked_out"), sehingga satu transaksi
+// bisa memuat beberapa item (perpanjangan paket, BPJS, merchandise) sekaligus
+// sementara pemasukan tetap dipecah per `category` di laporan keuangan.
+model CartItem {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  paymentId String?
+  payment   Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  // Item yang diambil dari katalog merchandise (Katalog Merchandise). NULL untuk
+  // item yang diketik manual (perpanjangan paket, BPJS, merchandise custom).
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  type      String // 'package' | 'bpjs' | 'merchandise'
+  label     String // teks yang tampil di keranjang & rincian pembayaran
+  category  String // kategori pemasukan di laporan keuangan, mis. "Perpanjangan Paket"
+  amount    Int
+  metadata  Json?  // payload per tipe: { packageId } | { periodMonth, periodYear } | { productId, size, qty, jerseyNumber }
+
+  // Khusus item BPJS: periode tagihan (bulan/tahun). Dipakai agar penagihan
+  // otomatis bulanan idempoten (satu item per anak per periode) tanpa perlu
+  // memfilter JSON.
+  periodMonth Int?
+  periodYear  Int?
+
+  addedById String?
+  addedBy   User?   @relation("CartItemAddedBy", fields: [addedById], references: [id])
+
+  status    String   @default("open") // 'open' | 'checked_out' | 'canceled'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, status])
+  @@index([paymentId])
+  @@index([productId])
+  @@index([type, periodMonth, periodYear])
+  @@map("cart_items")
+}
+
+// Katalog merchandise (jersey, aksesori, dll) yang dikelola admin dan bisa
+// dibeli parent lewat keranjang. `stock` NULL berarti stok tak terbatas; saat
+// pembayaran keranjang lunas, stok item yang berasal dari katalog dikurangi.
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   @default("Lainnya") // Jersey | Aksesori | Lainnya
+  price       Int
+  imageUrl    String?
+  stock       Int? // NULL = tak terbatas
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cartItems CartItem[]
+
+  @@index([isActive])
+  @@map("products")
+}
+
+// Jejak audit pembayaran ("Audit Pembayaran"). Mencatat aksi manual yang
+// mengubah/menghapus pembayaran (admin & parent) serta konfirmasi otomatis dari
+// gateway/rekonsiliasi, sehingga tiap perubahan uang bisa ditelusuri siapa &
+// kapan. `paymentId` sengaja tanpa relasi FK (onDelete SetNull) supaya riwayat
+// tetap ada walau pembayarannya sudah dihapus.
+model PaymentAuditLog {
+  id        String   @id @default(cuid())
+  paymentId String?
+  action    String // 'edit' | 'delete' | 'cancel' | 'callback_paid' | 'callback_failed' | 'reconcile_paid' | 'sync_paid' | 'invoice_created' | 'invoice_edit' | 'invoice_delete' | 'mark_paid_manual'
+  actorId   String?
+  actor     User?    @relation("PaymentAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole String?
+  studentId String?
+  amount    Int?
+  before    Json?
+  after     Json?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([createdAt])
+  @@map("payment_audit_logs")
+}
+
+// Slip honor bulanan seorang coach. `dailyRate` disalin saat generated supaya
+// slip lama tidak berubah kalau tarif harian diubah di kemudian hari.
+// `daysPresent` = jumlah hari hadir yang sudah diverifikasi admin pada periode
+// tersebut; total = dailyRate * daysPresent + bonus - deduction.
+model CoachPayroll {
+  id            String    @id @default(cuid())
+  coachId       String
+  coach         User      @relation("CoachPayrollCoach", fields: [coachId], references: [id], onDelete: Cascade)
+  month         Int
+  year          Int
+  dailyRate     Int       @default(0)
+  daysPresent   Int       @default(0)
+  bonus         Int       @default(0)
+  deduction     Int       @default(0)
+  total         Int       @default(0)
+  note          String?
+  status        String    @default("draft") // draft | paid
+  paidAt        DateTime?
+  generatedById String?
+  generatedBy   User?     @relation("CoachPayrollGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([coachId, month, year])
+  @@index([month, year])
+  @@map("coach_payrolls")
 }

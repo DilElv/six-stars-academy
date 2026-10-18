@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Calendar, Clock, MapPin, Users, Wallet, Plus, Trash2, Loader2, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 import { AppSelect } from '@/components/ui/app-select'
 import { PAYMENT_STATUS_BADGE } from '@/lib/sessionInfo'
 import ModalPortal from '@/components/ui/modal-portal'
@@ -167,13 +168,7 @@ export default function HeadCoachEventDetailPage() {
             placeholder="Semua Cabang"
             options={(event.branches?.length ? event.branches.map((b) => b.branch) : allBranches).map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
           />
-          <AppSelect
-            value={ageFilter}
-            onChange={setAgeFilter}
-            allLabel="Semua Umur"
-            placeholder="Semua Umur"
-            options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
-          />
+          <AgeGroupFilter value={ageFilter} onChange={setAgeFilter} allowAll />
         </div>
         <div className="space-y-2">
           {filteredStudents.map((s) => {

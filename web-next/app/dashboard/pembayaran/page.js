@@ -7,8 +7,15 @@ import RenewalModal from '@/components/RenewalModal'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  pending: { label: 'Menunggu Verifikasi', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pending: { label: 'Menunggu Pembayaran', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   failed: { label: 'Gagal', color: 'bg-red-50 text-red-700 border-red-200' },
+}
+
+const PAYMENT_TYPE_LABEL = {
+  registration: 'Pendaftaran',
+  renewal: 'Perpanjangan Paket',
+  event: 'Event',
+  cart: 'Tagihan',
 }
 
 const FILTERS = [
@@ -164,8 +171,10 @@ export default function PembayaranAnakPage() {
                     <Wallet size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-navy-900 truncate">{p.package?.name || p.eventParticipant?.event?.title || '-'}</div>
-                    <div className="text-xs text-gray-400 capitalize">{p.paymentType} · {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</div>
+                    <div className="font-semibold text-navy-900 truncate">
+                      {p.package?.name || p.eventParticipant?.event?.title || (p.cartItems?.length ? p.cartItems.map((c) => c.label).join(' + ') : '-')}
+                    </div>
+                    <div className="text-xs text-gray-400">{PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType} · {new Date(p.paidAt || p.createdAt).toLocaleDateString('id-ID')}</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-bold text-navy-900">{formatRupiah(p.totalAmount)}</div>
@@ -181,10 +190,19 @@ export default function PembayaranAnakPage() {
                         <Receipt size={13} /> Rincian Pembayaran
                       </div>
                       <div className="space-y-1.5 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Biaya Paket</span>
-                          <span className="text-navy-900 font-medium tabular-nums">{formatRupiah(p.amount)}</span>
-                        </div>
+                        {p.cartItems?.length ? (
+                          p.cartItems.map((c) => (
+                            <div key={c.id} className="flex justify-between gap-3">
+                              <span className="text-gray-500 min-w-0 truncate">{c.label}</span>
+                              <span className="text-navy-900 font-medium tabular-nums shrink-0">{formatRupiah(c.amount)}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Biaya Paket</span>
+                            <span className="text-navy-900 font-medium tabular-nums">{formatRupiah(p.amount)}</span>
+                          </div>
+                        )}
                         {p.registrationFee > 0 && (
                           <div className="flex justify-between">
                             <span className="text-gray-500">Biaya Pendaftaran</span>

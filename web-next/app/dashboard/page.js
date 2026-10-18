@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw, ReceiptText, CreditCard } from 'lucide-react'
 import * as api from '@/lib/api'
 import OvrGauge from '@/components/charts/OvrGauge'
 import SkillRadar from '@/components/charts/SkillRadar'
@@ -11,11 +11,15 @@ import RenewalModal from '@/components/RenewalModal'
 
 const paymentStatusLabel = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  pending: { label: 'Menunggu Verifikasi', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pending: { label: 'Menunggu Pembayaran', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   failed: { label: 'Gagal', color: 'bg-red-50 text-red-700 border-red-200' },
 }
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+
+function formatRupiah(n) {
+  return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
+}
 
 function daysLeft(dateStr) {
   if (!dateStr) return null
@@ -29,18 +33,18 @@ export default function ParentDasborPage() {
   const [reports, setReports] = useState([])
   const [trainingSessions, setTrainingSessions] = useState([])
   const [myEvents, setMyEvents] = useState([])
-  const [attendances, setAttendances] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showRenewal, setShowRenewal] = useState(false)
+  const [tagihan, setTagihan] = useState(null)
 
   function load() {
-    Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports(), api.getMyAttendance()])
-      .then(([s, p, r, att]) => {
+    api.getMyCart().then(setTagihan).catch(() => {})
+    Promise.all([api.getMyChild(), api.getMyPayments(), api.getMyReports()])
+      .then(([s, p, r]) => {
         setStudent(s)
         setPayments(p)
         setReports(r)
-        setAttendances(att)
         if (s?.ageGroup && s?.branchId) {
           api.getTrainingSessions(s.ageGroup, s.branchId).then((sessions) => {
             setTrainingSessions(sessions)
@@ -54,23 +58,10 @@ export default function ParentDasborPage() {
 
   useEffect(load, [])
 
-  const attendedDates = new Set(
-    (attendances || [])
-      .filter((a) => a.status === 'hadir')
-      .map((a) => {
-        const d = new Date(a.date)
-        return d.toISOString().slice(0, 10)
-      })
-  )
-
   const todayKey = new Date().toISOString().slice(0, 10)
   const todaysSessions = (trainingSessions || []).filter((ts) => new Date(ts.date).toISOString().slice(0, 10) === todayKey)
 
-  const forfeitedSessions = (trainingSessions || []).filter((ts) => {
-    const sDate = new Date(ts.date)
-    sDate.setHours(23, 59, 59, 999)
-    return sDate < new Date() && !attendedDates.has(new Date(ts.date).toISOString().slice(0, 10))
-  })
+  const missedAttendanceDates = student?.missedAttendanceDates || []
 
   if (loading) return null
   if (error) return <p className="text-sm text-red-500">{error}</p>
@@ -112,7 +103,24 @@ export default function ParentDasborPage() {
         </div>
       </div>
 
-      {student.status === 'needs_renewal' && (
+      {(tagihan?.items?.length || 0) > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border bg-amber-50 border-amber-100">
+          <div className="flex items-center gap-3">
+            <ReceiptText size={18} className="text-amber-600 shrink-0" />
+            <div className="text-sm text-amber-900">
+              Ada {tagihan.items.length} tagihan belum dibayar sebesar <span className="font-semibold">{formatRupiah(tagihan.total)}</span>. Bayar sekarang agar paket segera aktif.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRenewal(true)}
+            className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl shrink-0"
+          >
+            <CreditCard size={14} /> Bayar Tagihan
+          </button>
+        </div>
+      )}
+
+      {student.status === 'needs_renewal' && !(tagihan?.items?.length > 0) && (
         <div className="flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border bg-red-50 border-red-100">
           <div className="flex items-center gap-3">
             <AlertTriangle size={18} className="text-red-600 shrink-0" />
@@ -168,11 +176,12 @@ export default function ParentDasborPage() {
       )}
 
       {/* Forfeit warnings */}
-      {forfeitedSessions.length > 0 && (
+      {missedAttendanceDates.length > 0 && (
         <div className="space-y-2">
-          {forfeitedSessions.map((ts) => (
-            <div key={ts.id} className="bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 text-sm flex items-center gap-2">
-              <span className="font-semibold">Anda tidak hadir, sesi anda hangus</span>
+          {missedAttendanceDates.map((ts) => (
+            <div key={`${ts.date}-${ts.startTime}`} className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 text-sm flex items-center gap-2">
+              <AlertTriangle size={15} className="shrink-0" />
+              <span className="font-semibold">Absensi belum dicatat</span>
               <span className="text-red-400">·</span>
               <span>{new Date(ts.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
             </div>
@@ -234,7 +243,7 @@ export default function ParentDasborPage() {
           </h2>
           <div className="space-y-2">
             {myEvents.slice(0, 5).map((p) => (
-              <div key={p.id} className="glass-card rounded-2xl p-3.5 flex items-center gap-3">
+              <Link href={`/dashboard/event?open=${p.event.id}`} key={p.id} className="glass-card rounded-2xl p-3.5 flex items-center gap-3">
                 <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-900 font-bold text-xs">
                   {new Date(p.event.date).getDate()}
                 </div>
@@ -258,7 +267,7 @@ export default function ParentDasborPage() {
                     )}
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

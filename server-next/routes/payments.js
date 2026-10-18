@@ -2,10 +2,36 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
-import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS } from '../lib/rintisan.js'
-import { getEffectivePrice } from '../lib/pricing.js'
+import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod } from '../lib/rintisan.js'
+import { logPaymentAudit, getPaymentAudit } from '../lib/paymentAudit.js'
 
 const router = Router()
+
+// Snapshot field pembayaran yang relevan untuk jejak audit.
+function paymentSnapshot(p) {
+  if (!p) return null
+  return {
+    status: p.status,
+    paymentType: p.paymentType,
+    paymentMethod: p.paymentMethod,
+    note: p.note,
+    amount: p.amount,
+    registrationFee: p.registrationFee,
+    totalAmount: p.totalAmount,
+    paidAt: p.paidAt ? new Date(p.paidAt).toISOString() : null,
+  }
+}
+
+function paymentDiff(before, after) {
+  if (!before || !after) return ''
+  const changed = []
+  for (const key of Object.keys(after)) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      changed.push(`${key}: ${before[key] ?? '—'} → ${after[key] ?? '—'}`)
+    }
+  }
+  return changed.join(', ')
+}
 
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
@@ -13,7 +39,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
     if (req.query.status) where.status = req.query.status
     const payments = await prisma.payment.findMany({
       where,
-      include: { package: true, student: { select: { fullName: true, studentId: true, parentName: true, parentPhone: true } } },
+      include: { package: true, cartItems: true, student: { select: { fullName: true, studentId: true, parentName: true, parentPhone: true } } },
       orderBy: { createdAt: 'desc' },
     })
     res.json(payments)
@@ -28,32 +54,123 @@ router.get('/methods', (req, res) => {
 })
 
 router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
-  const { status, paymentMethod } = req.body
+  const { status, paymentMethod, paymentType, amount, registrationFee, totalAmount, paidAt, note } = req.body
   try {
     const existing = await prisma.payment.findUnique({ where: { id: req.params.id } })
     if (!existing) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
-
-    if (paymentMethod !== undefined) {
-      await prisma.payment.update({ where: { id: req.params.id }, data: { paymentMethod } })
+    for (const value of [amount, registrationFee, totalAmount]) {
+      if (value !== undefined && (value === '' || value === null || !Number.isSafeInteger(Number(value)) || Number(value) < 0)) return res.status(400).json({ error: 'Nominal harus bilangan bulat minimal 0' })
     }
+    if (paidAt !== undefined && paidAt !== null && paidAt !== '' && Number.isNaN(new Date(paidAt).getTime())) return res.status(400).json({ error: 'Tanggal pembayaran tidak valid' })
+    if (paymentType !== undefined && paymentType !== existing.paymentType) return res.status(400).json({ error: 'Jenis transaksi tidak dapat diubah; koreksi nominal atau metode pembayaran saja' })
+    if ((status ?? existing.status) === 'success' && paidAt !== undefined && !paidAt) return res.status(400).json({ error: 'Tanggal lunas wajib diisi untuk transaksi lunas' })
+
+    if (status !== undefined && !['pending', 'success', 'failed'].includes(status)) return res.status(400).json({ error: 'Status pembayaran tidak valid' })
+    if (paymentType !== undefined && !['registration', 'renewal', 'event', 'cart'].includes(paymentType)) return res.status(400).json({ error: 'Jenis pembayaran tidak valid' })
+
+    const numericAmount = amount !== undefined ? Math.max(0, Math.round(Number(amount) || 0)) : existing.amount
+    const numericFee = registrationFee !== undefined ? Math.max(0, Math.round(Number(registrationFee) || 0)) : existing.registrationFee
+    const numericTotal = totalAmount !== undefined ? Math.max(0, Math.round(Number(totalAmount) || 0)) : numericAmount + numericFee
+
+    const baseData = {
+      paymentMethod: paymentMethod !== undefined ? (paymentMethod || null) : undefined,
+      note: note !== undefined ? (note?.trim() || null) : undefined,
+      paymentType: paymentType || undefined,
+      amount: amount !== undefined ? numericAmount : undefined,
+      registrationFee: registrationFee !== undefined ? numericFee : undefined,
+      totalAmount: totalAmount !== undefined || amount !== undefined || registrationFee !== undefined ? numericTotal : undefined,
+      paidAt: paidAt !== undefined ? (paidAt ? new Date(paidAt) : null) : undefined,
+    }
+    const edited = await prisma.payment.update({ where: { id: req.params.id }, data: baseData })
 
     // Delegates to the same applyPaymentSuccess/applyPaymentFailed used by
-    // the online (Rintisan) payment flow — so admin manually verifying a
-    // payment here (e.g. the "Verifikasi" button in Keuangan Pemasukan)
-    // correctly applies renewal-type side effects too (session reset,
-    // package period activation), not just a bare status flip. No behavior
-    // change for registration/event payments — those helpers already do
-    // exactly what the old inline update here did.
+    // the online (Rintisan) payment flow — so an admin correcting a payment's
+    // status here (Keuangan > Pemasukan edit, or recording a cash/offline
+    // payment) correctly applies renewal-type side effects too (session
+    // reset, package period activation), not just a bare status flip. No
+    // behavior change for registration/event payments — those helpers already
+    // do exactly what the old inline update here did.
     let payment
     if (status === 'success') {
-      payment = await applyPaymentSuccess(existing)
+      payment = await applyPaymentSuccess(edited)
     } else if (status === 'failed') {
-      payment = await applyPaymentFailed(existing)
+      payment = await prisma.payment.update({ where: { id: req.params.id }, data: { status: 'failed', paidAt: null }, include: { student: true, package: true } })
+    } else if (status === 'pending') {
+      payment = await prisma.payment.update({ where: { id: req.params.id }, data: { status, paidAt: null }, include: { student: true, package: true } })
     } else {
-      payment = await prisma.payment.update({ where: { id: req.params.id }, data: { status }, include: { student: true } })
+      payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true, package: true } })
     }
 
+    const before = paymentSnapshot(existing)
+    const after = paymentSnapshot(payment)
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'edit',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before,
+      after,
+      note: paymentDiff(before, after) || 'Tidak ada perubahan nilai',
+    })
+
     res.json(payment)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/admin/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    await prisma.payment.delete({ where: { id: payment.id } })
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'delete',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before: paymentSnapshot(payment),
+      note: `Menghapus pembayaran ${payment.paymentType}`,
+    })
+    res.json({ message: 'Pembayaran dihapus' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Audit Pembayaran (admin): ringkasan + anomali + jejak audit terbaru.
+router.get('/audit', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(365, Math.round(Number(req.query.days) || 90)))
+    res.json(await getPaymentAudit({ days }))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Admin memaksa sinkronisasi satu pembayaran pending ke Rintisan (mis. pending
+// yang macet). Mencatat ke audit bila statusnya berubah menjadi lunas.
+router.post('/audit/:id/sync', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    const fresh = await syncPaymentWithRintisan(payment)
+    if (payment.status !== 'success' && fresh.status === 'success') {
+      await logPaymentAudit({
+        paymentId: fresh.id,
+        action: 'sync_paid',
+        actor: req.user,
+        studentId: fresh.studentId,
+        amount: fresh.totalAmount,
+        note: 'Sinkronisasi manual oleh admin',
+      })
+    }
+    res.json({ status: fresh.status, paidAt: fresh.paidAt, paymentMethod: fresh.paymentMethod })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -66,7 +183,7 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
     if (!student) return res.json([])
     const payments = await prisma.payment.findMany({
       where: { studentId: student.id },
-      include: { package: true, eventParticipant: { include: { event: true } } },
+      include: { package: true, cartItems: true, eventParticipant: { include: { event: true } } },
       orderBy: { createdAt: 'desc' },
     })
     res.json(payments)
@@ -76,70 +193,24 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   }
 })
 
-// Parent starts a package renewal for their child. Creates a pending Payment
-// and immediately requests a billing link from Rintisan.
+// Parent starts a package renewal for their child.
+//
+// DINONAKTIFKAN: perpanjangan sekarang SATU jalur saja lewat tagihan
+// (`POST /cart` → `POST /cart/checkout`, dibayar dari menu Perpanjang Paket),
+// supaya satu periode perpanjangan tidak pernah menghasilkan dua record
+// pembayaran. Endpoint ini dulu membuat Payment kedua yang tidak terhubung ke
+// tagihan admin — akar penyebab duplikasi transaksi.
 router.post('/renewal', authenticate, authorize('parent'), async (req, res) => {
-  const { packageId, paymentMethod } = req.body
-  if (!packageId || !paymentMethod) return res.status(400).json({ error: 'packageId dan paymentMethod wajib diisi' })
-
-  try {
-    const student = await prisma.student.findFirst({ where: { userId: req.user.id }, include: { user: true } })
-    if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
-
-    const pkg = await prisma.package.findUnique({ where: { id: packageId } })
-    if (!pkg) return res.status(400).json({ error: 'Paket tidak ditemukan' })
-
-    // Resolves to the student's branch's BranchPackage override (Pengaturan
-    // > Harga Paket) when one exists, not the package's raw base price.
-    const effectivePrice = await getEffectivePrice(pkg.id, student.branchId)
-
-    // Beasiswa SPP is set by admin on the student (Data Anak) and applies
-    // automatically here — no code entry needed from the parent.
-    const scholarshipPercent = student.sppScholarshipPercent || 0
-    const discount = Math.round(effectivePrice * scholarshipPercent / 100)
-
-    const totalAmount = Math.max(0, effectivePrice - discount)
-    const payment = await prisma.payment.create({
-      data: {
-        studentId: student.id,
-        packageId: pkg.id,
-        amount: effectivePrice,
-        registrationFee: 0,
-        totalAmount,
-        paymentType: 'renewal',
-        status: 'pending',
-      },
-    })
-
-    // 100% scholarship makes totalAmount 0 — Rintisan can't create a real
-    // billing/QRIS for Rp 0, so there's nothing to actually pay. Apply the
-    // same success side-effects (extend package, reset sessions) directly.
-    if (totalAmount === 0) {
-      const updated = await applyPaymentSuccess(payment)
-      return res.status(201).json({ payment: updated, rintisan: null, scholarshipPercent })
-    }
-
-    const { payment: updated, rintisan } = await checkoutPayment({
-      payment,
-      paymentMethod,
-      toName: student.parentName,
-      toEmail: student.parentEmail || student.user.email,
-      toPhone: student.parentPhone,
-      toAddress: student.address,
-      note: `Perpanjangan paket ${pkg.name} - ${student.fullName}`,
-    })
-
-    res.status(201).json({ payment: updated, rintisan, scholarshipPercent })
-  } catch (err) {
-    console.error(err)
-    res.status(400).json({ error: err.message || 'Gagal membuat tagihan perpanjangan' })
-  }
+  res.status(400).json({
+    error: 'Perpanjangan paket sekarang lewat menu Perpanjang Paket di dasbor. Buka menu itu, lalu bayar tagihannya sekali untuk semua item.',
+  })
 })
 
 // Parent pays for their child's event participation.
 router.post('/event', authenticate, authorize('parent'), async (req, res) => {
   const { eventParticipantId, paymentMethod } = req.body
   if (!eventParticipantId || !paymentMethod) return res.status(400).json({ error: 'eventParticipantId dan paymentMethod wajib diisi' })
+  if (!isSupportedPaymentMethod(paymentMethod)) return res.status(400).json({ error: 'Metode pembayaran Rintisan tidak valid' })
 
   try {
     const participant = await prisma.eventParticipant.findUnique({
@@ -152,8 +223,13 @@ router.post('/event', authenticate, authorize('parent'), async (req, res) => {
     if (!participant.event.fee || participant.event.fee <= 0) return res.status(400).json({ error: 'Event ini tidak memerlukan pembayaran' })
 
     let payment = participant.payment
+    if (payment?.status === 'pending' && payment.transactionId && (payment.paymentLink || payment.qrString)) {
+      return res.status(201).json({ payment, rintisan: null })
+    }
     if (!payment || payment.status === 'failed') {
-      payment = await prisma.payment.create({
+      payment = await prisma.$transaction(async (tx) => {
+      if (payment) await tx.payment.update({ where: { id: payment.id }, data: { eventParticipantId: null } })
+      return tx.payment.create({
         data: {
           studentId: participant.studentId,
           eventParticipantId: participant.id,
@@ -163,6 +239,7 @@ router.post('/event', authenticate, authorize('parent'), async (req, res) => {
           paymentType: 'event',
           status: 'pending',
         },
+      })
       })
     } else if (payment.status === 'success') {
       return res.status(400).json({ error: 'Event ini sudah lunas' })
@@ -209,9 +286,23 @@ router.delete('/:id', authenticate, authorize('parent'), async (req, res) => {
   try {
     const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true } })
     if (!payment || payment.student.userId !== req.user.id) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
-    if (payment.status !== 'pending') return res.status(400).json({ error: 'Hanya pembayaran yang masih menunggu verifikasi yang bisa dibatalkan' })
+    if (payment.status !== 'pending') return res.status(400).json({ error: 'Hanya pembayaran yang masih menunggu dibayar yang bisa dibatalkan' })
 
-    await prisma.payment.delete({ where: { id: payment.id } })
+    await prisma.$transaction(async (tx) => {
+      // Kalau ini pembayaran keranjang, kembalikan itemnya ke keranjang supaya
+      // bisa di-checkout ulang (Payment dihapus -> paymentId jadi null).
+      await tx.cartItem.updateMany({ where: { paymentId: payment.id }, data: { paymentId: null, status: 'open' } })
+      await tx.payment.delete({ where: { id: payment.id } })
+    })
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'cancel',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before: paymentSnapshot(payment),
+      note: 'Parent membatalkan pembayaran yang masih pending',
+    })
     res.json({ message: 'Dibatalkan' })
   } catch (err) {
     console.error(err)
@@ -253,8 +344,10 @@ router.post('/rintisan/callback', async (req, res) => {
       await prisma.payment.update({ where: { id: payment.id }, data: { callbackPayload: body } })
       if (statusCode === '200') {
         await applyPaymentSuccess(payment)
+        await logPaymentAudit({ paymentId: payment.id, action: 'callback_paid', studentId: payment.studentId, amount: payment.totalAmount, note: body.status?.message || 'Konfirmasi lunas dari gateway' })
       } else {
         await applyPaymentFailed(payment, body.status?.message)
+        await logPaymentAudit({ paymentId: payment.id, action: 'callback_failed', studentId: payment.studentId, amount: payment.totalAmount, note: body.status?.message || 'Konfirmasi gagal dari gateway' })
       }
       return res.json({ responseCode: '2005600', responseMessage: 'Successful' })
     }

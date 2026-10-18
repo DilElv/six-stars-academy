@@ -8,6 +8,8 @@ import { AGE_GROUPS } from '@/lib/ageGroups'
 import QrScannerModal from '@/components/QrScannerModal'
 import StaffCheckinCard from '@/components/StaffCheckinCard'
 import { AppSelect } from '@/components/ui/app-select'
+import { DatePicker } from '@/components/ui/date-picker'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 
 const STATUS_OPTIONS = [
   { value: 'hadir', label: 'Hadir', color: 'bg-emerald-500 text-white border-transparent shadow-sm hover:bg-emerald-500' },
@@ -16,7 +18,7 @@ const STATUS_OPTIONS = [
   { value: 'alfa', label: 'Alfa', color: 'bg-red-500 text-white border-transparent shadow-sm hover:bg-red-500' },
 ]
 
-const today = new Date().toISOString().slice(0, 10)
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -24,12 +26,13 @@ function initials(name = '') {
 
 function totalSessionsFor(student) {
   if (student.totalSessions != null) return student.totalSessions
-  return student.package ? student.package.sessionsPerWeek * 4 * student.package.durationMonths : 0
+  return student.package ? student.package.sessionsPerWeek * 4 : 0
 }
 
 function AbsensiContent() {
   const searchParams = useSearchParams()
   const [ageGroup, setAgeGroup] = useState(searchParams.get('ageGroup') ?? AGE_GROUPS[0])
+  const [date, setDate] = useState(today)
   const [search, setSearch] = useState('')
   const [students, setStudents] = useState([])
   const [statusMap, setStatusMap] = useState({})
@@ -55,7 +58,7 @@ function AbsensiContent() {
   useEffect(() => {
     if (!branchId) { setStudents([]); setStatusMap({}); setLoading(false); return }
     setLoading(true)
-    Promise.all([api.getStudents(ageGroup || undefined, branchId), api.getAttendance(today, ageGroup || undefined, branchId)])
+    Promise.all([api.getStudents(ageGroup || undefined, branchId), api.getAttendance(date, ageGroup || undefined, branchId)])
       .then(([studentList, attendanceList]) => {
         setStudents(studentList)
         const map = {}
@@ -63,7 +66,7 @@ function AbsensiContent() {
         setStatusMap(map)
       })
       .finally(() => setLoading(false))
-  }, [ageGroup, branchId])
+  }, [ageGroup, date, branchId])
 
   async function handleSubmit() {
     const records = students
@@ -72,10 +75,13 @@ function AbsensiContent() {
     if (records.length === 0) return setMessage('Tandai status minimal 1 siswa dulu')
     setSending(true)
     try {
-      const result = await api.submitAttendance(today, records)
+      const result = await api.submitAttendance(date, records)
+      if (result.skipped?.length) return setMessage(`${result.count} tersimpan; ${result.skipped.length} ditolak: ${result.skipped[0].error}`)
       setMessage(
-        result.alreadyRecorded?.length > 0
-          ? `Absensi berhasil dikirim (${result.alreadyRecorded.length} siswa sudah tercatat hari ini, sesi tidak bertambah)`
+        result.renewalWarnings?.length > 0
+          ? `Absensi berhasil dikirim. ${result.renewalWarnings.length} anak belum memperpanjang paket; sesi tidak ditambah.`
+          : result.alreadyRecorded?.length > 0
+          ? `Absensi berhasil dikirim (${result.alreadyRecorded.length} siswa sudah tercatat pada tanggal ini, sesi tidak bertambah)`
           : 'Absensi berhasil dikirim'
       )
     } catch (err) {
@@ -94,7 +100,9 @@ function AbsensiContent() {
       const result = await api.scanAttendance(qrCode)
       setStatusMap((m) => ({ ...m, [result.student.id]: 'hadir' }))
       setMessage(
-        result.attendance?.alreadyRecorded
+        result.attendance?.renewalWarning
+          ? `${result.student.fullName} berhasil absen, tetapi paket belum diperpanjang; sesi tidak ditambah`
+          : result.attendance?.alreadyRecorded
           ? `${result.student.fullName} sudah tercatat hari ini — sesi tidak bertambah lagi`
           : `${result.student.fullName} berhasil absen (Hadir)`
       )
@@ -113,21 +121,19 @@ function AbsensiContent() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-bold text-navy-900 text-lg">Absensi</h1>
-          <p className="text-sm text-gray-400">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <p className="text-sm text-gray-400">Pilih tanggal hari ini atau tanggal sebelumnya.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 min-w-0">
           <button
             onClick={() => setShowScanner(true)}
+            disabled={date !== today}
+            title={date !== today ? 'Scan QR hanya untuk absensi hari ini' : 'Scan QR'}
             className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-3 py-2 rounded-2xl"
           >
             <QrCode size={16} /> Scan QR
           </button>
-          <AppSelect
-            value={ageGroup}
-            onChange={setAgeGroup}
-            allLabel="Semua Umur"
-            options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
-          />
+          <DatePicker value={date} max={today} onChange={setDate} />
+          <AgeGroupFilter value={ageGroup} onChange={setAgeGroup} />
           <AppSelect
             value={branchId}
             onChange={setBranchId}
@@ -183,15 +189,10 @@ function AbsensiContent() {
                   {totalSessionsFor(s) > 0 && <span className="ml-2 text-gray-500 font-medium">{s.sessionsUsed}/{totalSessionsFor(s)} sesi</span>}
                 </div>
                 {s.status === 'needs_renewal' && (
-                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Kuota Habis</span>
+                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">Belum Perpanjang Paket</span>
                 )}
               </div>
               <div className="shrink-0 w-[118px] sm:w-[136px]">
-                {s.status === 'needs_renewal' ? (
-                  <div className="w-full text-center text-[11px] font-semibold text-red-500 bg-red-50 border border-red-100 rounded-2xl py-2.5">
-                    Perlu Perpanjang
-                  </div>
-                ) : (
                   <AppSelect
                     value={statusMap[s.id] || ''}
                     onChange={(v) => setStatusMap((m) => ({ ...m, [s.id]: v }))}
@@ -203,7 +204,6 @@ function AbsensiContent() {
                     }`}
                     options={STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
                   />
-                )}
               </div>
             </div>
           ))}

@@ -4,6 +4,7 @@ import { createBilling, queryPayment } from './rintisan.js'
 import { notifyUser } from './notify.js'
 import { assignAgeGroup } from './ageGroup.js'
 import { computePackagePeriod } from './packagePeriod.js'
+import { monthlySessionLimit } from './sessionQuota.js'
 
 function formatDateForRintisan(d) {
   const day = String(d.getDate()).padStart(2, '0')
@@ -61,6 +62,7 @@ export async function checkoutPayment({ payment, paymentMethod, toName, toEmail,
 // callback URL being reachable/registered correctly. Safe to call repeatedly
 // (e.g. from frontend polling): a no-op once the payment is no longer pending.
 export async function syncPaymentWithRintisan(payment) {
+  if (payment.status === 'success' && !payment.effectsAppliedAt) return applyPaymentSuccess(payment)
   if (payment.status !== 'pending' || !payment.transactionId) return payment
 
   try {
@@ -77,16 +79,27 @@ export async function syncPaymentWithRintisan(payment) {
 // Applies the business effect of a successful payment, based on its type.
 // Idempotent: safe to call more than once for the same payment.
 export async function applyPaymentSuccess(payment) {
-  if (payment.status === 'success') return payment
-
-  const updated = await prisma.payment.update({
+  const outcome = await prisma.$transaction(async (tx) => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${payment.id}))`
+  const current = await tx.payment.findUnique({
     where: { id: payment.id },
-    data: { status: 'success', paidAt: new Date() },
-    include: { student: { include: { user: true } }, package: true, eventParticipant: { include: { event: true } } },
+    include: { student: true, package: true, eventParticipant: { include: { event: true } }, cartItems: true },
+  })
+  if (!current) throw new Error('Pembayaran tidak ditemukan')
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${current.studentId}))`
+  if (current.effectsAppliedAt) {
+    const updated = await tx.payment.update({ where: { id: current.id }, data: { status: 'success', paidAt: current.paidAt || new Date() } })
+    return { updated, alreadyApplied: true }
+  }
+
+  const updated = await tx.payment.update({
+    where: { id: current.id },
+    data: { status: 'success', paidAt: current.paidAt || new Date() },
+    include: { student: true, package: true, eventParticipant: { include: { event: true } }, cartItems: true },
   })
 
   let renewedUntil = null
-  if (payment.paymentType === 'renewal' && updated.package) {
+  if (updated.paymentType === 'renewal' && updated.package) {
     const student = updated.student
     // Renewing early (before the current period actually expires) starts the
     // new period the day AFTER the existing end date — not ON it — so the
@@ -99,37 +112,93 @@ export async function applyPaymentSuccess(payment) {
     }
     const period = computePackagePeriod(base, updated.package)
     renewedUntil = period.packageEndDate
+    const startsThisMonth = base.getMonth() === new Date().getMonth() && base.getFullYear() === new Date().getFullYear()
 
-    await prisma.student.update({
+    await tx.student.update({
       where: { id: student.id },
       data: {
         packageId: updated.package.id,
-        packageStartDate: student.packageStartDate || new Date(),
+        packageStartDate: base,
         packageEndDate: period.packageEndDate,
-        totalSessions: period.totalSessions,
-        sessionsUsed: 0,
+        totalSessions: startsThisMonth ? monthlySessionLimit(updated.package) : student.totalSessions,
+        sessionsUsed: startsThisMonth ? 0 : student.sessionsUsed,
+        sessionMonth: startsThisMonth ? base.getMonth() + 1 : student.sessionMonth,
+        sessionYear: startsThisMonth ? base.getFullYear() : student.sessionYear,
         status: 'active',
       },
     })
   }
 
-  if (payment.paymentType === 'event' && updated.eventParticipant) {
-    await prisma.eventParticipant.update({
+  if (updated.paymentType === 'event' && updated.eventParticipant) {
+    await tx.eventParticipant.update({
       where: { id: updated.eventParticipant.id },
       data: { paymentStatus: 'paid' },
     })
   }
+
+  // Pembayaran gabungan (keranjang): terapkan efek tiap item. Item paket
+  // (perpanjangan) memperpanjang masa berlaku; item merchandise dari katalog
+  // mengurangi stok produk. BPJS & merchandise manual hanya tercatat lunas
+  // (CartItem.paymentId sudah terisi saat checkout).
+  if (updated.paymentType === 'cart') {
+    const packageItem = updated.cartItems?.find((i) => i.type === 'package' && i.metadata?.packageId)
+    if (packageItem) {
+      const pkg = await tx.package.findUnique({ where: { id: packageItem.metadata.packageId } })
+      if (pkg) {
+        const student = updated.student
+        let base = new Date()
+        if (student.packageEndDate && new Date(student.packageEndDate) > new Date()) {
+          base = new Date(student.packageEndDate)
+          base.setDate(base.getDate() + 1)
+        }
+        const period = computePackagePeriod(base, pkg)
+        renewedUntil = period.packageEndDate
+        const startsThisMonth = base.getMonth() === new Date().getMonth() && base.getFullYear() === new Date().getFullYear()
+        await tx.student.update({
+          where: { id: student.id },
+          data: {
+            packageId: pkg.id,
+            packageStartDate: base,
+            packageEndDate: period.packageEndDate,
+            totalSessions: startsThisMonth ? monthlySessionLimit(pkg) : student.totalSessions,
+            sessionsUsed: startsThisMonth ? 0 : student.sessionsUsed,
+            sessionMonth: startsThisMonth ? base.getMonth() + 1 : student.sessionMonth,
+            sessionYear: startsThisMonth ? base.getFullYear() : student.sessionYear,
+            status: 'active',
+          },
+        })
+      }
+    }
+
+    // Merchandise dari katalog: kurangi stok (NULL = stok tak terbatas).
+    for (const item of updated.cartItems?.filter((i) => i.type === 'merchandise' && i.productId) || []) {
+      const product = await tx.product.findUnique({ where: { id: item.productId } })
+      if (product && product.stock !== null) {
+        await tx.product.update({ where: { id: product.id }, data: { stock: Math.max(0, product.stock - 1) } })
+      }
+    }
+  }
+
+  const appliedAt = new Date()
+  await tx.payment.update({ where: { id: updated.id }, data: { effectsAppliedAt: appliedAt } })
+  updated.effectsAppliedAt = appliedAt
+  return { updated, renewedUntil, alreadyApplied: false }
+  })
+  const { updated, renewedUntil, alreadyApplied } = outcome
+  if (alreadyApplied) return updated
 
   const parentUserId = updated.student.userId
   const titleByType = {
     registration: 'Pendaftaran Berhasil Dibayar',
     renewal: 'Perpanjangan Paket Berhasil',
     event: 'Pembayaran Event Berhasil',
+    cart: 'Pembayaran Berhasil',
   }
   const messageByType = {
     registration: `Pembayaran pendaftaran ${updated.student.fullName} sudah lunas. Akun sudah aktif sepenuhnya.`,
     renewal: `Perpanjangan paket untuk ${updated.student.fullName} berhasil. Paket aktif sampai ${renewedUntil ? renewedUntil.toLocaleDateString('id-ID') : '-'}.`,
     event: `Pembayaran event "${updated.eventParticipant?.event?.title || ''}" untuk ${updated.student.fullName} berhasil dikonfirmasi.`,
+    cart: `Pembayaran tagihan untuk ${updated.student.fullName} berhasil${renewedUntil ? `. Paket aktif sampai ${renewedUntil.toLocaleDateString('id-ID')}` : ''}.`,
   }
 
   await notifyUser(parentUserId, {
@@ -150,6 +219,13 @@ export async function convertPendingRegistration(pending) {
   if (pending.status === 'success') return null
 
   const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${pending.id}))`
+    // Re-check under the lock: Rintisan's webhook, the registration wizard's
+    // polling endpoint, and the background reconciler can all race to convert
+    // the same pending registration — only the first one wins.
+    const current = await tx.pendingRegistration.findUnique({ where: { id: pending.id } })
+    if (!current || current.status === 'success') return null
+
     const user = await tx.user.create({
       data: { name: pending.parentName, email: pending.email, password: pending.passwordHash, role: 'parent', phone: pending.parentPhone },
     })
@@ -178,7 +254,9 @@ export async function convertPendingRegistration(pending) {
         packageId: pkg.id,
         packageStartDate,
         packageEndDate: period.packageEndDate,
-        totalSessions: period.totalSessions,
+        totalSessions: monthlySessionLimit(pkg),
+        sessionMonth: packageStartDate.getMonth() + 1,
+        sessionYear: packageStartDate.getFullYear(),
         branchId: pending.branchId || null,
       },
     })
@@ -197,6 +275,7 @@ export async function convertPendingRegistration(pending) {
         paymentLink: pending.paymentLink,
         qrString: pending.qrString,
         paidAt: new Date(),
+        effectsAppliedAt: new Date(),
       },
     })
 
@@ -215,6 +294,8 @@ export async function convertPendingRegistration(pending) {
 
     return { user, student, payment, card }
   })
+
+  if (!result) return null
 
   await notifyUser(result.user.id, {
     type: 'registration_success',
@@ -235,13 +316,12 @@ export async function failPendingRegistration(pending, reason) {
 }
 
 export async function applyPaymentFailed(payment, reason) {
-  if (payment.status === 'success') return payment
-
-  const updated = await prisma.payment.update({
-    where: { id: payment.id },
+  const changed = await prisma.payment.updateMany({
+    where: { id: payment.id, status: 'pending', effectsAppliedAt: null },
     data: { status: 'failed', failReason: reason || null },
-    include: { student: true },
   })
+  const updated = await prisma.payment.findUnique({ where: { id: payment.id }, include: { student: true } })
+  if (!changed.count) return updated
 
   await notifyUser(updated.student.userId, {
     type: `payment_${payment.paymentType}_failed`,

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { QrCode, FileText, LayoutDashboard, ShieldCheck, MapPinned, BellRing, ClipboardList, CreditCard, PartyPopper } from 'lucide-react'
+import { QrCode, FileText, LayoutDashboard, ShieldCheck, MapPinned, BellRing, ClipboardList, CreditCard, PartyPopper, CheckCircle2 } from 'lucide-react'
 import PublicNav from '@/components/PublicNav'
 import PublicFooter from '@/components/PublicFooter'
 import PageHero from '@/components/landing/PageHero'
@@ -18,17 +18,17 @@ const BENEFITS = [
 
 const STEPS = [
   { icon: ClipboardList, title: 'Isi Data Pendaftaran', desc: 'Data anak, orang tua, dan pilih cabang lewat form online singkat.' },
-  { icon: CreditCard, title: 'Pilih Paket & Bayar', desc: 'Pilih paket latihan, transfer sesuai instruksi, lalu unggah bukti bayar.' },
-  { icon: ShieldCheck, title: 'Verifikasi Admin', desc: 'Tim kami verifikasi pembayaran dan aktivasi akun dalam 1x24 jam.' },
+  { icon: CreditCard, title: 'Pilih Paket & Bayar', desc: 'Pilih paket latihan lalu bayar langsung — QRIS, Virtual Account, atau kartu kredit.' },
+  { icon: CheckCircle2, title: 'Akun Aktif Otomatis', desc: 'Begitu pembayaran berhasil dikonfirmasi, akun orang tua dan kartu siswa QR langsung aktif.' },
   { icon: PartyPopper, title: 'Mulai Latihan', desc: 'Kartu siswa QR aktif, jadwal muncul di dashboard — siap latihan pertama!' },
 ]
 
 const FAQ = [
-  { q: 'Bagaimana proses pendaftarannya?', a: 'Isi form pendaftaran online (data anak, orang tua, pilih paket & cabang), lakukan pembayaran, lalu tunggu verifikasi admin. Setelah aktif, akun orang tua dan kartu siswa QR langsung bisa dipakai.' },
+  { q: 'Bagaimana proses pendaftarannya?', a: 'Isi form pendaftaran online (data anak, orang tua, pilih paket & cabang), lalu bayar langsung lewat halaman pembayaran. Begitu pembayaran berhasil, akun orang tua dan kartu siswa QR otomatis aktif — tanpa menunggu verifikasi manual.' },
   { q: 'Bagaimana cara memantau perkembangan anak?', a: 'Login ke dashboard orang tua untuk melihat riwayat kehadiran, jadwal latihan, dan rapor bulanan yang berisi penilaian teknik, taktik, fisik, serta mental dari pelatih.' },
   { q: 'Apakah bisa pindah cabang latihan?', a: 'Bisa. Cabang latihan dapat diubah kapan saja melalui halaman profil siswa di dashboard orang tua.' },
-  { q: 'Bagaimana sistem pembayarannya?', a: 'Pembayaran dilakukan via transfer, lalu bukti bayar diverifikasi oleh admin. Status pembayaran (menunggu verifikasi / lunas) selalu bisa dicek di dashboard.' },
-  { q: 'Apa saja yang didapat saat pendaftaran?', a: '2 set jersey, kaos kaki, 1 bola, kartu QR presensi, dan akses dashboard orang tua (pantau jadwal, rapor bulanan, kehadiran) — aktivasi maksimal 1x24 jam setelah verifikasi.' },
+  { q: 'Bagaimana sistem pembayarannya?', a: 'Pembayaran dilakukan online melalui gateway resmi (QRIS, Virtual Account, atau kartu kredit). Status pembayaran (menunggu pembayaran / lunas) selalu bisa dicek di dashboard, dan akun otomatis aktif begitu pembayaran lunas.' },
+  { q: 'Apa saja yang didapat saat pendaftaran?', a: '2 set jersey, kaos kaki, 1 bola, kartu QR presensi, dan akses dashboard orang tua (pantau jadwal, rapor bulanan, kehadiran) — akun aktif otomatis begitu pembayaran lunas.' },
 ]
 
 export default async function PaketPage() {

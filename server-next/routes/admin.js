@@ -76,7 +76,7 @@ router.get('/users', async (req, res) => {
     const users = await prisma.user.findMany({
       where,
       select: {
-        id: true, name: true, email: true, role: true, phone: true, photo: true, bio: true, status: true, createdAt: true,
+        id: true, name: true, email: true, role: true, phone: true, photo: true, bio: true, status: true, dailyRate: true, createdAt: true,
         branches: { select: { branch: true } },
         _count: { select: { coachAttendances: true, trainingSessions: true } },
       },
@@ -90,15 +90,19 @@ router.get('/users', async (req, res) => {
 })
 
 router.post('/users', async (req, res) => {
-  const { name, email, password, role, phone, branchIds } = req.body
+  const { name, email, password, role, phone, branchIds, dailyRate } = req.body
   try {
     if (['coach', 'head_coach'].includes(role) && !email?.toLowerCase().endsWith('@sixstars.id')) {
       return res.status(400).json({ error: `Email ${role === 'coach' ? 'coach' : 'head coach'} harus menggunakan domain @sixstars.id` })
+    }
+    if (dailyRate !== undefined && dailyRate !== '' && (!Number.isSafeInteger(Number(dailyRate)) || Number(dailyRate) < 0)) {
+      return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
     }
     const hashed = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
       data: {
         name, email, password: hashed, role, phone,
+        dailyRate: dailyRate ? Number(dailyRate) : 0,
         branches: branchIds?.length ? { create: branchIds.map((branchId) => ({ branchId })) } : undefined,
       },
     })
@@ -112,9 +116,16 @@ router.post('/users', async (req, res) => {
 })
 
 router.put('/users/:id', async (req, res) => {
-  const { name, phone, status, password, branchIds } = req.body
+  const { name, phone, status, password, branchIds, dailyRate } = req.body
   try {
     const data = { name, phone, status }
+    if (dailyRate !== undefined && dailyRate !== '' && (!Number.isSafeInteger(Number(dailyRate)) || Number(dailyRate) < 0)) {
+      return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
+    }
+    if (dailyRate !== undefined && dailyRate !== '') data.dailyRate = Number(dailyRate)
+    if (name === undefined) delete data.name
+    if (phone === undefined) delete data.phone
+    if (status === undefined) delete data.status
     if (password) data.password = await bcrypt.hash(password, 10)
     if (branchIds !== undefined) {
       data.branches = { deleteMany: {}, create: branchIds.map((branchId) => ({ branchId })) }

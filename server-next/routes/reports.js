@@ -7,6 +7,7 @@ import { authenticate, authorize } from '../middleware/auth.js'
 import { generateReportPdf } from '../lib/generateReportPdf.js'
 import { notifyUser } from '../lib/notify.js'
 import { formatPeriodLabel } from '../lib/assessmentFields.js'
+import { assertCoachStudentAccess } from '../lib/branchAccess.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPORTS_DIR = path.join(__dirname, '..', 'uploads', 'rapor')
@@ -82,14 +83,16 @@ router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (
   }
 })
 
-router.get('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
+router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { studentId } = req.query
   if (!studentId || !req.query.month || !req.query.year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
+    await assertCoachStudentAccess(req.user, studentId)
     const { month, year, endMonth, endYear } = parsePeriod(req.query)
     const report = await prisma.report.findFirst({ where: { studentId, month, year, endMonth, endYear } })
     res.json(report)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }

@@ -10,6 +10,7 @@ const PAYMENT_TYPE_LABEL = {
   registration: 'Pendaftaran',
   renewal: 'Perpanjangan Paket',
   event: 'Biaya Event',
+  cart: 'Tagihan',
 }
 
 function monthRange(month, year) {
@@ -48,7 +49,10 @@ router.get('/pemasukan', async (req, res) => {
     const [payments, manualEntries] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
-        include: { student: { select: { fullName: true, branchId: true, branch: true } } },
+        include: {
+          student: { select: { fullName: true, branchId: true, branch: true } },
+          cartItems: true,
+        },
         orderBy: { paidAt: 'desc' },
       }),
       prisma.ledgerEntry.findMany({
@@ -59,17 +63,56 @@ router.get('/pemasukan', async (req, res) => {
     ])
 
     const items = [
-      ...payments.map((p) => ({
-        id: p.id,
-        source: 'payment',
-        category: PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType,
-        description: `${PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType} — ${p.student?.fullName || '-'}`,
-        amount: p.totalAmount,
-        date: p.paidAt,
-        branch: p.student?.branch || null,
-      })),
+      ...payments.flatMap((p) => {
+        // Pembayaran gabungan (keranjang): pecah jadi satu baris per item,
+        // masing-masing dengan kategori pemasukan sendiri, walau pembayarannya
+        // satu transaksi. `id` tetap id Payment supaya edit/hapus tetap bekerja;
+        // `lineKey` unik per baris untuk keperluan render.
+        if (p.paymentType === 'cart' && p.cartItems?.length) {
+          return p.cartItems.map((c) => ({
+            id: p.id,
+            lineKey: `${p.id}:${c.id}`,
+            isCartLine: true,
+            source: 'payment',
+            category: c.category,
+            description: `${c.label} — ${p.student?.fullName || '-'}`,
+            note: c.metadata && typeof c.metadata === 'object' ? c.metadata.note || null : null,
+            amount: c.amount,
+            date: p.paidAt,
+            branch: p.student?.branch || null,
+            studentName: p.student?.fullName || null,
+            paymentType: p.paymentType,
+            paymentMethod: p.paymentMethod,
+            baseAmount: c.amount,
+            registrationFee: 0,
+            totalAmount: c.amount,
+            status: p.status,
+            paidAt: p.paidAt,
+          }))
+        }
+        return [{
+          id: p.id,
+          lineKey: p.id,
+          source: 'payment',
+          category: PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType,
+          description: `${PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType} — ${p.student?.fullName || '-'}`,
+          note: p.note || null,
+          amount: p.totalAmount,
+          date: p.paidAt,
+          branch: p.student?.branch || null,
+          studentName: p.student?.fullName || null,
+          paymentType: p.paymentType,
+          paymentMethod: p.paymentMethod,
+          baseAmount: p.amount,
+          registrationFee: p.registrationFee,
+          totalAmount: p.totalAmount,
+          status: p.status,
+          paidAt: p.paidAt,
+        }]
+      }),
       ...manualEntries.map((e) => ({
         id: e.id,
+        lineKey: `manual:${e.id}`,
         source: 'manual',
         category: e.category || 'Lainnya',
         description: e.description,

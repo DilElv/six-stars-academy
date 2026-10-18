@@ -34,7 +34,7 @@ export default function AdminPembayaranPage() {
         ))}
       </div>
 
-      {tab === 'pemasukan' && <PemasukanTab canVerifyPayments />}
+      {tab === 'pemasukan' && <PemasukanTab />}
       {tab === 'pengeluaran' && <PengeluaranTab />}
       {tab === 'laba' && <LabaTab />}
     </div>

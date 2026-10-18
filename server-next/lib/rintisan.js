@@ -139,3 +139,7 @@ export const PAYMENT_METHODS = [
   { value: 'TOKOPEDIA NON CC', label: 'Tokopedia (Non Kartu Kredit)' },
   { value: 'BLIBLI CC', label: 'Kartu Kredit (Blibli)' },
 ]
+
+export function isSupportedPaymentMethod(value) {
+  return PAYMENT_METHODS.some((method) => method.value === value)
+}

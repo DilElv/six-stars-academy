@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { UserCheck, FileSpreadsheet, FileText, Download, Clock3, CheckCircle2, XCircle, MapPin, Loader2, X } from 'lucide-react'
+import { UserCheck, FileSpreadsheet, FileText, Download, MapPin, X } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 import { AppSelect } from '@/components/ui/app-select'
 import { DatePicker } from '@/components/ui/date-picker'
 import { exportAttendanceToExcel, exportAttendanceToPDF } from '@/lib/export'
@@ -18,62 +19,6 @@ const STATUS_COLOR = {
 
 const today = new Date().toISOString().slice(0, 10)
 const MONTH_LABELS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
-
-const VERIFY_LABEL = { pending: 'Menunggu Verifikasi', approved: 'Disetujui', rejected: 'Ditolak' }
-const VERIFY_COLOR = {
-  pending: 'bg-amber-50 text-amber-700 border-amber-100',
-  approved: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  rejected: 'bg-red-50 text-red-700 border-red-100',
-}
-const VERIFY_ICON = { pending: Clock3, approved: CheckCircle2, rejected: XCircle }
-
-// `type` picks which event (check-in vs check-out) the modal acts on — the
-// two share identical shapes (photo/time/location/verify fields), just with
-// a `checkOut`-prefixed field set and a separate API endpoint for checkout.
-function RejectModal({ record, type = 'checkin', onClose, onDone }) {
-  const [reason, setReason] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function handleReject() {
-    setSaving(true)
-    try {
-      if (type === 'checkin') await api.rejectStaffAttendance(record.id, reason)
-      else await api.rejectStaffCheckout(record.id, reason)
-      onDone()
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60" onClick={saving ? undefined : onClose} />
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-navy-900 text-sm">Tolak Absen {type === 'checkin' ? 'Masuk' : 'Pulang'} {record.user?.name}</h3>
-          {!saving && (
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-          )}
-        </div>
-        <label className="block text-xs font-semibold text-gray-500 mb-1">Alasan (opsional)</label>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          placeholder="mis. Foto tidak jelas / lokasi tidak sesuai lapangan"
-          className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm mb-4"
-        />
-        <button
-          onClick={handleReject}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-3 rounded-2xl disabled:opacity-50"
-        >
-          {saving && <Loader2 size={14} className="animate-spin" />} Tolak Absen
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function PhotoPreviewModal({ record, type = 'checkin', onClose }) {
   const photo = type === 'checkin' ? record.photo : record.checkOutPhoto
@@ -99,11 +44,11 @@ function PhotoPreviewModal({ record, type = 'checkin', onClose }) {
   )
 }
 
-// One masuk or pulang event within a day's record card. `verifyStatus` is
-// null when that event simply hasn't happened yet (e.g. checked in but not
-// out) — shown as a plain "Belum absen" note rather than a badge.
-function EventBlock({ label, photo, time, locationName, verifyStatus, rejectReason, onPreview, onReject, onApprove, acting }) {
-  const VerifyIcon = VERIFY_ICON[verifyStatus] || Clock3
+// One masuk or pulang event within a day's record card. Verifikasi admin
+// dihapus: absen coach/head coach langsung sah, jadi yang ditampilkan hanya
+// bukti selfie + timestamps. Baris `rejected` masih mungkin ada bila admin
+// menolak manual lewat `PUT /staff-attendance/:id/reject`.
+function EventBlock({ label, photo, time, locationName, verifyStatus, rejectReason, onPreview }) {
   return (
     <div className="border-t border-gray-100 pt-2.5 first:border-t-0 first:pt-0 space-y-2">
       <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</div>
@@ -122,7 +67,8 @@ function EventBlock({ label, photo, time, locationName, verifyStatus, rejectReas
               </div>
             )}
             <div className="min-w-0 flex-1 text-xs text-gray-500">
-              <div className="font-semibold text-navy-900">{new Date(time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div className="font-semibold text-navy-900 tabular-nums">{new Date(time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div className="text-[10px] text-gray-400">{new Date(time).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
             </div>
           </div>
 
@@ -133,30 +79,9 @@ function EventBlock({ label, photo, time, locationName, verifyStatus, rejectReas
             </div>
           )}
 
-          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full border ${VERIFY_COLOR[verifyStatus] || VERIFY_COLOR.pending}`}>
-            <VerifyIcon size={11} /> {VERIFY_LABEL[verifyStatus] || 'Menunggu Verifikasi'}
-          </span>
-
-          {verifyStatus === 'rejected' && rejectReason && (
-            <div className="text-[11px] text-red-600">Alasan: {rejectReason}</div>
-          )}
-
-          {verifyStatus === 'pending' && (
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={onReject}
-                disabled={acting}
-                className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
-              >
-                <XCircle size={13} /> Tolak
-              </button>
-              <button
-                onClick={onApprove}
-                disabled={acting}
-                className="flex items-center justify-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
-              >
-                {acting ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Setujui
-              </button>
+          {verifyStatus === 'rejected' && (
+            <div className="text-[11px] font-semibold text-red-600">
+              Ditolak{rejectReason ? `: ${rejectReason}` : ''}
             </div>
           )}
         </>
@@ -175,8 +100,6 @@ function StaffAttendanceTab() {
   const [staffRecords, setStaffRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [previewTarget, setPreviewTarget] = useState(null) // { record, type }
-  const [rejectTarget, setRejectTarget] = useState(null) // { record, type }
-  const [actingId, setActingId] = useState(null)
 
   useEffect(() => { api.getBranches().then(setBranches) }, [])
 
@@ -186,17 +109,6 @@ function StaffAttendanceTab() {
   }
 
   useEffect(load, [role, month, year, branchId])
-
-  async function handleApprove(record, type) {
-    setActingId(record.id)
-    try {
-      if (type === 'checkin') await api.approveStaffAttendance(record.id)
-      else await api.approveStaffCheckout(record.id)
-      load()
-    } finally {
-      setActingId(null)
-    }
-  }
 
   const byUser = staffRecords.reduce((acc, r) => {
     const key = r.user?.name || r.userId
@@ -238,7 +150,6 @@ function StaffAttendanceTab() {
         <div className="space-y-4">
           {groups.map((g) => {
             const hadirCount = g.records.filter((r) => r.verifyStatus === 'approved').length
-            const pendingCount = g.records.filter((r) => r.verifyStatus === 'pending' || r.checkOutVerifyStatus === 'pending').length
             const sortedRecords = [...g.records].sort((a, b) => new Date(b.date) - new Date(a.date))
             return (
               <div key={g.user?.name} className="glass-card rounded-3xl p-4 sm:p-5">
@@ -253,7 +164,6 @@ function StaffAttendanceTab() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">{hadirCount}x Hadir bulan ini</span>
-                    {pendingCount > 0 && <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">{pendingCount} Menunggu</span>}
                   </div>
                 </div>
 
@@ -276,9 +186,6 @@ function StaffAttendanceTab() {
                             verifyStatus={r.verifyStatus}
                             rejectReason={r.rejectReason}
                             onPreview={() => setPreviewTarget({ record: r, type: 'checkin' })}
-                            onReject={() => setRejectTarget({ record: r, type: 'checkin' })}
-                            onApprove={() => handleApprove(r, 'checkin')}
-                            acting={actingId === r.id}
                           />
                         )}
                         {showCheckout && (
@@ -290,9 +197,6 @@ function StaffAttendanceTab() {
                             verifyStatus={r.checkOutVerifyStatus}
                             rejectReason={r.checkOutRejectReason}
                             onPreview={() => setPreviewTarget({ record: r, type: 'checkout' })}
-                            onReject={() => setRejectTarget({ record: r, type: 'checkout' })}
-                            onApprove={() => handleApprove(r, 'checkout')}
-                            acting={actingId === r.id}
                           />
                         )}
                       </div>
@@ -307,14 +211,6 @@ function StaffAttendanceTab() {
 
       {previewTarget && (
         <PhotoPreviewModal record={previewTarget.record} type={previewTarget.type} onClose={() => setPreviewTarget(null)} />
-      )}
-      {rejectTarget && (
-        <RejectModal
-          record={rejectTarget.record}
-          type={rejectTarget.type}
-          onClose={() => setRejectTarget(null)}
-          onDone={() => { setRejectTarget(null); load() }}
-        />
       )}
     </div>
   )
@@ -357,7 +253,7 @@ function SiswaAttendanceTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <DatePicker value={date} max={today} onChange={setDate} />
           <AppSelect value={branchId} onChange={setBranchId} allLabel="Semua Cabang" placeholder="Semua Cabang" options={branches.map((b) => ({ value: b.id, label: b.name }))} />
-          <AppSelect value={ageGroup} onChange={setAgeGroup} allLabel="Semua Kelompok Umur" placeholder="Semua Kelompok Umur" options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))} />
+          <AgeGroupFilter value={ageGroup} onChange={setAgeGroup} allowAll allLabel="Semua Umur" />
         </div>
         <div className="relative" ref={exportRef}>
           <button onClick={() => setExportOpen(!exportOpen)} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold px-3 py-2 rounded-xl"><Download size={14} /> Export</button>
@@ -370,7 +266,7 @@ function SiswaAttendanceTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Object.entries(STATUS_LABEL).map(([key, label]) => (
           <div key={key} className="glass-card rounded-3xl p-4 text-center">
             <div className="text-xl font-bold text-navy-900">{counts[key] || 0}</div>

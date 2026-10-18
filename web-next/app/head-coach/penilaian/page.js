@@ -6,6 +6,7 @@ import { Save, Loader2, FileText, Download, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { getCategoriesForStudent, formatPeriodLabel } from '@/lib/assessmentFields'
 import { AGE_GROUPS } from '@/lib/ageGroups'
+import AgeGroupFilter from '@/components/AgeGroupFilter'
 import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
 import AssessmentCategories from '@/components/AssessmentCategories'
@@ -215,14 +216,7 @@ function PenilaianContent() {
             className="min-w-[160px]"
             options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
           />
-          <AppSelect
-            value={filterAgeGroup}
-            onChange={setFilterAgeGroup}
-            allLabel="Semua Kelompok Umur"
-            placeholder="Semua Kelompok Umur"
-            className="min-w-[180px]"
-            options={AGE_GROUPS.map((ag) => ({ value: ag, label: ag }))}
-          />
+          <AgeGroupFilter value={filterAgeGroup} onChange={setFilterAgeGroup} allowAll />
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-1">

@@ -53,6 +53,7 @@ export default function CoachUserManager({ role, label }) {
                 {role !== 'admin' && <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>}
                 {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Absensi Dibuat</th>}
                 {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Topik Dibuat</th>}
+                {role !== 'admin' && <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Honor/hari</th>}
                 <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
               </tr>
@@ -66,6 +67,7 @@ export default function CoachUserManager({ role, label }) {
                   {role !== 'admin' && <td className="px-3 py-3 text-gray-500">{u.branches?.map((b) => b.branch.code).join(', ') || '-'}</td>}
                   {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.coachAttendances ?? 0}</td>}
                   {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.trainingSessions ?? 0}</td>}
+                  {role !== 'admin' && <td className="px-3 py-3 text-right tabular-nums text-gray-500">{u.dailyRate ? 'Rp' + u.dailyRate.toLocaleString('id-ID') : '-'}</td>}
                   <td className="px-3 py-3 text-center">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                       {u.status === 'active' ? 'Aktif' : 'Nonaktif'}
@@ -93,7 +95,7 @@ export default function CoachUserManager({ role, label }) {
 }
 
 function AddModal({ role, label, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', branchIds: [] })
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', branchIds: [], dailyRate: '' })
   const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -150,6 +152,12 @@ function AddModal({ role, label, onClose, onSaved }) {
               />
             </div>
           )}
+          {role !== 'admin' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Honor harian (Rp)</label>
+              <input type="number" min="0" value={form.dailyRate} onChange={(e) => setForm((f) => ({ ...f, dailyRate: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums" placeholder="0" />
+            </div>
+          )}
           <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving && <Loader2 size={14} className="animate-spin" />} Buat Akun
           </button>
@@ -166,6 +174,7 @@ function EditModal({ user, onClose, onSaved }) {
     status: user.status,
     password: '',
     branchIds: user.branches?.map((b) => b.branch.id) || [],
+    dailyRate: String(user.dailyRate ?? 0),
   })
   const [branches, setBranches] = useState([])
   const [saving, setSaving] = useState(false)
@@ -223,6 +232,12 @@ function EditModal({ user, onClose, onSaved }) {
                 onChange={(v) => setForm((f) => ({ ...f, branchIds: v }))}
                 options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
               />
+            </div>
+          )}
+          {user.role !== 'admin' && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Honor harian (Rp)</label>
+              <input type="number" min="0" value={form.dailyRate} onChange={(e) => setForm((f) => ({ ...f, dailyRate: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums" placeholder="0" />
             </div>
           )}
           <div>

@@ -100,10 +100,6 @@ export async function getPaymentMethods() {
   return request('/payments/methods')
 }
 
-export async function createRenewalPayment(payload) {
-  return request('/payments/renewal', { method: 'POST', body: JSON.stringify(payload) })
-}
-
 // Actively asks Rintisan whether this payment has been paid yet, instead of
 // only waiting for their webhook — used while polling on the payment screen.
 export async function syncPayment(id) {
@@ -118,6 +114,95 @@ export async function createEventPayment(payload) {
 // only allowed while status is 'pending'.
 export async function cancelPayment(id) {
   return request(`/payments/${id}`, { method: 'DELETE' })
+}
+
+// Keranjang belanja parent: item (perpanjangan paket, BPJS, merchandise) yang
+// digabung jadi satu checkout.
+export async function getMyCart() {
+  return request('/cart/me')
+}
+
+export async function getStudentCart(studentId) {
+  return request(`/cart/student/${studentId}`)
+}
+
+export async function addCartItem(payload) {
+  return request('/cart', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function deleteCartItem(id) {
+  return request(`/cart/${id}`, { method: 'DELETE' })
+}
+
+// Ubah item tagihan yang belum dibayar (harga/keterangan). Admin/head_coach.
+export async function updateCartItem(id, payload) {
+  return request(`/cart/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+}
+
+// Tandai lunas manual (cash / transfer pribadi) oleh admin/head_coach.
+export async function markCartPaid(payload) {
+  return request('/cart/mark-paid', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+// Semua tagihan yang belum dibayar (belum jadi pendapatan) — panel Keuangan.
+export async function getOutstandingCart() {
+  return request('/cart/outstanding')
+}
+
+export async function checkoutCart(paymentMethod) {
+  return request('/cart/checkout', { method: 'POST', body: JSON.stringify({ paymentMethod }) })
+}
+
+// Katalog merchandise: admin mengelola (`/products/all`), parent melihat yang
+// aktif saja (`/products`).
+export async function getProducts() {
+  return request('/products')
+}
+
+export async function getAllProducts() {
+  return request('/products/all')
+}
+
+export async function createProduct(payload) {
+  return request('/products', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateProduct(id, payload) {
+  return request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deleteProduct(id) {
+  return request(`/products/${id}`, { method: 'DELETE' })
+}
+
+// Audit Pembayaran (admin): anomali + jejak audit perubahan.
+export async function getPaymentAudit(days = 90) {
+  return request(`/payments/audit?days=${days}`)
+}
+
+export async function syncPaymentAdmin(id) {
+  return request(`/payments/audit/${id}/sync`, { method: 'POST' })
+}
+
+// Payroll coach (admin) — honor harian x hari hadir (dari absen).
+export async function getPayroll(month, year) {
+  return request(`/payroll?month=${month}&year=${year}`)
+}
+
+export async function generatePayroll(month, year) {
+  return request('/payroll/generate', { method: 'POST', body: JSON.stringify({ month, year }) })
+}
+
+export async function updatePayroll(id, payload) {
+  return request(`/payroll/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function payPayroll(id) {
+  return request(`/payroll/${id}/pay`, { method: 'POST' })
+}
+
+export async function deletePayroll(id) {
+  return request(`/payroll/${id}`, { method: 'DELETE' })
 }
 
 export async function getMyReports() {
@@ -182,6 +267,13 @@ export async function getStudent(id) {
 
 export async function updateStudent(id, payload) {
   return request(`/students/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function resetAllStudentSessions(branchId) {
+  return request('/students/sessions/reset-all', {
+    method: 'POST',
+    body: JSON.stringify({ branchId: branchId || undefined }),
+  })
 }
 
 export async function renewStudent(id, payload) {
@@ -288,6 +380,10 @@ export async function updatePayment(id, payload) {
   return request(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function deletePaymentAdmin(id) {
+  return request(`/payments/admin/${id}`, { method: 'DELETE' })
+}
+
 export async function createSchedule(payload) {
   return request('/schedules', { method: 'POST', body: JSON.stringify(payload) })
 }
@@ -322,6 +418,19 @@ export async function getSettings() {
 
 export async function updateSettings(payload) {
   return request('/settings', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+// Billing BPJS otomatis (nominal global, ditagih bulanan ke semua anak).
+export async function getBpjsStatus(month, year) {
+  const params = new URLSearchParams()
+  if (month) params.set('month', month)
+  if (year) params.set('year', year)
+  const qs = params.toString()
+  return request(`/settings/bpjs/status${qs ? `?${qs}` : ''}`)
+}
+
+export async function runBpjsBilling(payload = {}) {
+  return request('/settings/bpjs/run', { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export async function getFields(branchId) {
@@ -372,6 +481,39 @@ export async function getMyStaffAttendance(date) {
   return request(`/staff-attendance/me${date ? `?date=${date}` : ''}`)
 }
 
+export async function getTodayEventStaffAttendance() {
+  return request('/event-staff-attendance/today')
+}
+
+export async function checkinEventStaff(payload) {
+  return request('/event-staff-attendance/checkin', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function checkoutEventStaff(payload) {
+  return request('/event-staff-attendance/checkout', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function getEventStaffAttendance(params = {}) {
+  const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== '' && value != null))
+  return request(`/event-staff-attendance${query.size ? `?${query}` : ''}`)
+}
+
+export async function approveEventStaffAttendance(id) {
+  return request(`/event-staff-attendance/${id}/approve`, { method: 'PUT' })
+}
+
+export async function rejectEventStaffAttendance(id, reason) {
+  return request(`/event-staff-attendance/${id}/reject`, { method: 'PUT', body: JSON.stringify({ reason }) })
+}
+
+export async function approveEventStaffCheckout(id) {
+  return request(`/event-staff-attendance/${id}/checkout/approve`, { method: 'PUT' })
+}
+
+export async function rejectEventStaffCheckout(id, reason) {
+  return request(`/event-staff-attendance/${id}/checkout/reject`, { method: 'PUT', body: JSON.stringify({ reason }) })
+}
+
 export async function getStaffAttendance(filters = {}) {
   const { date, month, year, role, branchId } = filters
   const params = new URLSearchParams()
@@ -381,6 +523,13 @@ export async function getStaffAttendance(filters = {}) {
   if (role) params.set('role', role)
   if (branchId) params.set('branchId', branchId)
   return request(`/staff-attendance?${params.toString()}`)
+}
+
+// Rekap kehadiran coach sebulan (menu Absensi Coach).
+export async function getCoachAttendanceRecap(month, year, branchId) {
+  const params = new URLSearchParams({ month: String(month), year: String(year) })
+  if (branchId) params.set('branchId', branchId)
+  return request(`/staff-attendance/recap?${params.toString()}`)
 }
 
 export async function getEvents(ageGroup, branchId, status) {
@@ -512,4 +661,8 @@ export async function deleteLedgerEntry(id) {
 
 export async function getLedgerTrend(filters) {
   return request(`/ledger/trend${buildQuery(filters)}`)
+}
+
+export async function updateStudentPackagePeriod(id, payload) {
+  return request(`/students/${id}/package-period`, { method: 'PUT', body: JSON.stringify(payload) })
 }

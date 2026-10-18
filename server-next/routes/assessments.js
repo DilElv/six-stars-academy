@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getCategoriesForStudent } from '../lib/assessmentFields.js'
+import { assertCoachStudentAccess } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -20,16 +21,20 @@ function parsePeriod(query) {
   return { month, year, endMonth, endYear }
 }
 
-router.get('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
+// Read-only for coaches too (branch-scoped): the coach "Laporan" menu shows
+// the same assessment content the head coach sees, without editing rights.
+router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { studentId } = req.query
   if (!studentId || !req.query.month || !req.query.year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
+    await assertCoachStudentAccess(req.user, studentId)
     const { month, year, endMonth, endYear } = parsePeriod(req.query)
     const assessment = await prisma.assessment.findUnique({
       where: { studentId_month_year_endMonth_endYear: { studentId, month, year, endMonth, endYear } },
     })
     res.json(assessment)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }

@@ -15,7 +15,7 @@ function formatRupiah(n) {
   return `Rp${(n || 0).toLocaleString('id-ID')}`
 }
 
-export default function AddStudentModal({ branches, packages, isAdmin = false, onClose, onSaved }) {
+export default function AddStudentModal({ branches, packages, canManageScholarship = false, onClose, onSaved }) {
   const [form, setForm] = useState({
     parentName: '', parentEmail: '', parentPhone: '', parentPassword: '',
     fullName: '', dateOfBirth: '', position: 'CM', branchId: '', packageId: '',
@@ -229,7 +229,7 @@ export default function AddStudentModal({ branches, packages, isAdmin = false, o
                   ]}
                 />
               </div>
-              {isAdmin && (
+              {canManageScholarship && (
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">Beasiswa</h4>
                   <ScholarshipField
