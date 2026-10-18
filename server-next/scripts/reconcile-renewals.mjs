@@ -11,17 +11,29 @@
 // duplikat supaya pemasukan tidak dobel.
 //
 // Pemakaian:
-//   node scripts/reconcile-renewals.mjs            # laporan saja (default)
-//   node scripts/reconcile-renewals.mjs --apply    # hapus duplikatnya
+//   node scripts/reconcile-renewals.mjs                            # laporan saja (default, 45 hari)
+//   node scripts/reconcile-renewals.mjs --window-days=3            # laporan dengan rentang lebih ketat
+//   node scripts/reconcile-renewals.mjs --window-days=3 --apply    # hapus duplikatnya
 //
 // Aturan: dalam satu kelompok (siswa + paket yang sama, dalam rentang
-// DUPLICATE_WINDOW_DAYS hari) hanya satu pembayaran yang dipertahankan —
-// yaitu yang paling awal; sisanya dihapus dan dicatat ke jejak audit.
+// DUPLICATE_WINDOW_DAYS hari DARI pembayaran pertama di kelompok itu) hanya satu
+// pembayaran yang dipertahankan — yaitu yang paling awal; sisanya dihapus dan
+// dicatat ke jejak audit.
+//
+// PENTING: jendela 45 hari bawaan terlalu lebar untuk paket bulanan — dua
+// perpanjangan sah yang berjarak ~30 hari ikut dianggap duplikat. Untuk
+// pembersihan aman di produksi gunakan --window-days=3 (hanya pasangan yang
+// benar-benar dobel pada hari yang sama / berdekatan).
 
 import prisma from '../lib/prisma.js'
 
 const APPLY = process.argv.includes('--apply')
-const DUPLICATE_WINDOW_DAYS = 45
+const windowArg = process.argv.find((a) => a.startsWith('--window-days='))
+const DUPLICATE_WINDOW_DAYS = windowArg ? Number(windowArg.split('=')[1]) : 45
+if (!Number.isFinite(DUPLICATE_WINDOW_DAYS) || DUPLICATE_WINDOW_DAYS < 0) {
+  console.error('Opsi --window-days harus berupa angka >= 0.')
+  process.exit(1)
+}
 
 const fmt = (n) => 'Rp' + (n || 0).toLocaleString('id-ID')
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '-')
@@ -72,6 +84,7 @@ async function main() {
   }
 
   console.log(`Mode            : ${APPLY ? 'APPLY (menghapus)' : 'DRY-RUN (laporan saja)'}`)
+  console.log(`Jendela dobel   : ${DUPLICATE_WINDOW_DAYS} hari`)
   console.log(`Pembayaran lunas: ${payments.length} baris renewal`)
   console.log(`Kelompok ganda  : ${plan.length}`)
   console.log(`Akan dihapus    : ${removable} baris (total ${fmt(removedAmount)})`)
