@@ -113,8 +113,8 @@ export default function AdminEventDetailPage() {
             </div>
             <div className="p-5 space-y-3">
               <label className="block text-xs font-semibold text-gray-500 mb-1">Metode Pembayaran</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[{ value: 'cash', label: 'Cash' }, { value: 'qris', label: 'QRIS' }].map((m) => (
+              <div className="grid grid-cols-3 gap-2">
+                {[{ value: 'cash', label: 'Cash' }, { value: 'qris', label: 'QRIS' }, { value: 'transfer', label: 'Transfer' }].map((m) => (
                   <button
                     key={m.value}
                     type="button"

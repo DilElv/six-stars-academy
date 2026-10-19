@@ -132,12 +132,6 @@ export async function queryPayment(trxId) {
 
 export const PAYMENT_METHODS = [
   { value: 'QRIS', label: 'QRIS' },
-  { value: 'VAMANDIRI', label: 'Virtual Account Mandiri' },
-  { value: 'VABNI', label: 'Virtual Account BNI' },
-  { value: 'VABRI', label: 'Virtual Account BRI' },
-  { value: 'TOKOPEDIA CC', label: 'Kartu Kredit (Tokopedia)' },
-  { value: 'TOKOPEDIA NON CC', label: 'Tokopedia (Non Kartu Kredit)' },
-  { value: 'BLIBLI CC', label: 'Kartu Kredit (Blibli)' },
 ]
 
 export function isSupportedPaymentMethod(value) {
