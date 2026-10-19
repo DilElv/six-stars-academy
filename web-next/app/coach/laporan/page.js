@@ -47,7 +47,16 @@ function LaporanContent() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    api.getStudents().then(setStudents)
+    // Coach hanya boleh melihat siswa di cabang yang ditugaskan; backend
+    // sengaja mengembalikan kosong bila role coach tidak mengirim branchId
+    // (lihat routes/students.js). Pola ini sama dengan halaman Absensi coach.
+    api.getMe()
+      .then((user) => {
+        const firstBranch = user.branches?.[0]?.branch?.id || ''
+        if (!firstBranch) { setStudents([]); return }
+        return api.getStudents(undefined, firstBranch).then(setStudents)
+      })
+      .catch(() => setStudents([]))
   }, [])
 
   const branchOptions = useMemo(() => {

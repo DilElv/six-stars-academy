@@ -50,7 +50,15 @@ export default function CoachDasborPage() {
     setExpanded(true)
     if (counts) return
     setLoadingCounts(true)
-    Promise.all(AGE_GROUPS.map((ag) => api.getStudents(ag)))
+    // Role coach wajib menyertakan branchId, kalau tidak backend mengembalikan
+    // daftar kosong (lihat routes/students.js).
+    const branchId = me?.branches?.[0]?.branch?.id
+    if (!branchId) {
+      setCounts(Object.fromEntries(AGE_GROUPS.map((ag) => [ag, 0])))
+      setLoadingCounts(false)
+      return
+    }
+    Promise.all(AGE_GROUPS.map((ag) => api.getStudents(ag, branchId)))
       .then((results) => {
         const map = {}
         AGE_GROUPS.forEach((ag, i) => { map[ag] = results[i].length })
