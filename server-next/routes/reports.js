@@ -80,6 +80,7 @@ router.post('/generate', authenticate, authorize('coach', 'head_coach', 'admin')
 
     res.json(report)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
