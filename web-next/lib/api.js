@@ -568,6 +568,11 @@ export async function generateCoachAttendanceSessions(month, year) {
   return request('/coach-attendance-sessions/generate', { method: 'POST', body: JSON.stringify({ month, year }) })
 }
 
+// Atur jam absen untuk semua jadwal pada bulan/cabang terpilih sekaligus.
+export async function setCoachAttendanceSessionWindow(payload) {
+  return request('/coach-attendance-sessions/window', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
 export async function getEvents(ageGroup, branchId, status) {
   const params = new URLSearchParams()
   if (ageGroup) params.set('ageGroup', ageGroup)

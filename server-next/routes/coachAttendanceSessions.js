@@ -269,6 +269,41 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
   }
 })
 
+// Atur jam absen untuk banyak jadwal sekaligus (mis. 15:30-16:00 sebulan).
+router.put('/window', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  const times = normalizeWindow(req.body || {})
+  if (times.error) return res.status(400).json({ error: times.error })
+  try {
+    const where = {}
+    if (req.body.month && req.body.year) {
+      where.date = monthRange(Number(req.body.month), Number(req.body.year))
+    } else if (req.body.date) {
+      where.date = startOfDay(req.body.date)
+    } else {
+      return res.status(400).json({ error: 'Pilih bulan atau tanggal' })
+    }
+    if (req.body.type) where.type = req.body.type
+
+    const branchIds = await headCoachBranchIds(req)
+    const requestedBranch = req.body.branchId || null
+    if (branchIds) {
+      if (requestedBranch && !branchIds.includes(requestedBranch)) {
+        return res.status(403).json({ error: 'Anda tidak memiliki akses ke cabang ini' })
+      }
+      if (requestedBranch) where.branchId = requestedBranch
+      else where.OR = [{ branchId: { in: branchIds } }, { branchId: null }]
+    } else if (requestedBranch) {
+      where.branchId = requestedBranch
+    }
+
+    const result = await prisma.coachAttendanceSession.updateMany({ where, data: times })
+    res.json({ updated: result.count, ...times })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
     const existing = await prisma.coachAttendanceSession.findUnique({ where: { id: req.params.id } })

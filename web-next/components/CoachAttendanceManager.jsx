@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarCheck, Loader2, RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle2,
   XCircle, FileSpreadsheet, FileText, MapPin, Plus, Pencil, Trash2, CalendarClock,
-  Wand2, Trophy, Dumbbell, X,
+  Wand2, Trophy, Dumbbell, X, SlidersHorizontal,
 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
@@ -445,6 +445,78 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
   )
 }
 
+function BulkWindowModal({ month, year, branchLabel, branchId, onClose, onSaved }) {
+  const [form, setForm] = useState({ checkInOpen: '15:30', checkInClose: '16:00', checkOutClose: '23:59' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const result = await api.setCoachAttendanceSessionWindow({
+        month, year,
+        branchId: branchId || undefined,
+        ...form,
+      })
+      onSaved(result)
+    } catch (err) {
+      setError(err.message || 'Gagal menyimpan jam absen')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60" onClick={saving ? undefined : onClose} />
+        <form onSubmit={submit} className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={18} className="text-navy-700" />
+              <h3 className="font-bold text-navy-900">Atur Jam Absen Massal</h3>
+            </div>
+            {!saving && <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>}
+          </div>
+
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</div>}
+
+          <p className="text-xs text-gray-500">
+            Berlaku untuk semua jadwal <b>{MONTHS[month]} {year}</b> {branchLabel ? <>di <b>{branchLabel}</b></> : 'di semua cabang'}. Jadwal baru per sesi tetap bisa diubah lagi satu-satu.
+          </p>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { key: 'checkInOpen', label: 'Buka absen masuk' },
+              { key: 'checkInClose', label: 'Tutup absen masuk' },
+              { key: 'checkOutClose', label: 'Batas absen pulang' },
+            ].map((field) => (
+              <label key={field.key} className="text-xs font-semibold text-gray-500">
+                {field.label}
+                <input
+                  type="time"
+                  value={form[field.key]}
+                  onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className="mt-1 w-full rounded-xl border border-gray-200 px-2 py-2 text-sm text-navy-900"
+                />
+              </label>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} disabled={saving} className="text-sm font-semibold text-gray-500 px-4 py-2 rounded-2xl hover:bg-gray-100 disabled:opacity-50">Batal</button>
+            <button type="submit" disabled={saving} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <SlidersHorizontal size={14} />} Terapkan
+            </button>
+          </div>
+        </form>
+      </div>
+    </ModalPortal>
+  )
+}
+
 export default function CoachAttendanceManager() {
   const [tab, setTab] = useState('schedule')
   const [branches, setBranches] = useState([])
@@ -461,6 +533,7 @@ export default function CoachAttendanceManager() {
   const [loadingSessions, setLoadingSessions] = useState(true)
   const [sessionsError, setSessionsError] = useState('')
   const [editor, setEditor] = useState(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   useEffect(() => {
     Promise.all([api.getMe(), api.getBranches(), api.getCoachAttendanceCoaches()])
@@ -621,6 +694,12 @@ export default function CoachAttendanceManager() {
                 className="flex items-center gap-1.5 text-xs font-semibold text-navy-700 border border-gray-200 hover:border-gold-300 rounded-2xl px-3 py-2 disabled:opacity-40"
               >
                 {busy === 'generate' ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} Generate Jadwal Bulan Ini
+              </button>
+              <button
+                onClick={() => setBulkOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-navy-700 border border-gray-200 hover:border-gold-300 rounded-2xl px-3 py-2"
+              >
+                <SlidersHorizontal size={13} /> Atur Jam Massal
               </button>
               <button
                 onClick={() => setEditor({ mode: 'create' })}
@@ -870,6 +949,24 @@ export default function CoachAttendanceManager() {
           branches={branches}
           onClose={() => setEditor(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkWindowModal
+          month={month}
+          year={year}
+          branchId={branchId}
+          branchLabel={(() => {
+            const found = branches.find((b) => b.id === branchId)
+            return found ? `${found.name} (${found.code})` : null
+          })()}
+          onClose={() => setBulkOpen(false)}
+          onSaved={(res) => {
+            setBulkOpen(false)
+            window.alert(`${res.updated} jadwal diperbarui (masuk ${res.checkInOpen}-${res.checkInClose}, pulang maks. ${res.checkOutClose}).`)
+            loadSessions()
+          }}
         />
       )}
     </div>
