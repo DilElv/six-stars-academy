@@ -151,11 +151,41 @@ router.put('/users/:id', async (req, res) => {
   }
 })
 
+// Hapus akun coach/head_coach/admin.
+//
+// Sebelumnya handler ini memanggil `prisma.user.delete()` langsung, sehingga
+// gagal (P2003) begitu user punya relasi ber-FK wajib — paling sering
+// `TrainingSession.coachId` (topik latihan yang pernah dibuat). Sekarang
+// dibersihkan dulu dalam satu transaksi:
+//   - topik latihan milik user  -> dihapus (kolom coachId wajib diisi)
+//   - absensi/jadwal/keranjang/password-reset -> tautan dilepas (kolom nullable),
+//     supaya riwayat kehadiran anak tetap utuh
+//   - relasi lain (UserBranch, StaffAttendance, EventStaffAttendance,
+//     CoachPayroll, Notification) sudah `onDelete: Cascade`; Payment & audit log SetNull.
+// Bila masih ada relasi wajib lain yang mengikat (mis. penilaian rapor, jurnal
+// keuangan, atau event yang dibuat user ini), kembalikan pesan jelas alih-alih 500.
 router.delete('/users/:id', async (req, res) => {
+  const { id } = req.params
   try {
-    await prisma.user.delete({ where: { id: req.params.id } })
+    const user = await prisma.user.findUnique({ where: { id } })
+    if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan' })
+
+    await prisma.$transaction(async (tx) => {
+      await tx.trainingSession.deleteMany({ where: { coachId: id } })
+      await tx.attendance.updateMany({ where: { coachId: id }, data: { coachId: null } })
+      await tx.schedule.updateMany({ where: { coachId: id }, data: { coachId: null } })
+      await tx.cartItem.updateMany({ where: { addedById: id }, data: { addedById: null } })
+      await tx.passwordReset.updateMany({ where: { userId: id }, data: { userId: null } })
+      await tx.user.delete({ where: { id } })
+    })
+
     res.json({ message: 'Deleted' })
   } catch (err) {
+    if (err.code === 'P2003') {
+      return res.status(409).json({
+        error: 'Akun ini masih terhubung dengan data yang tidak dihapus otomatis (mis. penilaian rapor, jurnal keuangan, atau event yang dibuat akun ini). Nonaktifkan akun ini sebagai gantinya.',
+      })
+    }
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
