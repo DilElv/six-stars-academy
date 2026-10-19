@@ -1,15 +1,14 @@
 'use client'
 
-import { Home, User, Calendar, Wallet, FileText, Trophy } from 'lucide-react'
+import { Home, User, Calendar, Wallet, FileText, Trophy, ShoppingCart, Store } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
-// Menu Keranjang & Toko sengaja belum ditampilkan (rilis berikutnya). Mekanisme
-// tagihannya tetap jalan di belakang layar: parent melihat & membayar tagihan
-// dari admin lewat menu Perpanjang Paket di Dasbor / Pembayaran.
 const navItems = [
   { href: '/dashboard', label: 'Dasbor', icon: Home },
   { href: '/dashboard/profil', label: 'Profil Anak', icon: User },
   { href: '/dashboard/jadwal', label: 'Jadwal', icon: Calendar },
+  { href: '/dashboard/keranjang', label: 'Keranjang', icon: ShoppingCart },
+  { href: '/dashboard/toko', label: 'Toko', icon: Store },
   { href: '/dashboard/pembayaran', label: 'Pembayaran', icon: Wallet },
   { href: '/dashboard/event', label: 'Event', icon: Trophy },
   { href: '/dashboard/rapor', label: 'Rapor', icon: FileText },

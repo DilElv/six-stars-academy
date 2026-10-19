@@ -12,7 +12,7 @@ const MAX_TABS = 4
 
 // Tombol mengambang "Chat Admin" (WhatsApp) disembunyikan sampai rilis
 // berikutnya — cukup ubah menjadi true untuk mengaktifkannya kembali.
-const SHOW_WA_ADMIN_BUTTON = false
+const SHOW_WA_ADMIN_BUTTON = true
 
 const ROLE_LABEL = {
   admin: 'Admin',

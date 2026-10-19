@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search, AlertTriangle } from 'lucide-react'
+import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search, AlertTriangle, Receipt } from 'lucide-react'
 import * as api from '@/lib/api'
 import DailyLedgerChart from '@/components/charts/DailyLedgerChart'
 import CategoryBreakdownChart from '@/components/charts/CategoryBreakdownChart'
@@ -26,6 +26,7 @@ export default function PemasukanTab() {
   const [detailEntry, setDetailEntry] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [missing, setMissing] = useState({ count: 0, total: 0, items: [] })
+  const [outstanding, setOutstanding] = useState({ count: 0, total: 0, items: [] })
 
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
 
@@ -33,6 +34,7 @@ export default function PemasukanTab() {
     setLoading(true)
     api.getPemasukan({ month, year }).then((res) => { setItems(res.items); setTotal(res.total); setBreakdown(res.breakdown || []) }).finally(() => setLoading(false))
     api.getMissingProof({ branchId: undefined }).then(setMissing).catch(() => setMissing({ count: 0, total: 0, items: [] }))
+    api.getOutstandingCart().then((res) => setOutstanding({ count: res.items.length, total: res.total, items: res.items })).catch(() => setOutstanding({ count: 0, total: 0, items: [] }))
   }
 
   useEffect(load, [month, year])
@@ -124,6 +126,33 @@ export default function PemasukanTab() {
                 </div>
                 <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(m.amount)}</div>
                 <PaymentProofUpload payment={m} onUploaded={load} compact />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {outstanding.count > 0 && (
+        <div className="glass-card rounded-3xl p-4 sm:p-5 border-l-4 border-rose-400">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Receipt size={16} className="text-rose-500" />
+              <span className="text-sm font-bold text-navy-900">Tagihan Belum Dibayar ({outstanding.count})</span>
+              <span className="text-xs text-gray-400">— belum dibayar, belum dihitung sebagai pendapatan</span>
+            </div>
+            <span className="text-sm font-extrabold text-rose-600">{formatRupiah(outstanding.total)}</span>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {outstanding.items.map((o) => (
+              <div key={o.id} className="flex items-center gap-3 flex-wrap rounded-2xl bg-rose-50/60 border border-rose-100 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-navy-900 truncate">{o.label || o.category}</div>
+                  <div className="text-[11px] text-gray-500">
+                    {o.student?.fullName || '-'}{o.student?.branch?.code ? ` · ${o.student.branch.code}` : ''}
+                    {o.addedBy?.name ? ` · dititipkan oleh ${o.addedBy.name}` : ''}
+                  </div>
+                </div>
+                <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(o.amount)}</div>
               </div>
             ))}
           </div>

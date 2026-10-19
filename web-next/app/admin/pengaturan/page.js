@@ -9,10 +9,9 @@ function formatRupiah(n) {
   return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
 }
 
-// Fitur yang belum ikut dirilis. Kodenya sudah lengkap di file ini — cukup
-// diubah menjadi true saat fitur tersebut dinaikkan ke VPS.
-const SHOW_BPJS_SETTINGS = false
-const SHOW_WA_ADMIN_BUTTON = false
+// Fitur yang dirilis: Billing BPJS (pengaturan) & tombol Chat Admin (WA).
+const SHOW_BPJS_SETTINGS = true
+const SHOW_WA_ADMIN_BUTTON = true
 
 export default function AdminPengaturanPage() {
   const [settings, setSettings] = useState(null)

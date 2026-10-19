@@ -1,19 +1,20 @@
 'use client'
 
-import { Home, Users, Shield, UserCog, Wallet, ClipboardList, Calendar, Trophy, Globe, Settings, ShieldCheck } from 'lucide-react'
+import { Home, Users, Shield, UserCog, Wallet, ClipboardList, Calendar, Trophy, Globe, Settings, ShieldCheck, Store, ScrollText, Banknote, UserCheck } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
-// Fitur yang belum ikut dirilis disembunyikan dari menu — kodenya masih ada,
-// cukup tambahkan kembali barisnya saat fitur tersebut dinaikkan ke VPS:
-// Toko (katalog merchandise), Audit, Payroll, Absensi Coach.
 const navItems = [
   { href: '/admin', label: 'Dasbor', icon: Home },
   { href: '/admin/data-anak', label: 'Data Anak', icon: Users },
   { href: '/admin/head-coach', label: 'Data Head Coach', icon: Shield },
   { href: '/admin/coach', label: 'Data Coach', icon: UserCog },
   { href: '/admin/data-admin', label: 'Data Admin', icon: ShieldCheck },
+  { href: '/admin/toko', label: 'Toko', icon: Store },
   { href: '/admin/pembayaran', label: 'Keuangan', icon: Wallet },
+  { href: '/admin/audit', label: 'Audit Pembayaran', icon: ScrollText },
+  { href: '/admin/payroll', label: 'Payroll', icon: Banknote },
   { href: '/admin/absensi', label: 'Absensi', icon: ClipboardList },
+  { href: '/admin/absensi-coach', label: 'Absensi Coach', icon: UserCheck },
   { href: '/admin/jadwal', label: 'Jadwal Latihan', icon: Calendar },
   { href: '/admin/event', label: 'Event', icon: Trophy },
   { href: '/admin/cms', label: 'CMS Landing Page', icon: Globe },

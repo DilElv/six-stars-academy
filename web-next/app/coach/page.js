@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Users, ClipboardList, BookOpen, ChevronRight, ChevronDown, Loader2,
-  UserCheck, CalendarClock, Trophy, MapPin,
+  UserCheck, CalendarClock, Trophy, MapPin, FileBarChart,
 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
@@ -106,7 +106,7 @@ export default function CoachDasborPage() {
         )}
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <Link
           href="/coach/absensi"
           className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
@@ -130,6 +130,19 @@ export default function CoachDasborPage() {
           <div className="flex-1">
             <div className="font-semibold text-navy-900">Jadwal</div>
             <div className="text-xs text-gray-400">Kalender latihan & topik hari ini</div>
+          </div>
+          <ChevronRight size={16} className="text-gray-300 group-hover:text-gold-500 group-hover:translate-x-1 transition-all duration-200" />
+        </Link>
+        <Link
+          href="/coach/laporan"
+          className="group flex items-center gap-4 glass-card rounded-3xl p-5 hover:border-gold-300 hover:shadow-md transition-all duration-200"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-navy-600 to-navy-800 shadow-md shadow-navy-900/25 flex items-center justify-center transition-shadow duration-200 shrink-0">
+            <FileBarChart size={19} className="text-gold-300" />
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-navy-900">Laporan</div>
+            <div className="text-xs text-gray-400">Isi rapor & penilaian siswa</div>
           </div>
           <ChevronRight size={16} className="text-gray-300 group-hover:text-gold-500 group-hover:translate-x-1 transition-all duration-200" />
         </Link>
