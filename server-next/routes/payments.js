@@ -2,7 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
-import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod } from '../lib/rintisan.js'
+import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod, isDuplicatePartnerTrxError } from '../lib/rintisan.js'
 import { logPaymentAudit, getPaymentAudit } from '../lib/paymentAudit.js'
 import { missingProofWhere } from '../lib/paymentProof.js'
 
@@ -274,43 +274,73 @@ router.post('/event', authenticate, authorize('parent'), async (req, res) => {
     if (participant.paymentStatus === 'paid') return res.status(400).json({ error: 'Event ini sudah lunas' })
     if (!participant.event.fee || participant.event.fee <= 0) return res.status(400).json({ error: 'Event ini tidak memerlukan pembayaran' })
 
-    let payment = participant.payment
-    if (payment?.status === 'pending' && payment.transactionId && (payment.paymentLink || payment.qrString)) {
-      return res.status(201).json({ payment, rintisan: null })
-    }
-    if (!payment || payment.status === 'failed') {
-      payment = await prisma.$transaction(async (tx) => {
-      if (payment) await tx.payment.update({ where: { id: payment.id }, data: { eventParticipantId: null } })
-      return tx.payment.create({
-        data: {
-          studentId: participant.studentId,
-          eventParticipantId: participant.id,
-          amount: participant.event.fee,
-          registrationFee: 0,
-          totalAmount: participant.event.fee,
-          paymentType: 'event',
-          status: 'pending',
-        },
-      })
-      })
-    } else if (payment.status === 'success') {
+    if (participant.payment?.status === 'success') {
       return res.status(400).json({ error: 'Event ini sudah lunas' })
     }
 
-    const { payment: updated, rintisan } = await checkoutPayment({
-      payment,
+    // Kalau tagihan sudah punya QR/link dari gateway, pakai ulang apa adanya.
+    const existing = participant.payment
+    if (existing?.status === 'pending' && existing.transactionId && (existing.paymentLink || existing.qrString)) {
+      return res.status(201).json({ payment: existing, rintisan: null })
+    }
+
+    // PENTING: `partner_trx_id` yang dikirim ke gateway = payment.id, dan id yang
+    // sama juga dipakai webhook untuk menemukan pembayaran ini. Jadi id yang sudah
+    // pernah dikirim TIDAK boleh dipakai ulang: kalau percobaan sebelumnya sempat
+    // membuat tagihan di gateway (responsnya hilang sebelum tersimpan), percobaan
+    // berikutnya ditolak "Partner transaction ID sudah pernah dipakai" — dan
+    // tagihan lama itu tak bisa dicari lagi (query gateway hanya menerima trx_id
+    // gateway). Karena itu tiap percobaan baru memakai baris pembayaran BARU
+    // (id baru = partner_trx_id baru). Baris percobaan lama ditandai 'failed'.
+    const freshEventPayment = (prev) =>
+      prisma.$transaction(async (tx) => {
+        if (prev) {
+          await tx.payment.update({
+            where: { id: prev.id },
+            data: { eventParticipantId: null, ...(prev.status === 'pending' ? { status: 'failed' } : {}) },
+          })
+        }
+        return tx.payment.create({
+          data: {
+            studentId: participant.studentId,
+            eventParticipantId: participant.id,
+            amount: participant.event.fee,
+            registrationFee: 0,
+            totalAmount: participant.event.fee,
+            paymentType: 'event',
+            status: 'pending',
+          },
+        })
+      })
+
+    const billingInput = {
       paymentMethod,
       toName: participant.student.parentName,
       toEmail: participant.student.parentEmail || participant.student.user.email,
       toPhone: participant.student.parentPhone,
       toAddress: participant.student.address,
       note: `Biaya event ${participant.event.title} - ${participant.student.fullName}`,
-    })
+    }
 
-    res.status(201).json({ payment: updated, rintisan })
+    let payment = await freshEventPayment(existing)
+    let checkout
+    try {
+      checkout = await checkoutPayment({ payment, ...billingInput })
+    } catch (err) {
+      // Balapan langka (dua klik bersamaan) masih bisa memicu pesan duplikat;
+      // coba sekali lagi dengan baris baru sebelum menyerah.
+      if (!isDuplicatePartnerTrxError(err)) throw err
+      payment = await freshEventPayment(payment)
+      checkout = await checkoutPayment({ payment, ...billingInput })
+    }
+
+    res.status(201).json({ payment: checkout.payment, rintisan: checkout.rintisan })
   } catch (err) {
     console.error(err)
-    res.status(400).json({ error: err.message || 'Gagal membuat tagihan event' })
+    const message = isDuplicatePartnerTrxError(err)
+      ? 'Tagihan ini sudah pernah dibuat di gateway. Muat ulang halaman lalu coba lagi; jika masih gagal hubungi admin.'
+      : err.message || 'Gagal membuat tagihan event'
+    res.status(400).json({ error: message })
   }
 })
 

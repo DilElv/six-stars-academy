@@ -82,29 +82,51 @@ export function verifyCallbackToken(token) {
 }
 
 // Create a billing (invoice) on Rintisan. `payload` follows their Create Billing spec.
+// Error yang dilempar diberi penanda `gatewayResponded` supaya pemanggil bisa
+// membedakan: (a) gateway menjawab & menolak (tidak ada tagihan terbuat) vs
+// (b) koneksi gagal / tidak ada jawaban (mungkin tagihan sudah terbuat — ambigu).
 export async function createBilling(payload) {
   if (!isConfigured()) throw new Error('Payment gateway belum dikonfigurasi (RINTISAN_* env belum diisi)')
 
   const { minified, signature } = signRequest(payload)
 
-  const res = await fetch(`${BASE_URL}/api/v1/billing/payin/partner/create`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'x-client-id': CLIENT_ID,
-      'x-api-key': API_KEY,
-      'x-signature': signature,
-    },
-    body: minified,
-  })
+  let res
+  try {
+    res = await fetch(`${BASE_URL}/api/v1/billing/payin/partner/create`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'x-client-id': CLIENT_ID,
+        'x-api-key': API_KEY,
+        'x-signature': signature,
+      },
+      body: minified,
+    })
+  } catch (err) {
+    const e = new Error(`Gagal menghubungi payment gateway: ${err.message}`)
+    e.gatewayResponded = false
+    throw e
+  }
 
   const data = await res.json().catch(() => null)
   if (!res.ok || !data || String(data.response_code) !== '200') {
-    const message = data?.message || `Rintisan create billing gagal (HTTP ${res.status})`
-    throw new Error(message)
+    const e = new Error(data?.message || `Rintisan create billing gagal (HTTP ${res.status})`)
+    e.gatewayResponded = true
+    e.gatewayCode = data?.response_code
+    e.httpStatus = res.status
+    throw e
   }
   return data
+}
+
+// Gateway menolak karena `partner_trx_id` sudah dipakai: artinya tagihan untuk
+// pembayaran ini SUDAH pernah dibuat di sisi gateway (biasanya responsnya hilang
+// sebelum tersimpan di DB). Tagihan lama tidak bisa dicari lagi — query gateway
+// hanya menerima `trx_id` gateway, bukan partner id kita — jadi satu-satunya
+// jalan adalah membuat pembayaran BARU dengan id baru, bukan memakai ulang id lama.
+export function isDuplicatePartnerTrxError(err) {
+  return err?.gatewayResponded === true && /partner transaction id sudah pernah dipakai/i.test(err.message || '')
 }
 
 export async function queryPayment(trxId) {
