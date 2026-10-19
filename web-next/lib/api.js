@@ -420,6 +420,11 @@ export async function getBpjsStatus(month, year) {
   return request(`/settings/bpjs/status${qs ? `?${qs}` : ''}`)
 }
 
+// Simpan setelan BPJS saja (halaman BPJS admin & head coach).
+export async function updateBpjsSettings(payload) {
+  return request('/settings/bpjs', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
 export async function runBpjsBilling(payload = {}) {
   return request('/settings/bpjs/run', { method: 'POST', body: JSON.stringify(payload) })
 }

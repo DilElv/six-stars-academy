@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Download, QrCode as QrCodeIcon, Edit3, RefreshCw } from 'lucide-react'
+import { Loader2, Download, QrCode as QrCodeIcon, Edit3, RefreshCw, ShoppingCart } from 'lucide-react'
 import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { downloadStudentCard } from '@/lib/studentCard'
@@ -18,7 +18,7 @@ function Row({ label, value }) {
 
 const PAYMENT_STATUS_LABEL = { success: 'Lunas', pending: 'Menunggu', failed: 'Gagal' }
 
-export default function StudentDetailModal({ student: initialStudent, onClose, onEdit, onRenew, onSaved }) {
+export default function StudentDetailModal({ student: initialStudent, onClose, onEdit, onRenew, onAddTagihan, onSaved }) {
   const [student, setStudent] = useState(initialStudent)
   const [loading, setLoading] = useState(true)
   const [qrUrl, setQrUrl] = useState('')
@@ -82,11 +82,16 @@ export default function StudentDetailModal({ student: initialStudent, onClose, o
           <h3 className="font-heading font-bold text-white">{student.fullName}</h3>
           <p className="text-xs text-gray-300">{student.studentId}</p>
         </div>
-        {(onEdit || onRenew) && (
+        {(onEdit || onRenew || onAddTagihan) && (
           <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
             {onEdit && (
               <button onClick={onEdit} className="flex-1 min-w-[30%] flex items-center justify-center gap-1.5 text-xs font-semibold bg-gray-50 hover:bg-gray-100 text-navy-700 border border-gray-200 px-3 py-2.5 rounded-2xl">
                 <Edit3 size={13} /> Edit
+              </button>
+            )}
+            {onAddTagihan && (
+              <button onClick={onAddTagihan} className="flex-1 min-w-[30%] flex items-center justify-center gap-1.5 text-xs font-semibold bg-gold-400 hover:bg-gold-500 text-navy-900 px-3 py-2.5 rounded-2xl">
+                <ShoppingCart size={13} /> Tambah Tagihan
               </button>
             )}
             {onRenew && (

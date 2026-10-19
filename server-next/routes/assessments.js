@@ -64,11 +64,13 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   }
 })
 
-router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
+router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { studentId, coachComment, activeCategories, ...scores } = req.body
   const { month, year, endMonth, endYear } = parsePeriod(req.body)
   if (!studentId || !month || !year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
+    // Coach hanya boleh menilai siswa di cabang yang ditugaskan; head coach/admin bebas.
+    await assertCoachStudentAccess(req.user, studentId)
     const student = await prisma.student.findUnique({ where: { id: studentId } })
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
 

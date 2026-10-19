@@ -10,6 +10,7 @@ import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
 import PerpanjangPaketModal from '@/components/PerpanjangPaketModal'
+import AddToCartModal from '@/components/AddToCartModal'
 import ScholarshipField from '@/components/ScholarshipField'
 import { DatePicker } from '@/components/ui/date-picker'
 import ModalPortal from '@/components/ui/modal-portal'
@@ -39,6 +40,7 @@ export default function AdminDataAnakPage() {
   const [viewStudent, setViewStudent] = useState(null)
   const [editStudent, setEditStudent] = useState(null)
   const [renewStudentTarget, setRenewStudentTarget] = useState(null)
+  const [cartStudentTarget, setCartStudentTarget] = useState(null)
   const [showAddStudent, setShowAddStudent] = useState(false)
   const [packages, setPackages] = useState([])
   const [requests, setRequests] = useState([])
@@ -219,10 +221,12 @@ export default function AdminDataAnakPage() {
               onClose={() => setViewStudent(null)}
               onEdit={() => { setEditStudent(viewStudent); setViewStudent(null) }}
               onRenew={() => { setRenewStudentTarget(viewStudent); setViewStudent(null) }}
+              onAddTagihan={() => { setCartStudentTarget(viewStudent); setViewStudent(null) }}
             />
           )}
           {editStudent && <EditModal student={editStudent} branches={branches} packages={packages} onClose={() => setEditStudent(null)} onSaved={() => { setEditStudent(null); load() }} />}
           {renewStudentTarget && <PerpanjangPaketModal student={renewStudentTarget} branches={branches} packages={packages} onClose={() => setRenewStudentTarget(null)} onSaved={load} />}
+          {cartStudentTarget && <AddToCartModal student={cartStudentTarget} packages={packages} onClose={() => setCartStudentTarget(null)} onSaved={load} />}
           {showAddStudent && <AddStudentModal branches={branches} packages={packages} canManageScholarship onClose={() => setShowAddStudent(false)} onSaved={() => { setShowAddStudent(false); load() }} />}
         </>
       ) : (

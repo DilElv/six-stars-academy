@@ -43,8 +43,29 @@ router.put('/', authenticate, authorize('admin'), async (req, res) => {
   }
 })
 
+// Simpan hanya pengaturan BPJS (dipakai halaman BPJS admin & head coach).
+// Dipisah dari PUT / (yang mengganti seluruh blob pengaturan) supaya head coach
+// dapat mengubah setelan BPJS tanpa bisa menimpa setelan lain.
+router.put('/bpjs', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    const { bpjsEnabled, bpjsAmount, bpjsDay } = req.body || {}
+    const existing = await prisma.cmsContent.findFirst({ where: { section: 'settings' } })
+    const content = { ...(existing?.content || {}) }
+    if (bpjsEnabled !== undefined) content.bpjsEnabled = !!bpjsEnabled
+    if (bpjsAmount !== undefined) content.bpjsAmount = Math.max(0, Math.round(Number(bpjsAmount) || 0))
+    if (bpjsDay !== undefined) content.bpjsDay = Math.min(28, Math.max(1, Math.round(Number(bpjsDay) || 1)))
+    const row = existing
+      ? await prisma.cmsContent.update({ where: { id: existing.id }, data: { content } })
+      : await prisma.cmsContent.create({ data: { section: 'settings', content } })
+    res.json(row.content)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Ringkasan billing BPJS periode berjalan (atau periode tertentu via query).
-router.get('/bpjs/status', authenticate, authorize('admin'), async (req, res) => {
+router.get('/bpjs/status', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
     res.json(await getBpjsStatus({ month: req.query.month, year: req.query.year }))
   } catch (err) {
@@ -55,7 +76,7 @@ router.get('/bpjs/status', authenticate, authorize('admin'), async (req, res) =>
 
 // Jalankan penagihan BPJS sekarang (idempoten — anak yang sudah tertagih
 // periode itu dilewati). Bisa dipakai untuk bulan lain lewat body.
-router.post('/bpjs/run', authenticate, authorize('admin'), async (req, res) => {
+router.post('/bpjs/run', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
     const { month, year, amount, studentIds } = req.body || {}
     res.json(await runBpjsBilling({ month, year, amount, studentIds }))

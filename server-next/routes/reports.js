@@ -24,11 +24,13 @@ function parsePeriod(body) {
   return { month, year, endMonth, endYear }
 }
 
-router.post('/generate', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
+router.post('/generate', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { studentId } = req.body
   const { month, year, endMonth, endYear } = parsePeriod(req.body)
   if (!studentId || !month || !year) return res.status(400).json({ error: 'studentId, month, year wajib diisi' })
   try {
+    // Coach hanya boleh membuat rapor siswa di cabang yang ditugaskan.
+    await assertCoachStudentAccess(req.user, studentId)
     const [student, assessment, settingsRow, headCoach] = await Promise.all([
       prisma.student.findUnique({ where: { id: studentId } }),
       prisma.assessment.findUnique({ where: { studentId_month_year_endMonth_endYear: { studentId, month, year, endMonth, endYear } } }),

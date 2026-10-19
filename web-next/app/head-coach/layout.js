@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, ClipboardList, Users, Star, User, Trophy, Wallet, CalendarDays } from 'lucide-react'
+import { Home, ClipboardList, Users, Star, User, Trophy, Wallet, CalendarDays, Banknote, HeartPulse } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
 const navItems = [
@@ -11,6 +11,8 @@ const navItems = [
   { href: '/head-coach/penilaian', label: 'Penilaian', icon: Star },
   { href: '/head-coach/event', label: 'Event', icon: Trophy },
   { href: '/head-coach/keuangan', label: 'Keuangan', icon: Wallet },
+  { href: '/head-coach/payroll', label: 'Payroll', icon: Banknote },
+  { href: '/head-coach/bpjs', label: 'BPJS', icon: HeartPulse },
   { href: '/head-coach/profil', label: 'Profil', icon: User },
 ]
 

@@ -6,8 +6,8 @@ import { PAYROLL_ROLES, attendanceRecap, statsFor, computeTotal } from '../lib/p
 
 const router = Router()
 
-// Payroll hanya untuk admin — menyangkut nominal gaji staf.
-router.use(authenticate, authorize('admin'))
+// Payroll untuk admin & head coach — menyangkut nominal gaji staf.
+router.use(authenticate, authorize('admin', 'head_coach'))
 
 function isNonNegInt(value) {
   return Number.isSafeInteger(Number(value)) && Number(value) >= 0

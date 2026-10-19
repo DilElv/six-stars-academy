@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Loader2, FileText, Download, Search, Info } from 'lucide-react'
+import { Save, Loader2, FileText, Download, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import { getCategoriesForStudent, formatPeriodLabel } from '@/lib/assessmentFields'
 import AgeGroupFilter from '@/components/AgeGroupFilter'
@@ -10,9 +10,9 @@ import SkillRadar from '@/components/charts/SkillRadar'
 import { AppSelect } from '@/components/ui/app-select'
 import AssessmentCategories from '@/components/AssessmentCategories'
 
-// Read-only mirror of the head-coach Penilaian view: a coach can open the same
-// assessment content (scores, radar, comment, and the generated report) for the
-// students in their assigned branches, but cannot edit scores or generate PDFs.
+// Coach dapat membuat & menyimpan penilaian serta generate rapor PDF untuk
+// siswa di cabang yang ditugaskan — sama seperti head coach di menu Penilaian.
+// Backend tetap membatasi akses per cabang (assertCoachStudentAccess).
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
 }
@@ -41,15 +41,16 @@ function LaporanContent() {
   const [scores, setScores] = useState({})
   const [comment, setComment] = useState('')
   const [activeCategories, setActiveCategories] = useState([])
-  const [overallAvg, setOverallAvg] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [hasAssessment, setHasAssessment] = useState(false)
   const [report, setReport] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
-    // Coach hanya boleh melihat siswa di cabang yang ditugaskan; backend
-    // sengaja mengembalikan kosong bila role coach tidak mengirim branchId
-    // (lihat routes/students.js). Pola ini sama dengan halaman Absensi coach.
+    // Coach hanya dapat mengakses siswa di cabang yang ditugaskan; backend
+    // mengembalikan kosong bila role coach tidak mengirim branchId.
     api.getMe()
       .then((user) => {
         const firstBranch = user.branches?.[0]?.branch?.id || ''
@@ -91,13 +92,11 @@ function LaporanContent() {
           setScores(s)
           setComment(data.coachComment || '')
           setActiveCategories(data.activeCategories?.length ? data.activeCategories : categories.map((c) => c.key))
-          setOverallAvg(data.overallAvg ?? null)
           setHasAssessment(true)
         } else {
           setScores({})
           setComment('')
           setActiveCategories(categories.map((c) => c.key))
-          setOverallAvg(null)
           setHasAssessment(false)
         }
       })
@@ -105,6 +104,10 @@ function LaporanContent() {
     api.getReport(studentId, month, year, periodEndMonth, periodEndYear).then(setReport).catch(() => setReport(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, month, year, periodEndMonth, periodEndYear])
+
+  function toggleCategory(key) {
+    setActiveCategories((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
+  }
 
   const liveAssessment = useMemo(() => {
     const avgByKey = {}
@@ -118,12 +121,55 @@ function LaporanContent() {
     }
   }, [scores, categories])
 
+  const overallPreview = useMemo(() => {
+    const parts = [liveAssessment.teknikAvg, liveAssessment.taktikAvg, liveAssessment.fisikAvg, liveAssessment.mentalAvg].filter((v) => v > 0)
+    if (parts.length === 0) return null
+    return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10
+  }, [liveAssessment])
+
+  async function handleSave() {
+    setSaving(true)
+    setMessage('')
+    try {
+      const numericScores = {}
+      for (const cat of categories) for (const [key] of cat.fields) {
+        numericScores[key] = scores[key] === '' || scores[key] === undefined ? null : Number(scores[key])
+      }
+      await api.saveAssessment({
+        studentId, month, year, endMonth: periodEndMonth, endYear: periodEndYear,
+        coachComment: comment, activeCategories, ...numericScores,
+      })
+      setHasAssessment(true)
+      setMessage('Penilaian berhasil disimpan')
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMessage(''), 3500)
+    }
+  }
+
+  async function handleGenerateReport() {
+    setGenerating(true)
+    setMessage('')
+    try {
+      const r = await api.generateReport(studentId, month, year, periodEndMonth, periodEndYear)
+      setReport(r)
+      setMessage('Rapor PDF berhasil dibuat')
+    } catch (err) {
+      setMessage(err.message)
+    } finally {
+      setGenerating(false)
+      setTimeout(() => setMessage(''), 3500)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-bold text-navy-900 text-lg">Laporan Siswa</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Lihat isi rapor & penilaian siswa di cabang Anda (read-only).</p>
+          <h1 className="font-bold text-navy-900 text-lg">Laporan &amp; Penilaian</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Isi penilaian dan buat rapor siswa di cabang Anda.</p>
         </div>
       </div>
 
@@ -219,7 +265,7 @@ function LaporanContent() {
 
       {!studentId ? (
         <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
-          Pilih siswa dulu untuk melihat rapor.
+          Pilih siswa dulu untuk mulai menilai.
         </div>
       ) : loading ? (
         <div className="py-10 text-center"><Loader2 size={18} className="animate-spin text-navy-300 mx-auto" /></div>
@@ -232,53 +278,71 @@ function LaporanContent() {
               <div className="text-xs text-gray-300">{formatPeriodLabel(MONTHS, month, year, periodEndMonth, periodEndYear)} · {selectedStudent?.position} · {selectedStudent?.ageGroup}</div>
             </div>
             <div className="relative text-right">
-              <div className="text-xs text-gray-300 mb-0.5">OVR</div>
-              <div className="text-4xl font-extrabold text-gold-400 tabular-nums leading-none">{overallAvg ?? '-'}</div>
+              <div className="text-xs text-gray-300 mb-0.5">OVR (preview)</div>
+              <div className="text-4xl font-extrabold text-gold-400 tabular-nums leading-none">{overallPreview ?? '-'}</div>
             </div>
           </div>
 
-          {!hasAssessment ? (
-            <div className="glass-card rounded-3xl p-10 text-center">
-              <Info size={26} className="text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-400">Belum ada penilaian untuk periode ini.</p>
-            </div>
-          ) : (
-            <>
-              <div className="glass-card rounded-3xl p-5">
-                <h2 className="text-sm font-semibold text-gray-500 mb-2">Radar Skill</h2>
-                <SkillRadar assessment={liveAssessment} height={240} />
-              </div>
+          <div className="glass-card rounded-3xl p-5">
+            <h2 className="text-sm font-semibold text-gray-500 mb-2">Preview Radar Skill</h2>
+            <SkillRadar assessment={liveAssessment} height={240} />
+          </div>
 
-              <AssessmentCategories
-                scores={scores}
-                position={selectedStudent?.position}
-                ageGroup={selectedStudent?.ageGroup}
-                activeCategories={activeCategories}
-              />
+          {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 
-              <div className="glass-card rounded-3xl p-5">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>
-                <p className="text-sm text-navy-900 whitespace-pre-wrap">{comment || '—'}</p>
-              </div>
+          <p className="text-xs text-gray-400 -mb-2">Centang kategori yang mau dinilai periode ini — kategori yang tidak dicentang tidak akan tampil ke user maupun di PDF.</p>
+          <AssessmentCategories
+            scores={scores}
+            editable
+            onChange={setScores}
+            position={selectedStudent?.position}
+            ageGroup={selectedStudent?.ageGroup}
+            activeCategories={activeCategories}
+            onToggleCategory={toggleCategory}
+          />
 
-              <div className="flex items-center gap-3 flex-wrap">
-                {report?.pdfUrl ? (
-                  <a
-                    href={report.pdfUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold px-5 py-2.5 rounded-2xl"
-                  >
-                    <Download size={16} /> Unduh Rapor PDF
-                  </a>
-                ) : (
-                  <span className="flex items-center gap-2 text-xs text-gray-400">
-                    <FileText size={14} /> Rapor PDF belum dibuat oleh Head Coach.
-                  </span>
-                )}
-              </div>
-            </>
-          )}
+          <div className="glass-card rounded-3xl p-5">
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Pesan / Komentar Coach</label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 bg-gold-400 hover:bg-gold-500 text-navy-900 font-bold px-5 py-2.5 rounded-2xl disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Simpan Penilaian
+            </button>
+
+            {hasAssessment && (
+              <button
+                onClick={handleGenerateReport}
+                disabled={generating}
+                className="flex items-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold px-5 py-2.5 rounded-2xl disabled:opacity-50"
+              >
+                {generating ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                {report ? 'Buat Ulang Rapor PDF' : 'Generate Rapor PDF'}
+              </button>
+            )}
+
+            {report?.pdfUrl && (
+              <a
+                href={report.pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 text-sm font-semibold text-gold-600"
+              >
+                <Download size={15} /> Unduh Rapor Terakhir
+              </a>
+            )}
+          </div>
         </>
       )}
     </div>
