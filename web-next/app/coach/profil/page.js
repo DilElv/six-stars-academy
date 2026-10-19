@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Save, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
+import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 
 export default function CoachProfilPage() {
   const [form, setForm] = useState(null)
@@ -84,7 +85,10 @@ export default function CoachProfilPage() {
           <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
           <input
             value={form.phone}
-            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))}
+            inputMode="numeric"
+            maxLength={15}
+            placeholder={PHONE_PLACEHOLDER}
             className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
         </div>

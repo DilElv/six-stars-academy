@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { incomeProofWhere } from '../lib/paymentProof.js'
+import { cleanPhone, isValidPhone, PHONE_ERROR } from '../lib/phone.js'
 
 const router = Router()
 
@@ -99,10 +100,15 @@ router.post('/users', async (req, res) => {
     if (dailyRate !== undefined && dailyRate !== '' && (!Number.isSafeInteger(Number(dailyRate)) || Number(dailyRate) < 0)) {
       return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
     }
+    // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+    if (phone !== undefined && phone !== '' && !isValidPhone(phone)) {
+      return res.status(400).json({ error: PHONE_ERROR })
+    }
     const hashed = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
       data: {
-        name, email, password: hashed, role, phone,
+        name, email, password: hashed, role,
+        phone: phone === '' ? null : cleanPhone(phone),
         dailyRate: dailyRate ? Number(dailyRate) : 0,
         branches: branchIds?.length ? { create: branchIds.map((branchId) => ({ branchId })) } : undefined,
       },
@@ -123,9 +129,14 @@ router.put('/users/:id', async (req, res) => {
     if (dailyRate !== undefined && dailyRate !== '' && (!Number.isSafeInteger(Number(dailyRate)) || Number(dailyRate) < 0)) {
       return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
     }
+    // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+    if (phone !== undefined && phone !== '' && !isValidPhone(phone)) {
+      return res.status(400).json({ error: PHONE_ERROR })
+    }
     if (dailyRate !== undefined && dailyRate !== '') data.dailyRate = Number(dailyRate)
     if (name === undefined) delete data.name
     if (phone === undefined) delete data.phone
+    else data.phone = phone === '' ? null : cleanPhone(phone)
     if (status === undefined) delete data.status
     if (password) data.password = await bcrypt.hash(password, 10)
     if (branchIds !== undefined) {

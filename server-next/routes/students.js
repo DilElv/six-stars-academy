@@ -13,6 +13,7 @@ import { notifyUser, notifyRole } from '../lib/notify.js'
 import { applyPaymentSuccess } from '../lib/paymentHelpers.js'
 import { assignAgeGroup } from '../lib/ageGroup.js'
 import { ensureCurrentSessionMonth, monthlySessionLimit } from '../lib/sessionQuota.js'
+import { cleanPhone, isValidPhone, PHONE_ERROR } from '../lib/phone.js'
 
 const router = Router()
 
@@ -121,6 +122,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
       return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
     }
     if (!parentPassword || parentPassword.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
+    // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+    if (!isValidPhone(parentPhone)) return res.status(400).json({ error: PHONE_ERROR })
+    const parentPhoneClean = cleanPhone(parentPhone)
 
     const existing = await prisma.user.findUnique({ where: { email: parentEmail } })
     if (existing) return res.status(400).json({ error: 'Email sudah terdaftar' })
@@ -139,7 +143,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
 
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { name: parentName, email: parentEmail, password: hashed, role: 'parent', phone: parentPhone },
+        data: { name: parentName, email: parentEmail, password: hashed, role: 'parent', phone: parentPhoneClean },
       })
 
       // Derived from the highest existing studentId, not a row count — count()
@@ -164,7 +168,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           ageGroup,
           photo: photo || null,
           parentName,
-          parentPhone,
+          parentPhone: parentPhoneClean,
           parentEmail,
           address: '',
           packageId: pkg?.id || null,
@@ -387,13 +391,18 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
   for (const value of [sessionsUsed, totalSessions]) {
     if (value !== undefined && value !== '' && (!Number.isInteger(Number(value)) || Number(value) < 0)) return res.status(400).json({ error: 'Sesi harus berupa bilangan bulat minimal 0' })
   }
+  // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+  if (parentPhone !== undefined && parentPhone !== '' && !isValidPhone(parentPhone)) {
+    return res.status(400).json({ error: PHONE_ERROR })
+  }
   try {
     const student = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.params.id}))`
       const current = await tx.student.findUnique({ where: { id: req.params.id } })
       if (!current) throw Object.assign(new Error('Siswa tidak ditemukan'), { status: 404 })
       const data = {
-        fullName, position, address, parentName, parentPhone, photo, status,
+        fullName, position, address, parentName, photo, status,
+        parentPhone: parentPhone !== undefined ? cleanPhone(parentPhone) : undefined,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
         branchId: branchId !== undefined ? (branchId || null) : undefined,
         sessionsUsed: sessionsUsed !== undefined && sessionsUsed !== '' ? Math.max(0, Math.round(Number(sessionsUsed))) : undefined,

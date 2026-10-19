@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Star, MessageCircle, Loader2, UserPlus, Search, Upload, RefreshCw } from 'lucide-react'
 import * as api from '@/lib/api'
+import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
@@ -345,7 +346,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Telepon Orang Tua</label>
-              <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+              <input value={form.parentPhone} onChange={(e) => setForm((f) => ({ ...f, parentPhone: sanitizePhoneInput(e.target.value) }))} inputMode="numeric" maxLength={15} placeholder={PHONE_PLACEHOLDER} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Password Baru</label>

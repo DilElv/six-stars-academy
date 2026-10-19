@@ -5,6 +5,7 @@ import { notifyUser } from './notify.js'
 import { assignAgeGroup } from './ageGroup.js'
 import { computePackagePeriod } from './packagePeriod.js'
 import { monthlySessionLimit } from './sessionQuota.js'
+import { toGatewayPhone } from './phone.js'
 
 function formatDateForRintisan(d) {
   const day = String(d.getDate()).padStart(2, '0')
@@ -17,6 +18,13 @@ function formatDateForRintisan(d) {
 // account/student even exist). Does not write anything back — callers persist
 // the result onto their own record shape.
 export async function createBillingFor({ id, totalAmount, paymentMethod, toName, toEmail, toPhone, toAddress, note }) {
+  // Nomor HP wajib valid sebelum dikirim ke gateway — nomor ber-spasi membuat
+  // Rintisan menolak dengan "Input data tidak lengkap / tidak sesuai".
+  const gatewayPhone = toGatewayPhone(toPhone)
+  if (!gatewayPhone) {
+    throw new Error('Nomor HP orang tua belum diisi atau tidak valid (harus diawali 0, tanpa spasi)')
+  }
+
   const today = new Date()
   const deadline = new Date(today)
   deadline.setDate(deadline.getDate() + 2)
@@ -26,7 +34,7 @@ export async function createBillingFor({ id, totalAmount, paymentMethod, toName,
     partner_trx_id: id,
     to_name: toName,
     to_email: toEmail,
-    to_phone: toPhone.startsWith('62') ? toPhone : `62${toPhone.replace(/^0/, '')}`,
+    to_phone: gatewayPhone,
     to_address: toAddress || null,
     invoice_date: formatDateForRintisan(today),
     deadline_date: formatDateForRintisan(deadline),

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { UserPlus, Edit3, Trash2, Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 import { AppSelect } from '@/components/ui/app-select'
 import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 
@@ -140,7 +141,7 @@ function AddModal({ role, label, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
-            <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+            <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} inputMode="numeric" maxLength={15} placeholder={PHONE_PLACEHOLDER} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           {role !== 'admin' && (
             <div>
@@ -213,7 +214,7 @@ function EditModal({ user, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">No. Telepon</label>
-            <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+            <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }))} inputMode="numeric" maxLength={15} placeholder={PHONE_PLACEHOLDER} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>

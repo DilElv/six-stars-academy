@@ -5,6 +5,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate } from '../middleware/auth.js'
 import { createBillingFor, convertPendingRegistration, failPendingRegistration } from '../lib/paymentHelpers.js'
 import { queryPayment, isSupportedPaymentMethod } from '../lib/rintisan.js'
+import { cleanPhone, isValidPhone, PHONE_ERROR } from '../lib/phone.js'
 
 const router = Router()
 
@@ -60,6 +61,11 @@ router.post('/register', async (req, res) => {
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'Password minimal 6 karakter' })
     }
+    // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+    if (!isValidPhone(parentPhone)) {
+      return res.status(400).json({ error: PHONE_ERROR })
+    }
+    const parentPhoneClean = cleanPhone(parentPhone)
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) return res.status(400).json({ error: 'Email sudah terdaftar' })
@@ -83,7 +89,7 @@ router.post('/register', async (req, res) => {
         photo: photo || null,
         branchId: branchId || null,
         parentName,
-        parentPhone,
+        parentPhone: parentPhoneClean,
         address,
         email,
         passwordHash: hashed,
@@ -103,7 +109,7 @@ router.post('/register', async (req, res) => {
         paymentMethod,
         toName: parentName,
         toEmail: email,
-        toPhone: parentPhone,
+        toPhone: parentPhoneClean,
         toAddress: address,
         note: `Pendaftaran ${fullName}`,
       })
@@ -197,7 +203,12 @@ router.get('/me', authenticate, async (req, res) => {
 router.put('/me', authenticate, async (req, res) => {
   const { name, phone, photo, signature, bio, address, email, password } = req.body
   try {
-    const data = { name, phone, photo, signature, bio, address }
+    // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
+    if (phone !== undefined && phone !== '' && !isValidPhone(phone)) {
+      return res.status(400).json({ error: PHONE_ERROR })
+    }
+    const data = { name, photo, signature, bio, address }
+    if (phone !== undefined) data.phone = phone === '' ? null : cleanPhone(phone)
     if (password) {
       if (password.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
       data.password = await bcrypt.hash(password, 10)
