@@ -210,233 +210,264 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
     }
   }
 
+  const MODES = [
+    { key: 'manual', label: 'Manual', hint: 'Isi sendiri', icon: Pencil },
+    { key: 'training', label: 'Sesi Latihan', hint: 'Dari jadwal', icon: Dumbbell },
+    { key: 'event', label: 'Event', hint: 'Dari event', icon: Trophy },
+  ]
+  const TIME_FIELDS = [
+    { key: 'checkInOpen', label: 'Buka absen masuk', tone: 'text-emerald-600 bg-emerald-50' },
+    { key: 'checkInClose', label: 'Tutup absen masuk', tone: 'text-amber-600 bg-amber-50' },
+    { key: 'checkOutClose', label: 'Batas absen pulang', tone: 'text-rose-600 bg-rose-50' },
+  ]
+  const inputCls = 'mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-navy-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-gold-300 focus:border-gold-400 disabled:bg-gray-50 disabled:text-gray-500'
+  const labelCls = 'block text-xs font-semibold text-gray-500'
+  const showManualFields = mode === 'manual' || editing
+
   return (
     <ModalPortal>
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-        <div className="fixed inset-0 bg-black/60" onClick={saving ? undefined : onClose} />
-        <form onSubmit={handleSubmit} className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CalendarClock size={18} className="text-navy-700" />
-              <h3 className="font-bold text-navy-900">{editing ? 'Edit Jadwal Absensi' : 'Tambah Jadwal Absensi'}</h3>
+      <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4">
+        <div className="fixed inset-0 bg-navy-900/60 backdrop-blur-[2px]" onClick={saving ? undefined : onClose} />
+        <form onSubmit={handleSubmit} className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden">
+          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-navy-900 text-gold-300 flex items-center justify-center shrink-0">
+                <CalendarClock size={20} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-navy-900 leading-tight">{editing ? 'Edit Jadwal Absensi' : 'Tambah Jadwal Absensi'}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {editing ? 'Ubah jadwal dan jendela waktu absen coach.' : 'Atur kapan coach boleh absen masuk dan pulang.'}
+                </p>
+              </div>
             </div>
             {!saving && (
-              <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+              <button type="button" onClick={onClose} aria-label="Tutup" className="p-1.5 -mr-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl shrink-0"><X size={18} /></button>
             )}
           </div>
 
-          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</div>}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 modal-scroll">
+            {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</div>}
 
-          {!editing && (
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { key: 'manual', label: 'Manual' },
-                { key: 'training', label: 'Sesi Latihan' },
-                { key: 'event', label: 'Event' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setMode(item.key)}
-                  className={`text-xs font-semibold px-3 py-2 rounded-xl border ${mode === item.key ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-navy-700 border-gray-200 hover:border-gold-300'}`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs font-semibold text-gray-500">
-              Tanggal
-              <input
-                type="date"
-                value={date}
-                disabled={editing && linked}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-navy-900 disabled:bg-gray-50"
-              />
-            </label>
-            <div className="text-xs font-semibold text-gray-500">
-              Tipe
-              <div className="mt-1 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-sm text-navy-900">
-                {typeLabel(editing ? initial.type : mode === 'training' ? 'training' : mode === 'event' ? 'event' : 'training')}
+            {!editing && (
+              <div className="grid grid-cols-3 gap-2">
+                {MODES.map((item) => {
+                  const Icon = item.icon
+                  const active = mode === item.key
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setMode(item.key)}
+                      className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-2xl border transition-colors ${active ? 'bg-navy-900 text-white border-navy-900 shadow-sm' : 'bg-white text-navy-700 border-gray-200 hover:border-gold-300'}`}
+                    >
+                      <Icon size={16} className={active ? 'text-gold-300' : 'text-gray-400'} />
+                      <span className="text-xs font-semibold leading-none">{item.label}</span>
+                      <span className={`text-[10px] leading-none ${active ? 'text-white/60' : 'text-gray-400'}`}>{item.hint}</span>
+                    </button>
+                  )
+                })}
               </div>
-            </div>
-          </div>
+            )}
 
-          {mode === 'training' && !editing && (
-            <div className="space-y-2">
-              {loadingSources ? (
-                <div className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Memuat sesi latihan...</div>
-              ) : availableTrainings.length === 0 ? (
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                  Tidak ada sesi latihan yang belum memiliki jadwal absensi pada tanggal ini.
+            <section className="space-y-3">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Info Sesi</h4>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className={labelCls}>
+                  Tanggal
+                  <input
+                    type="date"
+                    value={date}
+                    disabled={editing && linked}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={inputCls}
+                  />
+                </label>
+                <div className={labelCls}>
+                  Tipe
+                  <div className="mt-1.5 rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-2.5 text-sm text-navy-900">
+                    {typeLabel(editing ? initial.type : mode === 'training' ? 'training' : mode === 'event' ? 'event' : 'training')}
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {availableTrainings.map((training) => (
-                    <button
-                      key={training.id}
-                      type="button"
-                      onClick={() => setSourceId(training.id)}
-                      className={`w-full text-left rounded-xl border px-3 py-2 ${sourceId === training.id ? 'border-gold-400 bg-gold-50/60' : 'border-gray-200 hover:border-gold-300'}`}
-                    >
-                      <div className="text-sm font-semibold text-navy-900">{training.topicTitle || `Latihan ${training.ageGroup || ''}`}</div>
-                      <div className="text-[11px] text-gray-400">
-                        {training.ageGroup || '-'} · {training.coach?.name || 'tanpa coach'} · {training.branch?.name || 'semua cabang'}
-                      </div>
-                    </button>
-                  ))}
+              </div>
+
+              {mode === 'training' && !editing && (
+                <div className="space-y-2">
+                  {loadingSources ? (
+                    <div className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Memuat sesi latihan...</div>
+                  ) : availableTrainings.length === 0 ? (
+                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                      Tidak ada sesi latihan yang belum memiliki jadwal absensi pada tanggal ini.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {availableTrainings.map((training) => (
+                        <button
+                          key={training.id}
+                          type="button"
+                          onClick={() => setSourceId(training.id)}
+                          className={`w-full text-left rounded-xl border px-3.5 py-2.5 transition-colors ${sourceId === training.id ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-300' : 'border-gray-200 hover:border-gold-300'}`}
+                        >
+                          <div className="text-sm font-semibold text-navy-900">{training.topicTitle || `Latihan ${training.ageGroup || ''}`}</div>
+                          <div className="text-[11px] text-gray-400">
+                            {training.ageGroup || '-'} · {training.coach?.name || 'tanpa coach'} · {training.branch?.name || 'semua cabang'}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {mode === 'event' && !editing && (
-            <div className="space-y-2">
-              {loadingSources ? (
-                <div className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Memuat event...</div>
-              ) : availableEvents.length === 0 ? (
-                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-                  Tidak ada event/tournament yang belum memiliki jadwal absensi pada tanggal ini.
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {availableEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={() => { setSourceId(event.id); setEventBranchId('') }}
-                      className={`w-full text-left rounded-xl border px-3 py-2 ${sourceId === event.id ? 'border-gold-400 bg-gold-50/60' : 'border-gray-200 hover:border-gold-300'}`}
-                    >
-                      <div className="text-sm font-semibold text-navy-900">{event.title}</div>
-                      <div className="text-[11px] text-gray-400">{typeLabel(event.type)} · {event.location || '-'}</div>
-                    </button>
-                  ))}
+              {mode === 'event' && !editing && (
+                <div className="space-y-2">
+                  {loadingSources ? (
+                    <div className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Memuat event...</div>
+                  ) : availableEvents.length === 0 ? (
+                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                      Tidak ada event/tournament yang belum memiliki jadwal absensi pada tanggal ini.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {availableEvents.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => { setSourceId(event.id); setEventBranchId('') }}
+                          className={`w-full text-left rounded-xl border px-3.5 py-2.5 transition-colors ${sourceId === event.id ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-300' : 'border-gray-200 hover:border-gold-300'}`}
+                        >
+                          <div className="text-sm font-semibold text-navy-900">{event.title}</div>
+                          <div className="text-[11px] text-gray-400">{typeLabel(event.type)} · {event.location || '-'}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedEvent && selectedEvent.branchDetails?.length > 0 && (
+                    <label className={labelCls}>
+                      Cabang event
+                      {(() => {
+                        const missing = selectedEvent.branchDetails.filter((branch) => !(selectedEvent.existingBranchIds || []).includes(branch.id))
+                        if (missing.length === 0) {
+                          return <div className="mt-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">Semua cabang event sudah punya jadwal.</div>
+                        }
+                        return (
+                          <AppSelect
+                            value={eventBranchId}
+                            onChange={setEventBranchId}
+                            placeholder="Pilih cabang"
+                            options={missing.map((branch) => ({ value: branch.id, label: `${branch.name} (${branch.code})` }))}
+                            className="mt-1.5 w-full"
+                          />
+                        )
+                      })()}
+                    </label>
+                  )}
                 </div>
               )}
-              {selectedEvent && selectedEvent.branchDetails?.length > 0 && (
-                <label className="block text-xs font-semibold text-gray-500">
-                  Cabang event
-                  {(() => {
-                    const missing = selectedEvent.branchDetails.filter((branch) => !(selectedEvent.existingBranchIds || []).includes(branch.id))
-                    if (missing.length === 0) {
-                      return <div className="mt-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">Semua cabang event sudah punya jadwal.</div>
-                    }
-                    return (
-                      <AppSelect
-                        value={eventBranchId}
-                        onChange={setEventBranchId}
-                        placeholder="Pilih cabang"
-                        options={missing.map((branch) => ({ value: branch.id, label: `${branch.name} (${branch.code})` }))}
-                        className="mt-1 w-full"
-                      />
-                    )
-                  })()}
+
+              {showManualFields && (
+                <label className={labelCls}>
+                  Nama/Judul sesi
+                  <input
+                    value={form.title}
+                    onChange={(e) => update('title', e.target.value)}
+                    disabled={editing && linked}
+                    placeholder="Contoh: Latihan U-12"
+                    className={inputCls}
+                  />
                 </label>
               )}
-            </div>
-          )}
 
-          {(mode === 'manual' || editing) && (
-            <label className="block text-xs font-semibold text-gray-500">
-              Nama/Judul sesi
-              <input
-                value={form.title}
-                onChange={(e) => update('title', e.target.value)}
-                disabled={editing && linked}
-                placeholder="Contoh: Latihan U-12"
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-navy-900 disabled:bg-gray-50 disabled:text-gray-500"
-              />
-            </label>
-          )}
+              {showManualFields && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className={labelCls}>
+                    <span className="flex items-center gap-1"><MapPin size={12} /> Cabang</span>
+                    {editing && linked ? (
+                      <div className="mt-1.5 rounded-xl bg-gray-50 border border-gray-100 px-3.5 py-2.5 text-sm text-gray-600">
+                        {initial.branch ? `${initial.branch.name} (${initial.branch.code})` : 'Semua cabang'}
+                      </div>
+                    ) : (
+                      <AppSelect
+                        value={form.branchId}
+                        onChange={(v) => update('branchId', v)}
+                        allLabel="Semua cabang"
+                        placeholder="Semua cabang"
+                        options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                        className="mt-1.5 w-full"
+                      />
+                    )}
+                  </label>
+                  <label className={labelCls}>
+                    Coach
+                    <AppSelect
+                      value={form.coachId}
+                      onChange={(v) => update('coachId', v)}
+                      allLabel="Semua coach"
+                      placeholder="Semua coach"
+                      options={coaches.map((c) => ({ value: c.id, label: c.name }))}
+                      className="mt-1.5 w-full"
+                    />
+                  </label>
+                </div>
+              )}
+            </section>
 
-          {(mode === 'manual' || editing) && (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-semibold text-gray-500">
-                Cabang
-                {editing && linked ? (
-                  <div className="mt-1 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2 text-sm text-gray-600">
-                    {initial.branch ? `${initial.branch.name} (${initial.branch.code})` : 'Semua cabang'}
-                  </div>
-                ) : (
+            <section className="space-y-3">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Jendela Waktu Absen</h4>
+              <div className="grid grid-cols-3 gap-2">
+                {TIME_FIELDS.map((field) => (
+                  <label key={field.key} className="rounded-2xl border border-gray-200 p-2.5 focus-within:border-gold-400 focus-within:ring-2 focus-within:ring-gold-300">
+                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg ${field.tone}`}><Clock size={13} /></span>
+                    <span className="block text-[11px] font-semibold text-gray-500 mt-1.5 leading-tight">{field.label}</span>
+                    <input
+                      type="time"
+                      value={form[field.key]}
+                      onChange={(e) => update(field.key, e.target.value)}
+                      className="mt-1 w-full bg-transparent text-sm font-bold text-navy-900 tabular-nums focus:outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Coach hanya bisa absen masuk di antara jam buka–tutup, dan absen pulang maksimal sampai batas yang diisi.
+              </p>
+            </section>
+
+            <section className="space-y-3">
+              {editing && (
+                <label className={labelCls}>
+                  Status
                   <AppSelect
-                    value={form.branchId}
-                    onChange={(v) => update('branchId', v)}
-                    allLabel="Semua cabang"
-                    placeholder="Semua cabang"
-                    options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                    className="mt-1 w-full"
+                    value={form.status}
+                    onChange={(v) => update('status', v)}
+                    options={[
+                      { value: 'active', label: 'Aktif' },
+                      { value: 'cancelled', label: 'Dibatalkan' },
+                    ]}
+                    className="mt-1.5 w-full"
                   />
-                )}
-              </label>
-              <label className="text-xs font-semibold text-gray-500">
-                Coach
-                <AppSelect
-                  value={form.coachId}
-                  onChange={(v) => update('coachId', v)}
-                  allLabel="Semua coach"
-                  placeholder="Semua coach"
-                  options={coaches.map((c) => ({ value: c.id, label: c.name }))}
-                  className="mt-1 w-full"
-                />
-              </label>
-            </div>
-          )}
+                </label>
+              )}
 
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { key: 'checkInOpen', label: 'Buka absen masuk' },
-              { key: 'checkInClose', label: 'Tutup absen masuk' },
-              { key: 'checkOutClose', label: 'Batas absen pulang' },
-            ].map((field) => (
-              <label key={field.key} className="text-xs font-semibold text-gray-500">
-                {field.label}
+              <label className={labelCls}>
+                Catatan <span className="font-normal text-gray-400">(opsional)</span>
                 <input
-                  type="time"
-                  value={form[field.key]}
-                  onChange={(e) => update(field.key, e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-2 py-2 text-sm text-navy-900"
+                  value={form.note}
+                  onChange={(e) => update('note', e.target.value)}
+                  placeholder="Contoh: latihan pagi di lapangan A"
+                  className={inputCls}
                 />
               </label>
-            ))}
+            </section>
           </div>
-          <p className="text-[11px] text-gray-400 -mt-1">
-            Coach hanya bisa absen masuk di antara jam buka–tutup, dan absen pulang maksimal sampai batas yang diisi.
-          </p>
 
-          {editing && (
-            <label className="block text-xs font-semibold text-gray-500">
-              Status
-              <AppSelect
-                value={form.status}
-                onChange={(v) => update('status', v)}
-                options={[
-                  { value: 'active', label: 'Aktif' },
-                  { value: 'cancelled', label: 'Dibatalkan' },
-                ]}
-                className="mt-1 w-full"
-              />
-            </label>
-          )}
-
-          <label className="block text-xs font-semibold text-gray-500">
-            Catatan (opsional)
-            <input
-              value={form.note}
-              onChange={(e) => update('note', e.target.value)}
-              placeholder="Contoh: latihan pagi di lapangan A"
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-navy-900"
-            />
-          </label>
-
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={onClose} disabled={saving} className="text-sm font-semibold text-gray-500 px-4 py-2 rounded-2xl hover:bg-gray-100 disabled:opacity-50">
+          <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-gray-100 bg-gray-50/60">
+            <button type="button" onClick={onClose} disabled={saving} className="text-sm font-semibold text-gray-500 px-4 py-2.5 rounded-2xl hover:bg-gray-100 disabled:opacity-50">
               Batal
             </button>
-            <button type="submit" disabled={saving} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50">
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Simpan
+            <button type="submit" disabled={saving} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-5 py-2.5 rounded-2xl shadow-sm disabled:opacity-50">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {editing ? 'Simpan Perubahan' : 'Simpan Jadwal'}
             </button>
           </div>
         </form>
