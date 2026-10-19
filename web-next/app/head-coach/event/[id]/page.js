@@ -131,6 +131,15 @@ export default function HeadCoachEventDetailPage() {
                   <div className="text-sm font-semibold text-navy-900">{p.student.fullName}</div>
                   <div className="text-xs text-gray-400">{p.student.studentId} · {p.student.ageGroup} · {p.student.position}</div>
                   {p.payment?.paymentMethod && <div className="text-[11px] text-gray-400 mt-0.5">via {p.payment.paymentMethod}</div>}
+                  <div className="text-[11px] text-gray-400">Ortu: {p.student.parentName}{p.student.parentPhone ? ` · ${p.student.parentPhone}` : ''}</div>
+                  {p.paymentStatus === 'paid' && p.payment?.paidAt && (
+                    <div className="text-[11px] text-emerald-600">
+                      Dibayar {new Date(p.payment.paidAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })} WIB
+                      {p.payment.totalAmount ? ` · ${formatRupiah(p.payment.totalAmount)}` : ''}
+                      {p.payment.transactionId ? ` · Ref ${p.payment.transactionId}` : ''}
+                    </div>
+                  )}
+                  {p.payment?.note && <div className="text-[11px] text-gray-400">Ket: {p.payment.note}</div>}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

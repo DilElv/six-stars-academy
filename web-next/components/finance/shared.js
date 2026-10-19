@@ -25,3 +25,8 @@ export function MonthFilter({ month, setMonth, year, setYear }) {
     </div>
   )
 }
+
+export function formatDateTime(d) {
+  if (!d) return '-'
+  return new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB'
+}

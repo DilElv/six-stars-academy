@@ -30,6 +30,22 @@ function pctChange(current, previous) {
   return Math.round(((current - previous) / previous) * 1000) / 10
 }
 
+// Detail transaksi untuk tampilan admin/head coach: kapan dibayar (paidAt,
+// lengkap dengan jam), kapan tagihan dibuat, siapa yang membayar, lewat apa,
+// serta referensi gateway.
+function paymentDetail(p) {
+  return {
+    createdAt: p.createdAt,
+    parentName: p.student?.parentName || null,
+    parentPhone: p.student?.parentPhone || null,
+    packageName: p.package?.name || null,
+    eventTitle: p.eventParticipant?.event?.title || null,
+    transactionId: p.transactionId || null,
+    paymentMethod: p.paymentMethod || null,
+    effectsAppliedAt: p.effectsAppliedAt || null,
+  }
+}
+
 // GET /pemasukan?month=&year=&branchId=
 // Combines successful Payment rows (registration/renewal/event) with manual
 // LedgerEntry(type=income) rows into a single normalized, date-sorted feed.
@@ -50,7 +66,9 @@ router.get('/pemasukan', async (req, res) => {
       prisma.payment.findMany({
         where: paymentWhere,
         include: {
-          student: { select: { fullName: true, branchId: true, branch: true } },
+          student: { select: { fullName: true, branchId: true, branch: true, parentName: true, parentPhone: true } },
+          package: { select: { name: true } },
+          eventParticipant: { select: { event: { select: { title: true } } } },
           cartItems: true,
         },
         orderBy: { paidAt: 'desc' },
@@ -88,6 +106,8 @@ router.get('/pemasukan', async (req, res) => {
             totalAmount: c.amount,
             status: p.status,
             paidAt: p.paidAt,
+            ...paymentDetail(p),
+            eventTitle: null,
           }))
         }
         return [{
@@ -108,6 +128,7 @@ router.get('/pemasukan', async (req, res) => {
           totalAmount: p.totalAmount,
           status: p.status,
           paidAt: p.paidAt,
+          ...paymentDetail(p),
         }]
       }),
       ...manualEntries.map((e) => ({
@@ -122,6 +143,7 @@ router.get('/pemasukan', async (req, res) => {
         branchId: e.branchId,
         createdBy: e.createdBy?.name,
         createdById: e.createdById,
+        createdAt: e.createdAt,
       })),
     ].sort((a, b) => new Date(b.date) - new Date(a.date))
 

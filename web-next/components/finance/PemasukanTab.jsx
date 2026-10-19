@@ -1,15 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, Plus, Trash2, Pencil, FileSpreadsheet, FileText, Search } from 'lucide-react'
+import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search } from 'lucide-react'
 import * as api from '@/lib/api'
 import DailyLedgerChart from '@/components/charts/DailyLedgerChart'
 import CategoryBreakdownChart from '@/components/charts/CategoryBreakdownChart'
 import LedgerEntryModal from '@/components/finance/LedgerEntryModal'
 import PaymentEditModal from '@/components/finance/PaymentEditModal'
+import PaymentDetailModal from '@/components/finance/PaymentDetailModal'
 import { exportLedgerToCSV, exportLedgerToPDF } from '@/lib/financeExport'
 import { AppSelect } from '@/components/ui/app-select'
-import { MONTH_LABELS, MonthFilter, useMonthFilter, formatRupiah } from '@/components/finance/shared'
+import { MONTH_LABELS, MonthFilter, useMonthFilter, formatRupiah, formatDateTime } from '@/components/finance/shared'
 
 export default function PemasukanTab() {
   const { month, setMonth, year, setYear } = useMonthFilter()
@@ -21,6 +22,7 @@ export default function PemasukanTab() {
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [editEntry, setEditEntry] = useState(null)
+  const [detailEntry, setDetailEntry] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
 
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
@@ -134,25 +136,36 @@ export default function PemasukanTab() {
               <tbody className="divide-y divide-gray-50">
                 {filteredItems.map((item) => (
                   <tr key={item.lineKey || `${item.source}-${item.id}`} className="hover:bg-gray-50/60">
-                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="text-gray-600">{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                      {item.source === 'payment' && <div className="text-[11px] text-gray-400">{new Date(item.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })} WIB</div>}
+                    </td>
                     <td className="px-3 py-3">
                       <div className="font-medium text-navy-900 flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.source === 'payment' ? 'bg-navy-400' : 'bg-emerald-500'}`} />
                         {item.description}
                       </div>
                       <div className="text-[11px] text-gray-400 ml-3.5">{item.category}{item.branch ? ` · ${item.branch.code}` : ''}{item.note ? ` · ${item.note}` : ''}</div>
+                      {item.source === 'payment' && (
+                        <div className="text-[11px] text-gray-400 ml-3.5">
+                          {item.parentName ? `Ortu: ${item.parentName}` : ''}{item.paymentMethod ? ` · ${item.paymentMethod}` : ''}{item.eventTitle ? ` · ${item.eventTitle}` : ''}{item.packageName ? ` · ${item.packageName}` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-gray-500">{item.source === 'payment' ? 'Otomatis' : `Manual${item.createdBy ? ` (${item.createdBy})` : ''}`}</td>
                     <td className="px-3 py-3 text-right font-bold text-emerald-600 whitespace-nowrap">{formatRupiah(item.amount)}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {canEdit(item) && (
-                        <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-1">
+                        {item.source === 'payment' && (
+                          <button onClick={() => setDetailEntry(item)} title="Detail transaksi" className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Eye size={13} /></button>
+                        )}
+                        {canEdit(item) && <>
                           {canEditEntry(item) && (
                             <button onClick={() => setEditEntry(item)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Pencil size={13} /></button>
                           )}
                           <button onClick={() => handleDelete(item)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={13} /></button>
-                        </div>
-                      )}
+                        </>}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -169,6 +182,7 @@ export default function PemasukanTab() {
         </div>
       )}
 
+      {detailEntry && <PaymentDetailModal item={detailEntry} onClose={() => setDetailEntry(null)} />}
       {showAdd && <LedgerEntryModal type="income" onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load() }} />}
       {editEntry?.source === 'manual' && <LedgerEntryModal type="income" entry={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}
       {editEntry?.source === 'payment' && <PaymentEditModal payment={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}

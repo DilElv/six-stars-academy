@@ -90,10 +90,19 @@ function addPdfFooter(doc) {
 
 // ---- Pemasukan / Pengeluaran (ledger item list) ----
 
+const fmtDateTime = (item) => {
+  const d = new Date(item.date)
+  const day = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  if (item.source !== 'payment') return day
+  return `${day} ${d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })}`
+}
+
+const paymentExtra = (item) => [item.parentName && `Ortu: ${item.parentName}`, item.paymentMethod, item.transactionId && `Ref: ${item.transactionId}`].filter(Boolean).map((t) => `\n${t}`).join('')
+
 function ledgerRows(items, type) {
   return items.map((item) => [
-    new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
-    item.description,
+    fmtDateTime(item),
+    item.description + (item.source === 'payment' ? paymentExtra(item) : ''),
     type === 'pemasukan' ? (item.source === 'payment' ? 'Otomatis' : 'Manual') : 'Manual',
     item.branch?.code || item.branch?.name || '-',
     formatRupiah(item.amount),
@@ -101,16 +110,22 @@ function ledgerRows(items, type) {
 }
 
 export function exportLedgerToCSV(items, { type, month, year }) {
-  const header = ['Tanggal', 'Deskripsi', 'Sumber', 'Cabang', 'Nominal (Rp)']
+  const header = ['Tanggal', 'Jam (WIB)', 'Deskripsi', 'Orang Tua', 'Telepon', 'Metode', 'Ref Transaksi', 'Keterangan', 'Sumber', 'Cabang', 'Nominal (Rp)']
   const rows = items.map((item) => [
     new Date(item.date).toLocaleDateString('id-ID'),
+    item.source === 'payment' ? new Date(item.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta' }) : '',
     item.description,
+    item.parentName || '',
+    item.parentPhone || '',
+    item.paymentMethod || '',
+    item.transactionId || '',
+    item.note || '',
     type === 'pemasukan' ? (item.source === 'payment' ? 'Otomatis' : 'Manual') : 'Manual',
     item.branch?.code || item.branch?.name || '-',
     item.amount,
   ])
   const total = items.reduce((sum, i) => sum + i.amount, 0)
-  downloadCsv([header, ...rows, [], ['', '', '', 'TOTAL', total]], `${type}_${MONTH_LABELS[month]}_${year}.csv`)
+  downloadCsv([header, ...rows, [], ['', '', '', '', '', '', '', '', '', 'TOTAL', total]], `${type}_${MONTH_LABELS[month]}_${year}.csv`)
 }
 
 export async function exportLedgerToPDF(items, { type, month, year, total }) {
@@ -125,8 +140,8 @@ export async function exportLedgerToPDF(items, { type, month, year, total }) {
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 249, 251] },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 70 },
+      0: { cellWidth: 30 },
+      1: { cellWidth: 68 },
       2: { cellWidth: 24 },
       3: { cellWidth: 24 },
       4: { cellWidth: 32, halign: 'right' },
