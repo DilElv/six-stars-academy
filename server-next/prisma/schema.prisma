@@ -49,6 +49,7 @@ model User {
   branches                 UserBranch[]
   cartItemsAdded           CartItem[]        @relation("CartItemAddedBy")
   paymentAudits            PaymentAuditLog[] @relation("PaymentAuditActor")
+  paymentProofsUploaded    Payment[]         @relation("PaymentProofUploader")
   payrolls                 CoachPayroll[]    @relation("CoachPayrollCoach")
   generatedPayrolls        CoachPayroll[]    @relation("CoachPayrollGeneratedBy")
 
@@ -310,11 +311,23 @@ model Payment {
   callbackPayload    Json?
   paidAt             DateTime?
   effectsAppliedAt   DateTime?
+  // Bukti pembayaran (foto/screenshot transfer, QRIS, dsb.) yang diunggah
+  // parent/admin. WAJIB ada supaya pembayaran ikut dihitung sebagai pemasukan
+  // di laporan keuangan (lihat lib/paymentProof.js).
+  proofUrl           String?
+  proofNote          String?
+  proofUploadedAt    DateTime?
+  proofUploadedById  String?
+  proofUploadedBy    User?             @relation("PaymentProofUploader", fields: [proofUploadedById], references: [id], onDelete: SetNull)
+  // Data lama (sebelum fitur bukti) ditandai true agar tetap dihitung apa
+  // adanya. Pembayaran baru default false -> wajib punya bukti.
+  proofExempt        Boolean           @default(false)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
   cartItems          CartItem[]
 
+  @@index([proofUploadedById])
   @@map("payments")
 }
 

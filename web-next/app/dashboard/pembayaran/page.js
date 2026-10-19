@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck, RefreshCw, AlertTriangle, ExternalLink, X } from 'lucide-react'
+import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, CalendarCheck, RefreshCw, AlertTriangle, ExternalLink, X, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import RenewalModal from '@/components/RenewalModal'
+import PaymentProofUpload from '@/components/PaymentProofUpload'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -77,6 +78,15 @@ export default function PembayaranAnakPage() {
       <h1 className="font-bold text-navy-900 text-lg">Riwayat Pembayaran</h1>
 
       {actionError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{actionError}</div>}
+
+      {payments.some((p) => p.status === 'success' && !p.proofUrl && !p.proofExempt) && (
+        <div className="flex items-start gap-2.5 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800">
+          <Upload size={15} className="shrink-0 mt-0.5" />
+          <span>
+            Ada pembayaran yang belum ada bukti. Buka rinciannya lalu <b>upload bukti pembayaran</b> (foto/screenshot) supaya tercatat di laporan keuangan.
+          </span>
+        </div>
+      )}
 
       {child && (isExpired || nearExpiry) && (
         <div className={`flex items-center justify-between gap-3 flex-wrap rounded-3xl px-5 py-4 border ${isExpired ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'}`}>
@@ -179,6 +189,7 @@ export default function PembayaranAnakPage() {
                   <div className="text-right shrink-0">
                     <div className="font-bold text-navy-900">{formatRupiah(p.totalAmount)}</div>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${s.color}`}>{s.label}</span>
+                    {!p.proofUrl && !p.proofExempt && <div className="text-[10px] text-amber-600 font-semibold mt-0.5">Bukti belum diunggah</div>}
                   </div>
                   <ChevronDown size={16} className={`text-gray-300 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -236,6 +247,16 @@ export default function PembayaranAnakPage() {
                           </div>
                         )}
                       </div>
+                      {/* Bukti pembayaran — wajib agar transaksi masuk laporan keuangan */}
+                      <div className="h-px bg-gray-200" />
+                      {!p.proofUrl && !p.proofExempt && (
+                        <p className="text-[11px] text-amber-700 font-semibold">
+                          Wajib upload bukti pembayaran (foto/screenshot) agar transaksi ini tercatat di laporan keuangan.
+                        </p>
+                      )}
+                      {(p.status === 'success' || p.status === 'pending') && (
+                        <PaymentProofUpload payment={p} onUploaded={load} />
+                      )}
                       {p.status === 'pending' && (
                         <div className="flex items-center gap-2">
                           {p.paymentLink && (

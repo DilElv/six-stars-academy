@@ -24,6 +24,7 @@ import fieldsRoutes from './routes/fields.js'
 import eventsRoutes from './routes/events.js'
 import staffAttendanceRoutes from './routes/staffAttendance.js'
 import passwordResetRoutes from './routes/passwordReset.js'
+import { rejectInlineImages } from './middleware/rejectInlineImages.js'
 import branchPackagesRoutes from './routes/branchPackages.js'
 import ledgerRoutes from './routes/ledger.js'
 import eventStaffAttendanceRoutes from './routes/eventStaffAttendance.js'
@@ -38,6 +39,7 @@ const app = express()
 
 app.use(cors())
 app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf } }))
+app.use(rejectInlineImages)
 app.use('/rapor', express.static(path.join(__dirname, 'uploads', 'rapor')))
 app.use('/api/uploads/photos', express.static(path.join(__dirname, 'uploads', 'photos')))
 

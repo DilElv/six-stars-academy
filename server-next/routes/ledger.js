@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
+import { incomeProofWhere, missingProofWhere } from '../lib/paymentProof.js'
 
 const router = Router()
 
@@ -57,6 +58,8 @@ router.get('/pemasukan', async (req, res) => {
     const paymentWhere = { status: 'success' }
     if (range) paymentWhere.paidAt = range
     if (branchId) paymentWhere.student = { branchId }
+    // Hanya pembayaran yang sudah ada bukti (atau data lama) yang masuk laporan.
+    Object.assign(paymentWhere, incomeProofWhere())
 
     const ledgerWhere = { type: 'income' }
     if (range) ledgerWhere.date = range
@@ -104,6 +107,7 @@ router.get('/pemasukan', async (req, res) => {
             baseAmount: c.amount,
             registrationFee: 0,
             totalAmount: c.amount,
+            proofUrl: p.proofUrl || null,
             status: p.status,
             paidAt: p.paidAt,
             ...paymentDetail(p),
@@ -126,6 +130,7 @@ router.get('/pemasukan', async (req, res) => {
           baseAmount: p.amount,
           registrationFee: p.registrationFee,
           totalAmount: p.totalAmount,
+          proofUrl: p.proofUrl || null,
           status: p.status,
           paidAt: p.paidAt,
           ...paymentDetail(p),
@@ -198,6 +203,7 @@ async function sumIncomeExpense(month, year, branchId) {
   const paymentWhere = { status: 'success' }
   if (range) paymentWhere.paidAt = range
   if (branchId) paymentWhere.student = { branchId }
+  Object.assign(paymentWhere, incomeProofWhere())
 
   const incomeLedgerWhere = { type: 'income' }
   const expenseLedgerWhere = { type: 'expense' }
@@ -253,6 +259,7 @@ router.get('/trend', authorize('admin'), async (req, res) => {
 
     const paymentWhere = { status: 'success', paidAt: { gte: rangeStart } }
     if (branchId) paymentWhere.student = { branchId }
+    Object.assign(paymentWhere, incomeProofWhere())
     const ledgerWhere = { date: { gte: rangeStart } }
     if (branchId) ledgerWhere.branchId = branchId
 
@@ -275,6 +282,42 @@ router.get('/trend', authorize('admin'), async (req, res) => {
       return { label: `${MONTH_LABEL[month]} ${year}`, month, year, income, expense, laba: income - expense }
     })
     res.json(result)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// GET /belum-bukti?branchId= — pembayaran lunas yang belum ada bukti. Muncul
+// terpisah dari laporan karena pembayaran tanpa bukti TIDAK dihitung sebagai
+// pemasukan (lihat lib/paymentProof.js). Dipakai admin & head coach untuk
+// menagih/melengkapi bukti.
+router.get('/belum-bukti', async (req, res) => {
+  try {
+    const { branchId } = req.query
+    const where = { ...missingProofWhere() }
+    if (branchId) where.student = { branchId }
+    const payments = await prisma.payment.findMany({
+      where,
+      include: { student: { select: { fullName: true, studentId: true, parentName: true, parentPhone: true, branch: true } } },
+      orderBy: { paidAt: 'desc' },
+    })
+    const items = payments.map((p) => ({
+      id: p.id,
+      category: PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType,
+      description: `${PAYMENT_TYPE_LABEL[p.paymentType] || p.paymentType} — ${p.student?.fullName || '-'}`,
+      studentName: p.student?.fullName || null,
+      parentName: p.student?.parentName || null,
+      parentPhone: p.student?.parentPhone || null,
+      amount: p.totalAmount,
+      paymentMethod: p.paymentMethod,
+      paymentType: p.paymentType,
+      date: p.paidAt,
+      branch: p.student?.branch || null,
+      proofUrl: p.proofUrl || null,
+    }))
+    const total = items.reduce((sum, i) => sum + i.amount, 0)
+    res.json({ items, total, count: items.length })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

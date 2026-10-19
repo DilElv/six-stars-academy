@@ -2,6 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
+import { incomeProofWhere } from '../lib/paymentProof.js'
 
 const router = Router()
 
@@ -20,7 +21,7 @@ router.get('/stats', async (req, res) => {
       prisma.student.count({ where: { status: { not: 'inactive' } } }),
       prisma.user.count({ where: { role: 'head_coach' } }),
       prisma.user.count({ where: { role: 'coach' } }),
-      prisma.payment.aggregate({ _sum: { totalAmount: true }, where: { status: 'success', paidAt: { gte: startOfMonth } } }),
+      prisma.payment.aggregate({ _sum: { totalAmount: true }, where: { status: 'success', paidAt: { gte: startOfMonth }, ...incomeProofWhere() } }),
       prisma.attendance.count({ where: { date: { gte: startOfToday, lte: endOfToday } } }),
       prisma.payment.count({ where: { status: 'pending' } }),
       prisma.assessment.count({ where: { month: now.getMonth() + 1, year: now.getFullYear(), reports: { none: {} } } }),
@@ -51,7 +52,7 @@ router.get('/revenue-trend', async (req, res) => {
     }
     const rangeStart = new Date(months[0].year, months[0].month - 1, 1)
     const payments = await prisma.payment.findMany({
-      where: { status: 'success', paidAt: { gte: rangeStart } },
+      where: { status: 'success', paidAt: { gte: rangeStart }, ...incomeProofWhere() },
       select: { totalAmount: true, paidAt: true },
     })
     const MONTH_LABEL = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']

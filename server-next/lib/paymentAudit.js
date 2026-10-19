@@ -17,6 +17,7 @@ const AUDIT_ACTION_LABEL = {
   invoice_edit: 'Tagihan diubah',
   invoice_delete: 'Tagihan dihapus',
   mark_paid_manual: 'Ditandai lunas manual',
+  proof_uploaded: 'Bukti pembayaran diunggah',
 }
 
 export function auditActionLabel(action) {

@@ -627,6 +627,17 @@ export async function uploadFile(file) {
   return data.url
 }
 
+// Lampirkan bukti pembayaran (foto/screenshot) ke satu pembayaran. Bukti wajib
+// ada supaya pembayaran dihitung di laporan keuangan.
+export async function uploadPaymentProof(id, proofUrl, proofNote) {
+  return request(`/payments/${id}/proof`, { method: 'POST', body: JSON.stringify({ proofUrl, proofNote }) })
+}
+
+// Daftar pembayaran lunas yang belum ada bukti (admin & head coach).
+export async function getMissingProof(filters) {
+  return request(`/ledger/belum-bukti${buildQuery(filters)}`)
+}
+
 
 function buildQuery(filters = {}) {
   const params = new URLSearchParams()

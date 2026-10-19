@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import { PAYMENT_METHOD_LOGOS } from '@/lib/paymentMethodLogos'
 import { qrImageUrl } from '@/lib/qrImage'
 import PaymentStatusIcon from './PaymentStatusIcon'
+import PaymentProofUpload from '@/components/PaymentProofUpload'
 import ModalPortal from '@/components/ui/modal-portal'
 
 const FALLBACK_METHODS = [
@@ -36,6 +37,7 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [finalStatus, setFinalStatus] = useState(null)
+  const [proofUploaded, setProofUploaded] = useState(false)
   const pollRef = useRef(null)
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
         const s = await pollStatus(result)
         if (s?.status === 'success' || s?.status === 'failed') {
           clearInterval(pollRef.current)
-          setFinalStatus(s)
+          setFinalStatus({ ...s, paymentId: result?.payment?.id || null })
         }
       } catch {
         // transient network hiccup — keep polling
@@ -59,7 +61,9 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
   }, [result, pollStatus, finalStatus])
 
   useEffect(() => {
-    if (finalStatus?.status === 'success') {
+    // Pembayaran berhasil tanpa ID pembayaran (mis. beasiswa Rp 0) -> tutup
+    // otomatis. Kalau ada ID, biarkan parent meng-upload bukti dulu.
+    if (finalStatus?.status === 'success' && !finalStatus.paymentId) {
       const t = setTimeout(() => onDone?.({ ...result, ...finalStatus }), 1800)
       return () => clearTimeout(t)
     }
@@ -75,7 +79,7 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
       // server-side, with no Rintisan billing to show — skip straight to the
       // success animation instead of a QR/link screen for nothing.
       if (res?.payment?.status === 'success') {
-        setFinalStatus({ status: 'success', paidAt: res.payment.paidAt, paymentMethod: res.payment.paymentMethod })
+        setFinalStatus({ status: 'success', paidAt: res.payment.paidAt, paymentMethod: res.payment.paymentMethod, paymentId: res.payment.id })
       }
     } catch (err) {
       setError(err.message || 'Gagal membuat tagihan pembayaran')
@@ -142,6 +146,30 @@ export default function PaymentMethodModal({ title, amount, note, onConfirm, onC
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(finalStatus.paidAt).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB
                   </p>
+                )}
+                {finalStatus.paymentId && (
+                  <div className="mt-4 text-left">
+                    {proofUploaded ? (
+                      <div className="flex items-center gap-2 text-emerald-700 text-xs font-medium bg-emerald-50 border border-emerald-100 rounded-2xl px-3 py-2.5">
+                        <CheckCircle2 size={15} className="shrink-0" /> Bukti terkirim — terima kasih!
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-amber-700 font-semibold mb-2">
+                          Terakhir: upload bukti pembayaran (foto/screenshot) agar transaksi ini tercatat di laporan keuangan.
+                        </p>
+                        <PaymentProofUpload payment={{ id: finalStatus.paymentId }} onUploaded={() => setProofUploaded(true)} />
+                      </>
+                    )}
+                  </div>
+                )}
+                {finalStatus.paymentId && (
+                  <button
+                    onClick={() => onDone?.({ ...result, ...finalStatus })}
+                    className="mt-4 w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold text-sm px-4 py-2.5 rounded-2xl"
+                  >
+                    Selesai
+                  </button>
                 )}
               </>
             ) : (

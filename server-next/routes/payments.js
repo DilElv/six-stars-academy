@@ -4,6 +4,7 @@ import { authenticate, authorize } from '../middleware/auth.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod } from '../lib/rintisan.js'
 import { logPaymentAudit, getPaymentAudit } from '../lib/paymentAudit.js'
+import { missingProofWhere } from '../lib/paymentProof.js'
 
 const router = Router()
 
@@ -37,6 +38,8 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
     const where = {}
     if (req.query.status) where.status = req.query.status
+    if (req.query.proof === 'missing') Object.assign(where, missingProofWhere())
+    else if (req.query.proof === 'present') where.proofUrl = { not: null }
     const payments = await prisma.payment.findMany({
       where,
       include: { package: true, cartItems: true, student: { select: { fullName: true, studentId: true, parentName: true, parentPhone: true } } },
@@ -187,6 +190,55 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
       orderBy: { createdAt: 'desc' },
     })
     res.json(payments)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Unggah bukti pembayaran (foto/screenshot). Parent mengunggah untuk
+// pembayarannya sendiri (termasuk QRIS/gateway yang sudah berhasil);
+// admin/head_coach boleh mengunggah untuk pembayaran mana pun. Bukti wajib
+// ada supaya pembayaran ikut dihitung di laporan keuangan — lihat
+// lib/paymentProof.js. `proofUrl` berasal dari POST /api/upload (Cloudinary).
+router.post('/:id/proof', authenticate, async (req, res) => {
+  const { proofUrl, proofNote } = req.body
+  try {
+    if (typeof proofUrl !== 'string' || !/^https?:\/\//i.test(proofUrl.trim())) {
+      return res.status(400).json({ error: 'Bukti pembayaran wajib diunggah (foto atau screenshot)' })
+    }
+    const payment = await prisma.payment.findUnique({
+      where: { id: req.params.id },
+      include: { student: { select: { userId: true } } },
+    })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+
+    const isOwner = req.user.role === 'parent' && payment.student?.userId === req.user.id
+    const isStaff = req.user.role === 'admin' || req.user.role === 'head_coach'
+    if (!isOwner && !isStaff) return res.status(403).json({ error: 'Tidak berhak mengunggah bukti pembayaran ini' })
+
+    const updated = await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        proofUrl: proofUrl.trim(),
+        proofNote: proofNote?.trim() || null,
+        proofUploadedAt: new Date(),
+        proofUploadedById: req.user.id,
+      },
+    })
+
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'proof_uploaded',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before: { proofUrl: payment.proofUrl || null },
+      after: { proofUrl: updated.proofUrl },
+      note: isOwner ? 'Bukti pembayaran diunggah parent' : 'Bukti pembayaran diunggah admin',
+    })
+
+    res.json(updated)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search } from 'lucide-react'
+import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search, AlertTriangle } from 'lucide-react'
 import * as api from '@/lib/api'
 import DailyLedgerChart from '@/components/charts/DailyLedgerChart'
 import CategoryBreakdownChart from '@/components/charts/CategoryBreakdownChart'
 import LedgerEntryModal from '@/components/finance/LedgerEntryModal'
 import PaymentEditModal from '@/components/finance/PaymentEditModal'
 import PaymentDetailModal from '@/components/finance/PaymentDetailModal'
+import PaymentProofUpload from '@/components/PaymentProofUpload'
 import { exportLedgerToCSV, exportLedgerToPDF } from '@/lib/financeExport'
 import { AppSelect } from '@/components/ui/app-select'
 import { MONTH_LABELS, MonthFilter, useMonthFilter, formatRupiah, formatDateTime } from '@/components/finance/shared'
@@ -24,12 +25,14 @@ export default function PemasukanTab() {
   const [editEntry, setEditEntry] = useState(null)
   const [detailEntry, setDetailEntry] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
+  const [missing, setMissing] = useState({ count: 0, total: 0, items: [] })
 
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
 
   function load() {
     setLoading(true)
     api.getPemasukan({ month, year }).then((res) => { setItems(res.items); setTotal(res.total); setBreakdown(res.breakdown || []) }).finally(() => setLoading(false))
+    api.getMissingProof({ branchId: undefined }).then(setMissing).catch(() => setMissing({ count: 0, total: 0, items: [] }))
   }
 
   useEffect(load, [month, year])
@@ -98,6 +101,35 @@ export default function PemasukanTab() {
         </div>
       </div>
 
+      {missing.count > 0 && (
+        <div className="glass-card rounded-3xl p-4 sm:p-5 border-l-4 border-amber-400">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <AlertTriangle size={16} className="text-amber-500" />
+              <span className="text-sm font-bold text-navy-900">Belum ada bukti ({missing.count})</span>
+              <span className="text-xs text-gray-400">— belum dihitung di laporan sampai bukti diunggah</span>
+            </div>
+            <span className="text-sm font-extrabold text-amber-600">{formatRupiah(missing.total)}</span>
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {missing.items.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 flex-wrap rounded-2xl bg-amber-50/60 border border-amber-100 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-navy-900 truncate">{m.description}</div>
+                  <div className="text-[11px] text-gray-500">
+                    {new Date(m.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {m.paymentMethod ? ` · ${m.paymentMethod}` : ''}
+                    {m.parentName ? ` · ${m.parentName}` : ''}{m.parentPhone ? ` (${m.parentPhone})` : ''}
+                  </div>
+                </div>
+                <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(m.amount)}</div>
+                <PaymentProofUpload payment={m} onUploaded={load} compact />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -150,6 +182,13 @@ export default function PemasukanTab() {
                         <div className="text-[11px] text-gray-400 ml-3.5">
                           {item.parentName ? `Ortu: ${item.parentName}` : ''}{item.paymentMethod ? ` · ${item.paymentMethod}` : ''}{item.eventTitle ? ` · ${item.eventTitle}` : ''}{item.packageName ? ` · ${item.packageName}` : ''}
                         </div>
+                      )}
+                      {item.source === 'payment' && (
+                        item.proofUrl ? (
+                          <a href={item.proofUrl} target="_blank" rel="noopener noreferrer" className="ml-3.5 text-[11px] text-emerald-600 underline">Lihat bukti</a>
+                        ) : (
+                          <span className="ml-3.5 text-[11px] text-amber-600">Data lama (tanpa bukti)</span>
+                        )
                       )}
                     </td>
                     <td className="px-3 py-3 text-gray-500">{item.source === 'payment' ? 'Otomatis' : `Manual${item.createdBy ? ` (${item.createdBy})` : ''}`}</td>
