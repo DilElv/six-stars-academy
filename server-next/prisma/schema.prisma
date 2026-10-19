@@ -52,6 +52,8 @@ model User {
   paymentProofsUploaded    Payment[]         @relation("PaymentProofUploader")
   payrolls                 CoachPayroll[]    @relation("CoachPayrollCoach")
   generatedPayrolls        CoachPayroll[]    @relation("CoachPayrollGeneratedBy")
+  coachAttendanceSessions        CoachAttendanceSession[] @relation("CoachAttendanceSessionCoach")
+  createdCoachAttendanceSessions CoachAttendanceSession[] @relation("CoachAttendanceSessionCreator")
 
   @@map("users")
 }
@@ -88,6 +90,7 @@ model Branch {
   events           EventBranch[]
   branchPackages   BranchPackage[]
   ledgerEntries    LedgerEntry[]
+  coachAttendanceSessions CoachAttendanceSession[]
 
   @@map("branches")
 }
@@ -98,6 +101,10 @@ model StaffAttendance {
   user         User      @relation("StaffAttendanceUser", fields: [userId], references: [id], onDelete: Cascade)
   branchId     String?
   branch       Branch?   @relation(fields: [branchId], references: [id])
+  // Sesi absensi yang menjadi dasar check-in (jam buka/tutup). Baris lama
+  // (dan absensi head coach) boleh null; absensi coach baru selalu terisi.
+  sessionId    String?
+  session      CoachAttendanceSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   date         DateTime
   status       String    @default("hadir")
   checkInTime  DateTime?
@@ -128,14 +135,50 @@ model StaffAttendance {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  // A coach/head-coach assigned to multiple branches checks in/out
-  // separately per branch (e.g. branch A in the morning, branch B in the
-  // afternoon) — branchId is nullable at the DB level only so pre-existing
-  // historical rows (recorded before this constraint) don't collide, since
-  // Postgres treats NULLs as distinct in a unique index; the app always
-  // supplies a real branchId for every new check-in going forward.
-  @@unique([userId, date, branchId])
+  // Satu baris per sesi absensi. `sessionId` null dipakai baris lama dan
+  // absensi head coach (mode bebas); Postgres menganggap NULL unik sehingga
+  // banyak baris legacy tetap aman. Index tanggal dipakai rekap & payroll.
+  @@unique([userId, sessionId])
+  @@index([date])
   @@map("staff_attendances")
+}
+
+// Jadwal absensi coach per sesi. Dibuat otomatis dari sesi latihan / event
+// (dengan jam default) dan bisa diatur admin/head coach: jam buka-tutup absen
+// masuk dan batas absen pulang. Dampak event/tournament ke payroll ditentukan
+// manual lewat bonus/deduction di menu Payroll.
+model CoachAttendanceSession {
+  id                String   @id @default(cuid())
+  type              String   // training | event | tournament
+  title             String
+  date              DateTime // awal hari (zona waktu server = WIB)
+  branchId          String?
+  branch            Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  // null = semua coach di cabang; terisi = hanya coach tersebut.
+  coachId           String?
+  coach             User?    @relation("CoachAttendanceSessionCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  trainingSessionId String?  @unique
+  trainingSession   TrainingSession? @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  eventId           String?
+  event             Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Format "HH:mm" (WIB). Absen pulang tidak punya jam buka, hanya batas akhir.
+  checkInOpen   String @default("00:00")
+  checkInClose  String @default("23:59")
+  checkOutClose String @default("23:59")
+
+  status        String  @default("active") // active | cancelled
+  note          String?
+  createdById   String?
+  createdBy     User?   @relation("CoachAttendanceSessionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  attendances StaffAttendance[]
+
+  @@index([date, branchId])
+  @@index([eventId])
+  @@map("coach_attendance_sessions")
 }
 
 model EventStaffAttendance {
@@ -402,6 +445,8 @@ model TrainingSession {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  attendanceSession CoachAttendanceSession?
+
   @@map("training_sessions")
 }
 
@@ -424,6 +469,7 @@ model Event {
   participants EventParticipant[]
   branches     EventBranch[]
   staffAttendances EventStaffAttendance[]
+  attendanceSessions CoachAttendanceSession[]
 
   @@map("events")
 }

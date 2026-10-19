@@ -4,6 +4,8 @@ import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser } from '../lib/notify.js'
 import { assertBranchAccess, getUserBranchIds } from '../lib/branchAccess.js'
 
+import { windowState, closedMessage } from '../lib/coachAttendance.js'
+
 const router = Router()
 
 function startOfDay(dateStr) {
@@ -14,14 +16,27 @@ function startOfDay(dateStr) {
 
 // A coach/head-coach with no branches assigned yet (e.g. not set up by
 // admin) falls back to the pre-branch behavior: one plain record a day,
-// branchId left null. Prisma's compound unique lookup rejects a literal
-// null for branchId, so that case can't reuse `userId_date_branchId` and
-// goes through a manual findFirst+create/update instead.
+// branchId left null. Since absensi coach kini per sesi, baris legacy
+// (sessionId null) dicari manual, bukan lewat compound unique lama.
 async function findTodayRecord(userId, day, branchId) {
-  if (branchId) {
-    return prisma.staffAttendance.findUnique({ where: { userId_date_branchId: { userId, date: day, branchId } } })
+  return prisma.staffAttendance.findFirst({ where: { userId, date: day, branchId: branchId ?? null, sessionId: null } })
+}
+
+async function findCoachSession(user, sessionId, assignedBranchIds) {
+  const session = await prisma.coachAttendanceSession.findUnique({ where: { id: sessionId }, include: { branch: true } })
+  if (!session) throw Object.assign(new Error('Sesi absensi tidak ditemukan'), { status: 404 })
+  if (session.status !== 'active') throw Object.assign(new Error('Sesi absensi sudah dibatalkan'), { status: 400 })
+  if (session.type !== 'training') throw Object.assign(new Error('Sesi ini memakai absensi event'), { status: 400 })
+  if (startOfDay(session.date).getTime() !== startOfDay().getTime()) {
+    throw Object.assign(new Error('Sesi absensi bukan untuk hari ini'), { status: 400 })
   }
-  return prisma.staffAttendance.findFirst({ where: { userId, date: day, branchId: null } })
+  if (session.coachId && session.coachId !== user.id) {
+    throw Object.assign(new Error('Sesi absensi ini bukan untuk Anda'), { status: 403 })
+  }
+  if (session.branchId && !assignedBranchIds.includes(session.branchId)) {
+    throw Object.assign(new Error('Anda tidak memiliki akses ke cabang ini'), { status: 403 })
+  }
+  return session
 }
 
 async function canVerifyRecord(req, record) {
@@ -32,16 +47,52 @@ async function canVerifyRecord(req, record) {
 }
 
 router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
-  const { photo, latitude, longitude, locationName } = req.body
+  const { photo, latitude, longitude, locationName, sessionId } = req.body
   let { branchId } = req.body
   if (!photo) return res.status(400).json({ error: 'Foto selfie wajib diambil' })
   try {
-    // A coach/head-coach assigned to multiple branches checks in separately
-    // at each one, so both roles need branch selection now (it used to be
-    // coach-only, back when a day only ever had one record). Someone with no
-    // branches assigned at all keeps the old no-branch behavior instead of
-    // being locked out.
     const assignedBranchIds = await getUserBranchIds(req.user.id)
+
+    // Coach: absensi hanya lewat sesi yang dijadwalkan admin/head coach dan
+    // hanya di dalam jendela jam buka-tutup.
+    if (req.user.role === 'coach') {
+      if (!sessionId) return res.status(400).json({ error: 'Pilih sesi absensi terlebih dahulu' })
+      const session = await findCoachSession(req.user, sessionId, assignedBranchIds)
+      const state = windowState(session)
+      if (!state.canCheckIn) return res.status(400).json({ error: closedMessage(session, state) })
+
+      branchId = session.branchId || (branchId && assignedBranchIds.includes(branchId) ? branchId : null)
+      const existing = await prisma.staffAttendance.findUnique({
+        where: { userId_sessionId: { userId: req.user.id, sessionId } },
+      })
+      if (existing?.checkInTime && existing.verifyStatus !== 'rejected') {
+        return res.status(409).json({ error: 'Absen masuk sesi ini sudah tercatat' })
+      }
+      const now = new Date()
+      const day = startOfDay(session.date)
+      const data = {
+        status: 'hadir',
+        date: day,
+        sessionId,
+        branchId,
+        checkInTime: now,
+        photo,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+        locationName: locationName || null,
+        // Absen langsung sah (foto + timestamp), tanpa antrean verifikasi.
+        verifyStatus: 'approved',
+        verifiedById: null,
+        verifiedAt: now,
+        rejectReason: null,
+      }
+      const record = existing
+        ? await prisma.staffAttendance.update({ where: { id: existing.id }, data, include: { branch: true, session: true } })
+        : await prisma.staffAttendance.create({ data: { ...data, userId: req.user.id }, include: { branch: true, session: true } })
+      return res.json(record)
+    }
+
+    // Head coach: tetap absen harian bebas per cabang.
     if (assignedBranchIds.length > 0) {
       if (!branchId) return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
       await assertBranchAccess(req.user.id, branchId)
@@ -58,10 +109,6 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
       latitude: latitude ?? null,
       longitude: longitude ?? null,
       locationName: locationName || null,
-      // Verifikasi admin dihapus: absen masuk langsung sah, jadi absen coach &
-      // head coach langsung masuk laporan (foto + timestamp) dan payroll tanpa
-      // antrean verifikasi. Absen palsu masih bisa ditolak manual oleh admin
-      // lewat `PUT /:id/reject` bila diperlukan.
       verifyStatus: 'approved',
       verifiedById: null,
       verifiedAt: now,
@@ -80,11 +127,48 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
 })
 
 router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
-  const { photo, latitude, longitude, locationName } = req.body
+  const { photo, latitude, longitude, locationName, sessionId } = req.body
   let { branchId } = req.body
   if (!photo) return res.status(400).json({ error: 'Foto selfie wajib diambil' })
   try {
     const assignedBranchIds = await getUserBranchIds(req.user.id)
+
+    if (req.user.role === 'coach') {
+      if (!sessionId) return res.status(400).json({ error: 'Pilih sesi absensi terlebih dahulu' })
+      const session = await findCoachSession(req.user, sessionId, assignedBranchIds)
+      const existing = await prisma.staffAttendance.findUnique({
+        where: { userId_sessionId: { userId: req.user.id, sessionId } },
+      })
+      if (!existing?.checkInTime) return res.status(400).json({ error: 'Absen masuk dulu di sesi ini sebelum absen pulang' })
+      if (existing.verifyStatus === 'rejected') return res.status(400).json({ error: 'Perbaiki absen masuk yang ditolak terlebih dahulu' })
+      if (existing.checkOutTime && existing.checkOutVerifyStatus !== 'rejected') {
+        return res.status(409).json({ error: 'Absen pulang sesi ini sudah tercatat' })
+      }
+      const state = windowState(session)
+      if (!state.canCheckOut) {
+        return res.status(400).json({ error: `Batas absen pulang sudah lewat (pukul ${session.checkOutClose}).` })
+      }
+      const now = new Date()
+      if (now < new Date(existing.checkInTime)) return res.status(400).json({ error: 'Waktu absen pulang tidak valid' })
+      const record = await prisma.staffAttendance.update({
+        where: { id: existing.id },
+        data: {
+          checkOutTime: now,
+          checkOutPhoto: photo,
+          checkOutLatitude: latitude ?? null,
+          checkOutLongitude: longitude ?? null,
+          checkOutLocationName: locationName || null,
+          checkOutVerifyStatus: 'approved',
+          checkOutVerifiedById: null,
+          checkOutVerifiedAt: now,
+          checkOutRejectReason: null,
+        },
+        include: { branch: true, session: true },
+      })
+      return res.json(record)
+    }
+
+    // Head coach: absen pulang harian bebas per cabang.
     if (assignedBranchIds.length > 0) {
       if (!branchId) return res.status(400).json({ error: 'Pilih cabang terlebih dahulu' })
       await assertBranchAccess(req.user.id, branchId)
@@ -96,6 +180,9 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
     if (!existing || !existing.checkInTime) {
       return res.status(400).json({ error: 'Absen masuk dulu di cabang ini sebelum absen pulang' })
     }
+    if (existing.checkOutTime && existing.checkOutVerifyStatus !== 'rejected') {
+      return res.status(409).json({ error: 'Absen pulang hari ini sudah tercatat' })
+    }
     const now = new Date()
     const record = await prisma.staffAttendance.update({
       where: { id: existing.id },
@@ -105,7 +192,6 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
         checkOutLatitude: latitude ?? null,
         checkOutLongitude: longitude ?? null,
         checkOutLocationName: locationName || null,
-        // Sama seperti absen masuk: absen pulang langsung sah.
         checkOutVerifyStatus: 'approved',
         checkOutVerifiedById: null,
         checkOutVerifiedAt: now,
@@ -129,7 +215,10 @@ router.get('/me', authenticate, authorize('coach', 'head_coach'), async (req, re
     const day = startOfDay(req.query.date)
     const records = await prisma.staffAttendance.findMany({
       where: { userId: req.user.id, date: day },
-      include: { branch: true },
+      include: {
+        branch: true,
+        session: { select: { id: true, title: true, type: true, checkInOpen: true, checkInClose: true, checkOutClose: true } },
+      },
     })
     res.json(records)
   } catch (err) {
@@ -165,6 +254,7 @@ router.get('/', authenticate, authorize('admin', 'head_coach'), async (req, res)
         branch: true,
         verifiedBy: { select: { name: true } },
         checkOutVerifiedBy: { select: { name: true } },
+        session: { select: { id: true, title: true, type: true, checkInOpen: true, checkInClose: true, checkOutClose: true } },
       },
       orderBy: { checkInTime: 'desc' },
     })
@@ -211,7 +301,10 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
 
     const records = await prisma.staffAttendance.findMany({
       where: recordWhere,
-      include: { branch: true },
+      include: {
+        branch: true,
+        session: { select: { id: true, title: true, type: true, checkInOpen: true, checkInClose: true, checkOutClose: true } },
+      },
       orderBy: [{ date: 'asc' }, { checkInTime: 'asc' }],
     })
 
@@ -255,6 +348,7 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
           checkOutLocationName: r.checkOutLocationName,
           rejectReason: r.rejectReason,
           checkOutRejectReason: r.checkOutRejectReason,
+          session: r.session,
         })),
       }
     })

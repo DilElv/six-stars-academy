@@ -5,6 +5,7 @@ import { notifyRole, notifyUser } from '../lib/notify.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { applyPaymentSuccess } from '../lib/paymentHelpers.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
+import { ensureEventAttendance } from '../lib/coachAttendance.js'
 
 const router = Router()
 
@@ -137,6 +138,14 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
       link: '/admin/event',
     })
 
+    // Jadwal absensi event/tournament otomatis (jam default, bisa diatur).
+    try {
+      const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
+      await ensureEventAttendance(fullEvent)
+    } catch (syncErr) {
+      console.error('Gagal membuat jadwal absensi event:', syncErr)
+    }
+
     res.status(201).json(event)
   } catch (err) {
     console.error(err)
@@ -160,6 +169,12 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       if (branchIds !== undefined) await setEventBranches(tx, req.params.id, branchIds)
       return updated
     })
+    try {
+      const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
+      await ensureEventAttendance(fullEvent)
+    } catch (syncErr) {
+      console.error('Gagal menyinkronkan jadwal absensi event:', syncErr)
+    }
     res.json(event)
   } catch (err) {
     console.error(err)

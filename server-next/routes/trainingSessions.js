@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyRole } from '../lib/notify.js'
 import { getUserBranchIds, assertBranchAccess } from '../lib/branchAccess.js'
+import { ensureTrainingSessionAttendance } from '../lib/coachAttendance.js'
 
 const router = Router()
 
@@ -84,6 +85,13 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
       })
     }
 
+    // Jadwal absensi coach mengikuti sesi latihan (jam default, bisa diatur).
+    try {
+      await ensureTrainingSessionAttendance(session)
+    } catch (syncErr) {
+      console.error('Gagal membuat jadwal absensi sesi latihan:', syncErr)
+    }
+
     res.status(201).json(session)
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
@@ -120,6 +128,11 @@ router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
         branchId: branchId || undefined,
       },
     })
+    try {
+      await ensureTrainingSessionAttendance(session)
+    } catch (syncErr) {
+      console.error('Gagal menyinkronkan jadwal absensi sesi latihan:', syncErr)
+    }
     res.json(session)
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })

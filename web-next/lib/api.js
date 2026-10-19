@@ -528,6 +528,46 @@ export async function getCoachAttendanceRecap(month, year, branchId) {
   return request(`/staff-attendance/recap?${params.toString()}`)
 }
 
+// Jadwal & jendela waktu absensi coach (menu Absensi Coach > Jadwal & Waktu).
+export async function getCoachAttendanceSessions(params = {}) {
+  const query = new URLSearchParams()
+  if (params.date) query.set('date', params.date)
+  if (params.month) query.set('month', params.month)
+  if (params.year) query.set('year', params.year)
+  if (params.branchId) query.set('branchId', params.branchId)
+  if (params.type) query.set('type', params.type)
+  if (params.status) query.set('status', params.status)
+  return request(`/coach-attendance-sessions${query.size ? `?${query}` : ''}`)
+}
+
+export async function getCoachAttendanceSessionSources(date) {
+  return request(`/coach-attendance-sessions/sources?date=${date}`)
+}
+
+export async function getCoachAttendanceCoaches(branchId) {
+  return request(`/coach-attendance-sessions/coaches${branchId ? `?branchId=${branchId}` : ''}`)
+}
+
+export async function getTodayCoachSessions() {
+  return request('/coach-attendance-sessions/today')
+}
+
+export async function createCoachAttendanceSession(payload) {
+  return request('/coach-attendance-sessions', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateCoachAttendanceSession(id, payload) {
+  return request(`/coach-attendance-sessions/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deleteCoachAttendanceSession(id) {
+  return request(`/coach-attendance-sessions/${id}`, { method: 'DELETE' })
+}
+
+export async function generateCoachAttendanceSessions(month, year) {
+  return request('/coach-attendance-sessions/generate', { method: 'POST', body: JSON.stringify({ month, year }) })
+}
+
 export async function getEvents(ageGroup, branchId, status) {
   const params = new URLSearchParams()
   if (ageGroup) params.set('ageGroup', ageGroup)

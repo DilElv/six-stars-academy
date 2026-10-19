@@ -31,6 +31,7 @@ import eventStaffAttendanceRoutes from './routes/eventStaffAttendance.js'
 import cartRoutes from './routes/cart.js'
 import productsRoutes from './routes/products.js'
 import payrollRoutes from './routes/payroll.js'
+import coachAttendanceSessionsRoutes from './routes/coachAttendanceSessions.js'
 import { startMonthlySessionReset } from './lib/sessionQuota.js'
 import { startPaymentReconciler } from './lib/paymentReconcile.js'
 import { startBpjsBilling } from './lib/bpjsBilling.js'
@@ -62,6 +63,7 @@ app.use('/api/branches', branchesRoutes)
 app.use('/api/fields', fieldsRoutes)
 app.use('/api/events', eventsRoutes)
 app.use('/api/staff-attendance', staffAttendanceRoutes)
+app.use('/api/coach-attendance-sessions', coachAttendanceSessionsRoutes)
 app.use('/api/password-reset', passwordResetRoutes)
 app.use('/api/branch-packages', branchPackagesRoutes)
 app.use('/api/ledger', ledgerRoutes)

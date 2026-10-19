@@ -65,7 +65,7 @@ function drawWatermark(ctx, width, height, { timeText, locationText }) {
 // already knows exactly which branch button was clicked, including the
 // no-branch case for a coach/head-coach with nothing assigned yet), so this
 // modal no longer needs its own branch picker or `getMe()` fetch.
-export default function SelfieCheckinModal({ type = 'checkin', branchId, branchLabel, eventId, onSuccess, onClose }) {
+export default function SelfieCheckinModal({ type = 'checkin', branchId, branchLabel, eventId, sessionId, onSuccess, onClose }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -165,6 +165,7 @@ export default function SelfieCheckinModal({ type = 'checkin', branchId, branchL
         locationName: locationText,
         branchId: branchId || undefined,
         eventId: eventId || undefined,
+        sessionId: sessionId || undefined,
       }
       const record = eventId
         ? (type === 'checkin' ? await api.checkinEventStaff(payload) : await api.checkoutEventStaff(payload))

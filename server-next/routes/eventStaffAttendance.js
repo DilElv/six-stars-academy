@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { notifyUser } from '../lib/notify.js'
+import { windowState, closedMessage } from '../lib/coachAttendance.js'
 
 const router = Router()
 
@@ -14,6 +15,20 @@ function dayStart(value = new Date()) {
 
 function sameDay(a, b = new Date()) {
   return dayStart(a).getTime() === dayStart(b).getTime()
+}
+
+// Jadwal absensi event/tournament yang berlaku untuk cabang coach tersebut.
+async function sessionForEvent(event, branchId) {
+  const day = dayStart(event.date)
+  if (branchId) {
+    const exact = await prisma.coachAttendanceSession.findFirst({
+      where: { eventId: event.id, branchId, date: day, status: 'active' },
+    })
+    if (exact) return exact
+  }
+  return prisma.coachAttendanceSession.findFirst({
+    where: { eventId: event.id, branchId: null, date: day, status: 'active' },
+  })
 }
 
 async function accessibleEvent(userId, eventId, branchId) {
@@ -50,10 +65,23 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
         status: 'open',
         OR: [{ branches: { none: {} } }, { branches: { some: { branchId: { in: branchIds } } } }],
       },
-      include: { branches: { include: { branch: true } }, staffAttendances: { where: { userId: req.user.id }, include: { branch: true } } },
+      include: {
+        branches: { include: { branch: true } },
+        staffAttendances: { where: { userId: req.user.id }, include: { branch: true } },
+        attendanceSessions: { where: { date: start, status: 'active' } },
+      },
       orderBy: { date: 'asc' },
     })
-    res.json(events.map((event) => ({ ...event, myAttendance: event.staffAttendances[0] || null })))
+    res.json(events.map((event) => {
+      const sessions = event.attendanceSessions || []
+      const session = sessions.find((row) => row.branchId && branchIds.includes(row.branchId)) || sessions.find((row) => !row.branchId) || null
+      return {
+        ...event,
+        myAttendance: event.staffAttendances[0] || null,
+        attendanceSession: session,
+        window: session ? windowState(session) : null,
+      }
+    }))
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -65,6 +93,10 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
   if (!eventId || !photo) return res.status(400).json({ error: 'Event dan foto selfie wajib diisi' })
   try {
     const access = await accessibleEvent(req.user.id, eventId, branchId)
+    const session = await sessionForEvent(access.event, access.branchId)
+    if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
+    const state = windowState(session)
+    if (!state.canCheckIn) return res.status(400).json({ error: closedMessage(session, state) })
     const existing = await prisma.eventStaffAttendance.findUnique({ where: { eventId_userId: { eventId, userId: req.user.id } } })
     if (existing?.checkInTime && existing.verifyStatus !== 'rejected') return res.status(409).json({ error: 'Absen masuk event sudah tercatat' })
     const now = new Date()
@@ -86,7 +118,11 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
   const { eventId, branchId, photo, latitude, longitude, locationName } = req.body
   if (!eventId || !photo) return res.status(400).json({ error: 'Event dan foto selfie wajib diisi' })
   try {
-    await accessibleEvent(req.user.id, eventId, branchId)
+    const access = await accessibleEvent(req.user.id, eventId, branchId)
+    const session = await sessionForEvent(access.event, access.branchId)
+    if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
+    const state = windowState(session)
+    if (!state.canCheckOut) return res.status(400).json({ error: `Batas absen pulang event sudah lewat (pukul ${session.checkOutClose}).` })
     const existing = await prisma.eventStaffAttendance.findUnique({ where: { eventId_userId: { eventId, userId: req.user.id } }, include: { event: true } })
     if (!existing?.checkInTime) return res.status(400).json({ error: 'Absen masuk event terlebih dahulu' })
     if (existing.verifyStatus === 'rejected') return res.status(400).json({ error: 'Perbaiki absen masuk yang ditolak terlebih dahulu' })
