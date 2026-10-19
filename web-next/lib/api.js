@@ -175,15 +175,6 @@ export async function deleteProduct(id) {
   return request(`/products/${id}`, { method: 'DELETE' })
 }
 
-// Audit Pembayaran (admin): anomali + jejak audit perubahan.
-export async function getPaymentAudit(days = 90) {
-  return request(`/payments/audit?days=${days}`)
-}
-
-export async function syncPaymentAdmin(id) {
-  return request(`/payments/audit/${id}/sync`, { method: 'POST' })
-}
-
 // Payroll coach (admin) — honor harian x hari hadir (dari absen).
 export async function getPayroll(month, year) {
   return request(`/payroll?month=${month}&year=${year}`)

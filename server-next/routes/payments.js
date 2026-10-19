@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod, isDuplicatePartnerTrxError } from '../lib/rintisan.js'
-import { logPaymentAudit, getPaymentAudit } from '../lib/paymentAudit.js'
+import { logPaymentAudit } from '../lib/paymentAudit.js'
 import { missingProofWhere } from '../lib/paymentProof.js'
 
 const router = Router()
@@ -139,41 +139,6 @@ router.delete('/admin/:id', authenticate, authorize('admin'), async (req, res) =
       note: `Menghapus pembayaran ${payment.paymentType}`,
     })
     res.json({ message: 'Pembayaran dihapus' })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Server error' })
-  }
-})
-
-// Audit Pembayaran (admin): ringkasan + anomali + jejak audit terbaru.
-router.get('/audit', authenticate, authorize('admin'), async (req, res) => {
-  try {
-    const days = Math.max(1, Math.min(365, Math.round(Number(req.query.days) || 90)))
-    res.json(await getPaymentAudit({ days }))
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Server error' })
-  }
-})
-
-// Admin memaksa sinkronisasi satu pembayaran pending ke Rintisan (mis. pending
-// yang macet). Mencatat ke audit bila statusnya berubah menjadi lunas.
-router.post('/audit/:id/sync', authenticate, authorize('admin'), async (req, res) => {
-  try {
-    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } })
-    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
-    const fresh = await syncPaymentWithRintisan(payment)
-    if (payment.status !== 'success' && fresh.status === 'success') {
-      await logPaymentAudit({
-        paymentId: fresh.id,
-        action: 'sync_paid',
-        actor: req.user,
-        studentId: fresh.studentId,
-        amount: fresh.totalAmount,
-        note: 'Sinkronisasi manual oleh admin',
-      })
-    }
-    res.json({ status: fresh.status, paidAt: fresh.paidAt, paymentMethod: fresh.paymentMethod })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

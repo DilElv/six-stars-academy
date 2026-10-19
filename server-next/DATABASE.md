@@ -92,10 +92,10 @@ A single global BPJS premium (Pengaturan > BPJS: `bpjsEnabled`, `bpjsAmount`, `b
 - `startBpjsBilling()` runs at startup and then hourly; it only acts on/after `bpjsDay` and only when the feature is enabled with an amount > 0. Because the insert is idempotent, a student enrolled mid-month still gets billed on the next sweep.
 - Admin endpoints: `GET /settings/bpjs/status` (eligible vs. billed counts for a period) and `POST /settings/bpjs/run` (`{ month?, year?, amount?, studentIds? }`) — the latter backs Pengaturan's "Tagih Sekarang" button.
 
-### Audit Pembayaran (`payment_audit_logs`)
-`lib/paymentAudit.js` powers the admin Audit page (`GET /payments/audit`, `POST /payments/audit/:id/sync`). It does two things:
-- **Anomaly detection** (`detectPaymentAnomalies`) over payments from the last N days *plus* any still-`pending` row: a `pending` older than 24 h (`stuck_pending`), a `success` with no `effectsAppliedAt` on a renewal/event/cart (`success_no_effects`), a `cart` payment whose `totalAmount` ≠ the sum of its `CartItem.amount` (`cart_total_mismatch`), a pending row with no `transactionId` (`missing_gateway_ref`), and duplicate pending rows for the same student/type/amount (`duplicate_pending`).
-- **Change trail** — one `PaymentAuditLog` row per notable action: admin `edit`/`delete`, parent `cancel`, gateway `callback_paid`/`callback_failed`, background `reconcile_paid`, and manual admin `sync_paid`. Each stores `actorId`/`actorRole`, `studentId`, `amount`, a `before`/`after` snapshot (for edits) and a human-readable `note`. `paymentId` is a plain column (no FK) so the trail survives a hard-deleted payment; `actorId` is `ON DELETE SET NULL`.
+### Jejak audit pembayaran (`payment_audit_logs`)
+`lib/paymentAudit.js` mencatat **change trail** — satu `PaymentAuditLog` row per notable action: admin `edit`/`delete`, parent `cancel`, gateway `callback_paid`/`callback_failed`, background `reconcile_paid`, dan `proof_uploaded`. Each stores `actorId`/`actorRole`, `studentId`, `amount`, a `before`/`after` snapshot (for edits) and a human-readable `note`. `paymentId` is a plain column (no FK) so the trail survives a hard-deleted payment; `actorId` is `ON DELETE SET NULL`.
+
+> Halaman "Audit Pembayaran", pendeteksi anomalinya (`detectPaymentAnomalies`), dan endpoint `GET /payments/audit` / `POST /payments/audit/:id/sync` sudah **dihapus**. Penulisan jejak audit (`logPaymentAudit`) tetap berjalan karena dipakai alur pembayaran & rekonsiliasi.
 
 ### `PendingRegistration` (`pending_registrations`)
 **A new student's account does not exist until their first payment succeeds.** When someone fills out the public registration wizard (`POST /auth/register`), this table stores all their wizard data (name, DOB, parent info, hashed password, chosen package, computed amounts, promo code) plus the Rintisan billing link — keyed by this row's own `id` (used as Rintisan's `partner_trx_id`). No `User`/`Student`/`Payment` row exists yet.
