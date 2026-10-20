@@ -119,7 +119,7 @@ export async function ensureTrainingSessionAttendance(trainingSession, defaults 
 // Event dengan daftar cabang mendapat satu jadwal per cabang; event "semua
 // cabang" memakai satu jadwal branchId null. Jam yang sudah diatur tidak
 // ditimpa.
-export async function ensureEventAttendance(event, defaults = DEFAULT_WINDOWS) {
+export async function ensureEventAttendance(event, defaults = DEFAULT_WINDOWS, { coachIds } = {}) {
   if (!event) return []
   const date = startOfDay(event.date)
   const type = event.type === 'tournament' ? 'tournament' : 'event'
@@ -138,8 +138,32 @@ export async function ensureEventAttendance(event, defaults = DEFAULT_WINDOWS) {
         data: { type, title: event.title, date, branchId, eventId: event.id, ...defaults },
       }))
     }
+    // coachIds undefined = jangan sentuh penugasan yang sudah ada.
+    if (Array.isArray(coachIds)) await setSessionCoaches(out[out.length - 1].id, coachIds)
   }
   return out
+}
+
+// Ganti daftar coach yang ditugaskan pada satu sesi. Kosong = semua coach cabang.
+export async function setSessionCoaches(sessionId, coachIds) {
+  const ids = [...new Set((coachIds || []).filter(Boolean))]
+  await prisma.$transaction([
+    prisma.coachAttendanceSessionCoach.deleteMany({ where: { sessionId, ...(ids.length ? { userId: { notIn: ids } } : {}) } }),
+    ...(ids.length
+      ? [prisma.coachAttendanceSessionCoach.createMany({ data: ids.map((userId) => ({ sessionId, userId })), skipDuplicates: true })]
+      : []),
+  ])
+  return ids
+}
+
+// Coach boleh absen di sesi ini bila tidak ada penugasan (semua coach cabang),
+// atau namanya termasuk dalam daftar. `coachId` lama (sesi latihan) tetap berlaku.
+export async function isCoachAssigned(session, userId) {
+  if (session.coachId) return session.coachId === userId
+  const assigned = session.assignedCoaches
+    ? session.assignedCoaches.map((row) => row.userId)
+    : (await prisma.coachAttendanceSessionCoach.findMany({ where: { sessionId: session.id }, select: { userId: true } })).map((row) => row.userId)
+  return assigned.length === 0 || assigned.includes(userId)
 }
 
 // Dipakai tombol "Generate Jadwal Bulan Ini": melengkapi jadwal untuk semua

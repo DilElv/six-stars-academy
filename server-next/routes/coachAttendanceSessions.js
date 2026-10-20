@@ -9,6 +9,7 @@ import {
   assertManageSession,
   ensureTrainingSessionAttendance,
   generateMonthAttendanceSessions,
+  setSessionCoaches,
 } from '../lib/coachAttendance.js'
 
 const router = Router()
@@ -18,6 +19,7 @@ const SESSION_INCLUDE = {
   coach: { select: { id: true, name: true, photo: true } },
   trainingSession: { select: { id: true, topicTitle: true, ageGroup: true, duration: true } },
   event: { select: { id: true, title: true, type: true } },
+  assignedCoaches: { include: { user: { select: { id: true, name: true, photo: true } } } },
   _count: { select: { attendances: true } },
 }
 
@@ -189,7 +191,7 @@ router.get('/sources', authenticate, authorize('admin', 'head_coach'), async (re
 
 // Buat jadwal manual atau dari sesi latihan / event.
 router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
-  const { type, title, date, branchId, coachId, trainingSessionId, eventId, note, status } = req.body || {}
+  const { type, title, date, branchId, coachId, coachIds, trainingSessionId, eventId, note, status } = req.body || {}
   const times = normalizeWindow(req.body || {})
   if (times.error) return res.status(400).json({ error: times.error })
   if (!date && !trainingSessionId && !eventId) return res.status(400).json({ error: 'Tanggal wajib diisi' })
@@ -259,11 +261,45 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
 
     const created = await prisma.coachAttendanceSession.create({
       data: { ...data, createdById: req.user.id },
-      include: SESSION_INCLUDE,
     })
-    res.status(201).json(created)
+    // Jadwal event/manual boleh punya banyak coach bertugas; kosong = semua coach cabang.
+    if (Array.isArray(coachIds)) await setSessionCoaches(created.id, coachIds)
+    res.status(201).json(await prisma.coachAttendanceSession.findUnique({ where: { id: created.id }, include: SESSION_INCLUDE }))
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Atur coach bertugas untuk banyak jadwal sekaligus (mis. seluruh event satu bulan).
+router.put('/coaches', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  const { month, year, date, type, coachIds } = req.body || {}
+  if (!Array.isArray(coachIds)) return res.status(400).json({ error: 'coachIds wajib berupa daftar (boleh kosong = semua coach)' })
+  try {
+    const where = {}
+    if (month && year) where.date = monthRange(Number(month), Number(year))
+    else if (date) where.date = startOfDay(date)
+    else return res.status(400).json({ error: 'Pilih bulan atau tanggal' })
+    // Penugasan massal hanya untuk event/tournament; sesi latihan punya coach sendiri.
+    where.type = type && ['event', 'tournament'].includes(type) ? type : { in: ['event', 'tournament'] }
+
+    const branchIds = await headCoachBranchIds(req)
+    const requestedBranch = req.body.branchId || null
+    if (branchIds) {
+      if (requestedBranch && !branchIds.includes(requestedBranch)) {
+        return res.status(403).json({ error: 'Anda tidak memiliki akses ke cabang ini' })
+      }
+      if (requestedBranch) where.branchId = requestedBranch
+      else where.OR = [{ branchId: { in: branchIds } }, { branchId: null }]
+    } else if (requestedBranch) {
+      where.branchId = requestedBranch
+    }
+
+    const sessions = await prisma.coachAttendanceSession.findMany({ where, select: { id: true } })
+    for (const session of sessions) await setSessionCoaches(session.id, coachIds)
+    res.json({ updated: sessions.length })
+  } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }
@@ -313,7 +349,7 @@ router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, r
     const times = normalizeWindow({ ...existing, ...(req.body || {}) })
     if (times.error) return res.status(400).json({ error: times.error })
 
-    const { title, date, branchId, coachId, note, status } = req.body || {}
+    const { title, date, branchId, coachId, coachIds, note, status } = req.body || {}
     if (status !== undefined && !['active', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Status tidak valid' })
     }
@@ -334,12 +370,9 @@ router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, r
       }
     }
 
-    const updated = await prisma.coachAttendanceSession.update({
-      where: { id: existing.id },
-      data,
-      include: SESSION_INCLUDE,
-    })
-    res.json(updated)
+    await prisma.coachAttendanceSession.update({ where: { id: existing.id }, data })
+    if (Array.isArray(coachIds)) await setSessionCoaches(existing.id, coachIds)
+    res.json(await prisma.coachAttendanceSession.findUnique({ where: { id: existing.id }, include: SESSION_INCLUDE }))
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)

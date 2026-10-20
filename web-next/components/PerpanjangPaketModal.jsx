@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { RefreshCw, Loader2, Check, ReceiptText, Banknote } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import ModalPortal from '@/components/ui/modal-portal'
 
@@ -193,7 +194,7 @@ export default function PerpanjangPaketModal({ student, branches = [], packages 
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                  <AppSelect
+                  <BranchSelect
                     value={branchId}
                     onChange={(v) => { setBranchId(v); setPackageId('') }}
                     className="w-full"

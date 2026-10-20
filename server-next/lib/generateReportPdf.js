@@ -32,10 +32,11 @@ async function fetchImageBuffer(url) {
   }
 }
 
-export async function generateReportPdf({ student, assessment, month, year, endMonth, endYear, settings, headCoachName, headCoachSignature, attendanceSummary }) {
-  const [photoBuffer, signatureBuffer, commentTokens] = await Promise.all([
+export async function generateReportPdf({ student, assessment, month, year, endMonth, endYear, settings, headCoachName, headCoachSignature, coachName, coachSignature, attendanceSummary }) {
+  const [photoBuffer, signatureBuffer, coachSignatureBuffer, commentTokens] = await Promise.all([
     fetchImageBuffer(student.photo),
     fetchImageBuffer(headCoachSignature),
+    fetchImageBuffer(coachSignature),
     buildRichTextTokens(assessment.coachComment || '-'),
   ])
   const periodEndMonth = endMonth || month
@@ -74,7 +75,7 @@ export async function generateReportPdf({ student, assessment, month, year, endM
 
     drawOverallBox(doc, assessment)
     drawComment(doc, commentTokens)
-    drawFooter(doc, headCoachName, signatureBuffer)
+    drawFooter(doc, headCoachName, signatureBuffer, coachName, coachSignatureBuffer)
 
     doc.end()
   })
@@ -278,24 +279,29 @@ function drawComment(doc, commentTokens) {
   doc.x = CONTENT_X
 }
 
-function drawFooter(doc, headCoachName, signatureBuffer) {
+function drawFooter(doc, headCoachName, signatureBuffer, coachName, coachSignatureBuffer) {
   ensureSpace(doc, 80)
   doc.fontSize(8).fillColor('#666666').font('NotoSans')
   doc.text(`Dibuat: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   if (headCoachName) doc.text(`Head Coach: ${headCoachName}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
+  if (coachName) doc.text(`Coach: ${coachName}`, CONTENT_X, doc.y, { width: CONTENT_WIDTH })
   doc.moveDown(0.5)
 
   const signatureBoxW = 160
   const signatureBoxH = 50
   const top = doc.y
-  if (signatureBuffer) {
-    try {
-      doc.image(signatureBuffer, CONTENT_X, top, { fit: [signatureBoxW, signatureBoxH] })
-    } catch {
-      // corrupted signature image — fall through to the blank line below
+  // Dua kolom: Head Coach di kiri, Coach penilai di kanan (bila ada).
+  const columns = [{ x: CONTENT_X, buffer: signatureBuffer, label: 'Tanda Tangan Head Coach' }]
+  if (coachName) columns.push({ x: CONTENT_X + CONTENT_WIDTH / 2, buffer: coachSignatureBuffer, label: 'Tanda Tangan Coach' })
+  for (const column of columns) {
+    if (column.buffer) {
+      try {
+        doc.image(column.buffer, column.x, top, { fit: [signatureBoxW, signatureBoxH] })
+      } catch {
+        // corrupted signature image — fall through to the blank line below
+      }
     }
+    doc.text(column.label, column.x, top + signatureBoxH + 2, { width: CONTENT_WIDTH / 2 - 8 })
   }
-  doc.y = top + signatureBoxH + 2
   doc.x = CONTENT_X
-  doc.text('Tanda Tangan Head Coach', CONTENT_X, doc.y, { width: CONTENT_WIDTH })
 }

@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { notifyUser } from '../lib/notify.js'
-import { windowState, closedMessage } from '../lib/coachAttendance.js'
+import { windowState, closedMessage, isCoachAssigned } from '../lib/coachAttendance.js'
 
 const router = Router()
 
@@ -68,20 +68,24 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
       include: {
         branches: { include: { branch: true } },
         staffAttendances: { where: { userId: req.user.id }, include: { branch: true } },
-        attendanceSessions: { where: { date: start, status: 'active' } },
+        attendanceSessions: { where: { date: start, status: 'active' }, include: { assignedCoaches: true } },
       },
       orderBy: { date: 'asc' },
     })
-    res.json(events.map((event) => {
+    // Hanya coach yang ditugaskan (atau semua coach bila belum ada penugasan).
+    const rows = []
+    for (const event of events) {
       const sessions = event.attendanceSessions || []
       const session = sessions.find((row) => row.branchId && branchIds.includes(row.branchId)) || sessions.find((row) => !row.branchId) || null
-      return {
+      if (session && !(await isCoachAssigned(session, req.user.id))) continue
+      rows.push({
         ...event,
         myAttendance: event.staffAttendances[0] || null,
         attendanceSession: session,
         window: session ? windowState(session) : null,
-      }
-    }))
+      })
+    }
+    res.json(rows)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -95,6 +99,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
     const access = await accessibleEvent(req.user.id, eventId, branchId)
     const session = await sessionForEvent(access.event, access.branchId)
     if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
+    if (!(await isCoachAssigned(session, req.user.id))) return res.status(403).json({ error: 'Anda tidak ditugaskan pada event ini' })
     const state = windowState(session)
     if (!state.canCheckIn) return res.status(400).json({ error: closedMessage(session, state) })
     const existing = await prisma.eventStaffAttendance.findUnique({ where: { eventId_userId: { eventId, userId: req.user.id } } })
@@ -121,6 +126,7 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
     const access = await accessibleEvent(req.user.id, eventId, branchId)
     const session = await sessionForEvent(access.event, access.branchId)
     if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
+    if (!(await isCoachAssigned(session, req.user.id))) return res.status(403).json({ error: 'Anda tidak ditugaskan pada event ini' })
     const state = windowState(session)
     if (!state.canCheckOut) return res.status(400).json({ error: `Batas absen pulang event sudah lewat (pukul ${session.checkOutClose}).` })
     const existing = await prisma.eventStaffAttendance.findUnique({ where: { eventId_userId: { eventId, userId: req.user.id } }, include: { event: true } })

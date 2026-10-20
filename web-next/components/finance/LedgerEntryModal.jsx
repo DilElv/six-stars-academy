@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/ledgerCategories'
 
@@ -88,7 +89,7 @@ export default function LedgerEntryModal({ type, entry, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang (opsional)</label>
-            <AppSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: v }))} className="w-full" allLabel="- Semua Cabang -" placeholder="- Semua Cabang -" options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))} />
+            <BranchSelect value={form.branchId} onChange={(v) => setForm((f) => ({ ...f, branchId: v }))} className="w-full" allLabel="- Semua Cabang -" placeholder="- Semua Cabang -" options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))} />
           </div>
           <button type="submit" disabled={saving} className={`w-full flex items-center justify-center gap-2 text-white font-bold py-2.5 rounded-2xl disabled:opacity-50 ${isIncome ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}>
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan

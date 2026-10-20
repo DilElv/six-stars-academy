@@ -199,7 +199,7 @@ export default function ParentDasborPage() {
               <div key={s.id} className="rounded-2xl border-2 border-gold-300 bg-gold-50/50 p-3.5">
                 <div className="font-bold text-navy-900 text-sm">{s.topicTitle}</div>
                 {s.topicDescription && <p className="text-xs text-gray-500 mt-1">{s.topicDescription}</p>}
-                {s.field?.name && <div className="text-xs text-gold-700 font-semibold mt-1 flex items-center gap-1"><MapPin size={11} /> {s.field.name}</div>}
+                {(s.field?.name || s.fieldName) && <div className="text-xs text-gold-700 font-semibold mt-1 flex items-center gap-1"><MapPin size={11} /> {s.field?.name || s.fieldName}</div>}
               </div>
             ))}
           </div>
@@ -221,11 +221,11 @@ export default function ParentDasborPage() {
                   <div className="font-semibold text-navy-900 text-sm truncate">{s.topicTitle}</div>
                   <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
                     <span>{new Date(s.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-                    {s.field?.name && (
+                    {(s.field?.name || s.fieldName) && (
                       <>
                         <span>·</span>
                         <MapPin size={11} className="shrink-0" />
-                        <span>{s.field.name}</span>
+                        <span>{s.field?.name || s.fieldName}</span>
                       </>
                     )}
                   </div>

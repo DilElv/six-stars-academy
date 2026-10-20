@@ -43,7 +43,7 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
 })
 
 router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, branchId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, fieldName, branchId } = req.body
   try {
     if (!Array.isArray(ageGroups) || ageGroups.length === 0) return res.status(400).json({ error: 'Pilih minimal satu kelompok umur' })
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
@@ -73,6 +73,8 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
         duration,
         equipment,
         fieldId: fieldId || null,
+        // Lapangan yang diketik manual hanya dipakai bila tidak memilih dari daftar.
+        fieldName: fieldId ? null : (String(fieldName || '').trim().slice(0, 80) || null),
         branchId: branchId || null,
       },
     })
@@ -101,7 +103,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 })
 
 router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
-  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, branchId } = req.body
+  const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, fieldName, branchId } = req.body
   try {
     if (req.user.role === 'coach' && branchId) {
       await assertBranchAccess(req.user.id, branchId)
@@ -124,7 +126,8 @@ router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
         objective,
         duration,
         equipment,
-        fieldId: fieldId !== undefined ? (fieldId || null) : undefined,
+        fieldId: fieldId !== undefined ? (fieldId || null) : (fieldName ? null : undefined),
+        fieldName: fieldId ? null : (fieldName !== undefined ? (String(fieldName || '').trim().slice(0, 80) || null) : undefined),
         branchId: branchId || undefined,
       },
     })

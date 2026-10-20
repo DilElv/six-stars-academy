@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import StudentDetailModal from '@/components/StudentDetailModal'
 import AddStudentModal from '@/components/AddStudentModal'
@@ -536,7 +537,7 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-            <AppSelect
+            <BranchSelect
               value={form.branchId}
               onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
               className="w-full"

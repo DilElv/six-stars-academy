@@ -15,7 +15,9 @@ function dateKey(d) {
   return format(d, 'yyyy-MM-dd')
 }
 
-const emptyTopicForm = { topicTitle: '', ageGroups: [], topicDescription: '', objective: '', duration: '', equipment: '', fieldId: '' }
+const MANUAL_FIELD = '__manual_field__'
+
+const emptyTopicForm = { topicTitle: '', ageGroups: [], topicDescription: '', objective: '', duration: '', equipment: '', fieldId: '', fieldName: '' }
 
 /**
  * Shared calendar + selected-date detail panel for jadwal latihan, reused by
@@ -98,7 +100,8 @@ export default function JadwalCalendar({
       await api.createTrainingSession({
         ...topicForm,
         date: dateKey(selectedDate),
-        fieldId: topicForm.fieldId || undefined,
+        fieldId: topicForm.fieldId && topicForm.fieldId !== MANUAL_FIELD ? topicForm.fieldId : undefined,
+        fieldName: topicForm.fieldId === MANUAL_FIELD ? topicForm.fieldName.trim() : undefined,
         branchId,
       })
       setShowTopicForm(false)
@@ -235,7 +238,7 @@ export default function JadwalCalendar({
                       </div>
                       {s.topicDescription && <p className="text-xs text-gray-500 mt-1.5">{s.topicDescription}</p>}
                       <div className="flex flex-wrap gap-3 text-[11px] text-gray-400 mt-1.5">
-                        {s.field?.name && <span>📍 {s.field.name}</span>}
+                        {(s.field?.name || s.fieldName) && <span>📍 {s.field?.name || s.fieldName}</span>}
                         {s.objective && <span>Tujuan: {s.objective}</span>}
                         {s.duration && <span>Durasi: {s.duration}</span>}
                         {s.equipment && <span>Peralatan: {s.equipment}</span>}
@@ -284,8 +287,19 @@ export default function JadwalCalendar({
                   className="w-full"
                   allLabel="- Pilih Lapangan -"
                   placeholder="- Pilih Lapangan -"
-                  options={fields.map((f) => ({ value: f.id, label: f.name }))}
+                  options={[...fields.map((f) => ({ value: f.id, label: f.name })), { value: MANUAL_FIELD, label: 'Lapangan lain (ketik manual)' }]}
                 />
+                {topicForm.fieldId === MANUAL_FIELD && (
+                  <input
+                    autoFocus
+                    required
+                    maxLength={80}
+                    placeholder="Ketik nama lapangan, mis. Lapangan GOR Kelurahan"
+                    value={topicForm.fieldName}
+                    onChange={(e) => setTopicForm((f) => ({ ...f, fieldName: e.target.value }))}
+                    className="mt-2 w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

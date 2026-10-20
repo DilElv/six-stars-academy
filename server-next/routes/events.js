@@ -50,6 +50,7 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
       include: {
         createdBy: { select: { name: true } },
         branches: { include: { branch: { select: { id: true, name: true, code: true } } } },
+        attendanceSessions: { select: { assignedCoaches: { select: { user: { select: { id: true, name: true } } } } } },
         _count: { select: { participants: true } },
       },
       orderBy: { date: 'desc' },
@@ -93,6 +94,7 @@ router.get('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
       include: {
         createdBy: { select: { name: true, email: true } },
         branches: { include: { branch: { select: { id: true, name: true, code: true } } } },
+        attendanceSessions: { select: { branchId: true, assignedCoaches: { select: { user: { select: { id: true, name: true } } } } } },
         participants: {
           include: {
             student: {
@@ -113,7 +115,7 @@ router.get('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
 })
 
 router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds } = req.body
+  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds, coachIds } = req.body
   if (!date || isNaN(new Date(date).getTime())) return res.status(400).json({ error: 'Tanggal event tidak valid' })
   try {
     const event = await prisma.$transaction(async (tx) => {
@@ -141,7 +143,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
     // Jadwal absensi event/tournament otomatis (jam default, bisa diatur).
     try {
       const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
-      await ensureEventAttendance(fullEvent)
+      await ensureEventAttendance(fullEvent, undefined, { coachIds })
     } catch (syncErr) {
       console.error('Gagal membuat jadwal absensi event:', syncErr)
     }
@@ -154,7 +156,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
 })
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds } = req.body
+  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds, coachIds } = req.body
   try {
     const event = await prisma.$transaction(async (tx) => {
       const updated = await tx.event.update({
@@ -171,7 +173,7 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
     })
     try {
       const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
-      await ensureEventAttendance(fullEvent)
+      await ensureEventAttendance(fullEvent, undefined, { coachIds })
     } catch (syncErr) {
       console.error('Gagal menyinkronkan jadwal absensi event:', syncErr)
     }

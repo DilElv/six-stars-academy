@@ -425,6 +425,19 @@ export async function updateBpjsSettings(payload) {
   return request('/settings/bpjs', { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+// Semua anak + status BPJS (dikecualikan / sudah ditagih) untuk periode terpilih.
+export async function getBpjsStudents(month, year) {
+  const params = new URLSearchParams()
+  if (month) params.set('month', month)
+  if (year) params.set('year', year)
+  return request(`/settings/bpjs/students?${params.toString()}`)
+}
+
+// { exemptIds: [...], includeIds: [...] } — kecualikan / tagih lagi.
+export async function updateBpjsStudents(payload) {
+  return request('/settings/bpjs/students', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
 export async function runBpjsBilling(payload = {}) {
   return request('/settings/bpjs/run', { method: 'POST', body: JSON.stringify(payload) })
 }
@@ -439,6 +452,11 @@ export async function getBranches() {
 
 export async function createBranch(payload) {
   return request('/branches', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+// Buat cabang baru hanya dari nama (opsi "ketik manual" di form).
+export async function quickCreateBranch(name) {
+  return request('/branches/quick', { method: 'POST', body: JSON.stringify({ name }) })
 }
 
 export async function updateBranch(id, payload) {
@@ -571,6 +589,11 @@ export async function generateCoachAttendanceSessions(month, year) {
 // Atur jam absen untuk semua jadwal pada bulan/cabang terpilih sekaligus.
 export async function setCoachAttendanceSessionWindow(payload) {
   return request('/coach-attendance-sessions/window', { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+// Atur coach bertugas untuk semua event/tournament pada bulan/cabang terpilih.
+export async function setCoachAttendanceSessionCoaches(payload) {
+  return request('/coach-attendance-sessions/coaches', { method: 'PUT', body: JSON.stringify(payload) })
 }
 
 export async function getEvents(ageGroup, branchId, status) {

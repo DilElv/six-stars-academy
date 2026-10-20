@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 import { POSITIONS } from '@/lib/positions'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { totalSessionsFor } from '@/lib/sessionInfo'
@@ -161,7 +162,7 @@ export default function AddStudentModal({ branches, packages, canManageScholarsh
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                  <AppSelect
+                  <BranchSelect
                     value={form.branchId}
                     onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
                     className="w-full"

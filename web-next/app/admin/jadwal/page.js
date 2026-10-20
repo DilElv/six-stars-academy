@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
 import { DatePicker, MultiDatePicker } from '@/components/ui/date-picker'
 import JadwalCalendar from '@/components/JadwalCalendar'
 import ModalPortal from '@/components/ui/modal-portal'
@@ -164,7 +165,7 @@ export default function AdminJadwalPage() {
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
-                <AppSelect
+                <BranchSelect
                   value={form.branchId}
                   onChange={(v) => setForm((f) => ({ ...f, branchId: v, dates: [] }))}
                   className="w-full"

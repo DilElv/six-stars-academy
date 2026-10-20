@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react'
 import { Save, Loader2, Upload } from 'lucide-react'
 import * as api from '@/lib/api'
 import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
+import SignaturePad from '@/components/SignaturePad'
+
+function dataUrlToFile(dataUrl, filename) {
+  const [header, base64] = dataUrl.split(',')
+  const mime = header.match(/:(.*?);/)[1]
+  const bytes = atob(base64)
+  const arr = new Uint8Array(bytes.length)
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+  return new File([arr], filename, { type: mime })
+}
 
 export default function CoachProfilPage() {
   const [form, setForm] = useState(null)
@@ -11,10 +21,12 @@ export default function CoachProfilPage() {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  // undefined = signature untouched this session, null = cleared, string = freshly drawn (data URL, not yet uploaded)
+  const [signatureDataUrl, setSignatureDataUrl] = useState(undefined)
 
   useEffect(() => {
     api.getMe().then((profile) => {
-      setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', bio: profile.bio || '', email: profile.email || '', address: profile.address || '' })
+      setForm({ name: profile.name, phone: profile.phone || '', photo: profile.photo || '', signature: profile.signature || '', bio: profile.bio || '', email: profile.email || '', address: profile.address || '' })
       setBranchName(profile.branches?.length ? profile.branches.map((b) => `${b.branch.name} (${b.branch.code})`).join(', ') : 'Belum ditentukan')
     })
   }, [])
@@ -35,7 +47,15 @@ export default function CoachProfilPage() {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.updateMe(form)
+      const payload = { ...form }
+      if (signatureDataUrl === null) {
+        payload.signature = null
+      } else if (signatureDataUrl) {
+        payload.signature = await api.uploadFile(dataUrlToFile(signatureDataUrl, 'signature.png'))
+      }
+      await api.updateMe(payload)
+      setForm(payload)
+      setSignatureDataUrl(undefined)
       setMessage('Profil berhasil disimpan')
     } catch (err) {
       setMessage(err.message)
@@ -116,6 +136,15 @@ export default function CoachProfilPage() {
             rows={3}
             className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Tanda Tangan</label>
+          <SignaturePad
+            initialImage={form.signature || null}
+            onChange={setSignatureDataUrl}
+          />
+          <p className="text-[11px] text-gray-400 mt-1">Tanda tangan ini otomatis dipakai di bagian tanda tangan Rapor bulanan yang Anda buat.</p>
         </div>
 
         <button

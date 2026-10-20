@@ -50,7 +50,7 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.get('/all', authenticate, authorize('admin'), async (_req, res) => {
+router.get('/all', authenticate, authorize('admin', 'head_coach'), async (_req, res) => {
   try {
     const products = await prisma.product.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
     res.json(products)
@@ -60,7 +60,7 @@ router.get('/all', authenticate, authorize('admin'), async (_req, res) => {
   }
 })
 
-router.post('/', authenticate, authorize('admin'), async (req, res) => {
+router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   const { data, error } = parseProductInput(req.body)
   if (error) return res.status(400).json({ error })
   try {
@@ -72,7 +72,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
   }
 })
 
-router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   const { data, error } = parseProductInput(req.body, { partial: true })
   if (error) return res.status(400).json({ error })
   try {
@@ -85,7 +85,7 @@ router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
   }
 })
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
     const used = await prisma.cartItem.count({ where: { productId: req.params.id } })
     if (used > 0) {

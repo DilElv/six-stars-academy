@@ -13,7 +13,7 @@ import ModalPortal from '@/components/ui/modal-portal'
 
 const emptyForm = {
   title: '', description: '', type: 'tournament', ageGroups: [],
-  date: '', registrationDeadline: '', location: '', fee: 0, branchIds: [], allBranches: true,
+  date: '', registrationDeadline: '', location: '', fee: 0, branchIds: [], allBranches: true, coachIds: [],
 }
 
 const TYPE_OPTIONS = [
@@ -31,15 +31,19 @@ function formatRupiah(n) {
 export default function HeadCoachEventPage() {
   const [events, setEvents] = useState([])
   const [branches, setBranches] = useState([])
+  const [coaches, setCoaches] = useState([])
+  const [newBranchName, setNewBranchName] = useState('')
+  const [addingBranch, setAddingBranch] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   async function load() {
-    const [evts, brs] = await Promise.all([api.getEvents('', '', ''), api.getBranches()])
+    const [evts, brs, cs] = await Promise.all([api.getEvents('', '', ''), api.getBranches(), api.getCoachAttendanceCoaches().catch(() => [])])
     setEvents(evts)
     setBranches(brs)
+    setCoaches(cs)
   }
 
   useEffect(() => { load() }, [])
@@ -48,6 +52,27 @@ export default function HeadCoachEventPage() {
     setForm(emptyForm)
     setError('')
     setShowForm(true)
+  }
+
+  const eventCoachOptions = coaches
+    .filter((c) => form.allBranches || c.branches?.some((b) => form.branchIds.includes(b.branch.id)))
+    .map((c) => ({ value: c.id, label: c.role === 'head_coach' ? `${c.name} (Head Coach)` : c.name }))
+
+  // Cabang yang diketik manual dibuat sungguhan, lalu langsung dicentang.
+  async function addBranch() {
+    if (newBranchName.trim().length < 2) return
+    setAddingBranch(true)
+    setError('')
+    try {
+      const branch = await api.quickCreateBranch(newBranchName)
+      setBranches((prev) => (prev.some((b) => b.id === branch.id) ? prev : [...prev, branch]))
+      setForm((f) => ({ ...f, branchIds: f.branchIds.includes(branch.id) ? f.branchIds : [...f.branchIds, branch.id] }))
+      setNewBranchName('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAddingBranch(false)
+    }
   }
 
   async function handleCreate(e) {
@@ -177,12 +202,39 @@ export default function HeadCoachEventPage() {
                 {form.allBranches ? (
                   <p className="text-[11px] text-gray-400">Berlaku untuk semua cabang.</p>
                 ) : (
+                  <>
+                    <MultiSelectCheckbox
+                      options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+                      values={form.branchIds}
+                      onChange={(vals) => setForm((f) => ({ ...f, branchIds: vals }))}
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        value={newBranchName}
+                        onChange={(e) => setNewBranchName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBranch() } }}
+                        placeholder="Cabang lain? Ketik nama cabang baru"
+                        className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs"
+                      />
+                      <button type="button" onClick={addBranch} disabled={addingBranch || newBranchName.trim().length < 2} className="text-xs font-semibold text-navy-700 border border-gray-200 hover:border-gold-300 rounded-xl px-3 py-2 disabled:opacity-50">
+                        {addingBranch ? 'Menambah...' : '+ Tambah'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Coach Bertugas</label>
+                {eventCoachOptions.length === 0 ? (
+                  <p className="text-[11px] text-gray-400">Tidak ada coach pada cabang terpilih.</p>
+                ) : (
                   <MultiSelectCheckbox
-                    options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
-                    values={form.branchIds}
-                    onChange={(vals) => setForm((f) => ({ ...f, branchIds: vals }))}
+                    options={eventCoachOptions}
+                    values={form.coachIds}
+                    onChange={(vals) => setForm((f) => ({ ...f, coachIds: vals }))}
                   />
                 )}
+                <p className="text-[11px] text-gray-400 mt-1">Kosongkan bila semua coach di cabang boleh absen. Bisa diubah lagi di menu Absensi Coach.</p>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>

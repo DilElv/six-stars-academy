@@ -40,6 +40,12 @@ router.post('/generate', authenticate, authorize('coach', 'head_coach', 'admin')
     if (!student) return res.status(404).json({ error: 'Siswa tidak ditemukan' })
     if (!assessment) return res.status(400).json({ error: 'Belum ada penilaian untuk periode ini' })
 
+    // Coach penilai ikut menandatangani rapor (head coach tetap di sisi lain).
+    const assessor = assessment.coachId
+      ? await prisma.user.findUnique({ where: { id: assessment.coachId }, select: { name: true, role: true, signature: true } })
+      : null
+    const coach = assessor?.role === 'coach' ? assessor : null
+
     const periodStart = new Date(year, month - 1, 1)
     const periodEnd = new Date(endYear, endMonth, 1)
     const periodAttendances = await prisma.attendance.findMany({
@@ -57,7 +63,8 @@ router.post('/generate', authenticate, authorize('coach', 'head_coach', 'admin')
     const settings = { ssbName: 'SixStars Academy Indonesia', ...(settingsRow?.content || {}) }
     const pdfBuffer = await generateReportPdf({
       student, assessment, month, year, endMonth, endYear, settings,
-      headCoachName: headCoach?.name, headCoachSignature: headCoach?.signature, attendanceSummary,
+      headCoachName: headCoach?.name, headCoachSignature: headCoach?.signature,
+      coachName: coach?.name, coachSignature: coach?.signature, attendanceSummary,
     })
     const fileName = endMonth === month && endYear === year
       ? `${student.studentId}-${year}-${month}.pdf`

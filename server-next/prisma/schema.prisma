@@ -54,6 +54,7 @@ model User {
   generatedPayrolls        CoachPayroll[]    @relation("CoachPayrollGeneratedBy")
   coachAttendanceSessions        CoachAttendanceSession[] @relation("CoachAttendanceSessionCoach")
   createdCoachAttendanceSessions CoachAttendanceSession[] @relation("CoachAttendanceSessionCreator")
+  assignedAttendanceSessions     CoachAttendanceSessionCoach[]
 
   @@map("users")
 }
@@ -176,9 +177,26 @@ model CoachAttendanceSession {
 
   attendances StaffAttendance[]
 
+  // Coach yang ditugaskan (banyak). Kosong = semua coach di cabang (perilaku
+  // lama); `coachId` di atas tetap dipakai sesi latihan (satu coach).
+  assignedCoaches CoachAttendanceSessionCoach[]
+
   @@index([date, branchId])
   @@index([eventId])
   @@map("coach_attendance_sessions")
+}
+
+model CoachAttendanceSessionCoach {
+  id        String                 @id @default(cuid())
+  sessionId String
+  session   CoachAttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime               @default(now())
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@map("coach_attendance_session_coaches")
 }
 
 model EventStaffAttendance {
@@ -269,6 +287,8 @@ model Student {
   sessionMonth                   Int?
   sessionYear                    Int?
   status                         String    @default("active")
+  // true = dikecualikan dari tagihan BPJS otomatis / "Tagih Sekarang".
+  bpjsExempt                     Boolean   @default(false)
   branchId                       String?
   branch                         Branch?   @relation(fields: [branchId], references: [id])
   // Beasiswa (scholarship) — admin-only, set from Data Anak. 0 = none.
@@ -437,6 +457,8 @@ model TrainingSession {
   branch           Branch?  @relation(fields: [branchId], references: [id])
   fieldId          String?
   field            Field?   @relation(fields: [fieldId], references: [id])
+  // Nama lapangan yang diketik manual (bila bukan dari daftar Field).
+  fieldName        String?
   topicTitle       String
   topicDescription String?
   objective        String?
@@ -769,7 +791,7 @@ model CartItem {
   @@map("cart_items")
 }
 
-// Katalog merchandise (jersey, aksesori, dll) yang dikelola admin dan bisa
+// Katalog merchandise (jersey, aksesori, dll) yang dikelola admin & head coach dan bisa
 // dibeli parent lewat keranjang. `stock` NULL berarti stok tak terbatas; saat
 // pembayaran keranjang lunas, stok item yang berasal dari katalog dikurangi.
 model Product {

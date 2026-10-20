@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarCheck, Loader2, RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle2,
   XCircle, FileSpreadsheet, FileText, MapPin, Plus, Pencil, Trash2, CalendarClock,
-  Wand2, Trophy, Dumbbell, X, SlidersHorizontal,
+  Wand2, Trophy, Dumbbell, X, SlidersHorizontal, Users,
 } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
+import { BranchSelect } from '@/components/ui/branch-select'
+import { MultiSelectCheckbox } from '@/components/ui/multi-select-checkbox'
 import ModalPortal from '@/components/ui/modal-portal'
 import { exportCoachRecapToExcel, exportCoachRecapToPDF, exportCoachRecapDetailToExcel, exportCoachRecapDetailToPDF } from '@/lib/export'
 
@@ -100,6 +102,7 @@ const emptyForm = {
   type: 'training',
   branchId: '',
   coachId: '',
+  coachIds: [],
   checkInOpen: '15:30',
   checkInClose: '16:00',
   checkOutClose: '23:59',
@@ -117,6 +120,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
     type: initial.type || 'training',
     branchId: initial.branchId || '',
     coachId: initial.coachId || '',
+    coachIds: (initial.assignedCoaches || []).map((row) => row.userId),
     checkInOpen: initial.checkInOpen || '00:00',
     checkInClose: initial.checkInClose || '23:59',
     checkOutClose: initial.checkOutClose || '23:59',
@@ -160,6 +164,14 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
     [sources],
   )
   const selectedEvent = availableEvents.find((row) => row.id === sourceId) || null
+  // Jadwal event/tournament bisa punya banyak coach bertugas; latihan & manual satu coach.
+  const multiCoach = editing ? !!initial?.eventId : mode === 'event'
+  const coachChoices = coaches
+    .filter((c) => {
+      const branch = editing && linked ? initial.branchId : (mode === 'event' ? eventBranchId : form.branchId)
+      return !branch || c.branches?.some((b) => b.branch.id === branch)
+    })
+    .map((c) => ({ value: c.id, label: c.role === 'head_coach' ? `${c.name} (Head Coach)` : c.name }))
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -176,7 +188,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
       if (editing) {
         saved = await api.updateCoachAttendanceSession(initial.id, {
           ...times,
-          coachId: form.coachId || null,
+          ...(multiCoach ? { coachIds: form.coachIds } : { coachId: form.coachId || null }),
           ...(linked ? {} : { date, branchId: form.branchId || null, title: form.title }),
           status: form.status,
         })
@@ -188,6 +200,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
         saved = await api.createCoachAttendanceSession({
           eventId: sourceId,
           branchId: eventBranchId || undefined,
+          coachIds: form.coachIds,
           ...times,
         })
       } else {
@@ -388,7 +401,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
                         {initial.branch ? `${initial.branch.name} (${initial.branch.code})` : 'Semua cabang'}
                       </div>
                     ) : (
-                      <AppSelect
+                      <BranchSelect
                         value={form.branchId}
                         onChange={(v) => update('branchId', v)}
                         allLabel="Semua cabang"
@@ -398,17 +411,33 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
                       />
                     )}
                   </label>
-                  <label className={labelCls}>
-                    Coach
-                    <AppSelect
-                      value={form.coachId}
-                      onChange={(v) => update('coachId', v)}
-                      allLabel="Semua coach"
-                      placeholder="Semua coach"
-                      options={coaches.map((c) => ({ value: c.id, label: c.name }))}
-                      className="mt-1.5 w-full"
-                    />
-                  </label>
+                  {!multiCoach && (
+                    <label className={labelCls}>
+                      Coach
+                      <AppSelect
+                        value={form.coachId}
+                        onChange={(v) => update('coachId', v)}
+                        allLabel="Semua coach"
+                        placeholder="Semua coach"
+                        options={coaches.map((c) => ({ value: c.id, label: c.name }))}
+                        className="mt-1.5 w-full"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {multiCoach && (
+                <div>
+                  <span className={labelCls}>Coach bertugas</span>
+                  <div className="mt-1.5">
+                    {coachChoices.length === 0 ? (
+                      <p className="text-[11px] text-gray-400">Tidak ada coach pada cabang ini.</p>
+                    ) : (
+                      <MultiSelectCheckbox options={coachChoices} values={form.coachIds} onChange={(vals) => update('coachIds', vals)} />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Kosongkan bila semua coach di cabang boleh absen.</p>
                 </div>
               )}
             </section>
@@ -548,6 +577,61 @@ function BulkWindowModal({ month, year, branchLabel, branchId, onClose, onSaved 
   )
 }
 
+function BulkCoachModal({ month, year, branchLabel, branchId, coaches, onClose, onSaved }) {
+  const [coachIds, setCoachIds] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const choices = coaches
+    .filter((c) => !branchId || c.branches?.some((b) => b.branch.id === branchId))
+    .map((c) => ({ value: c.id, label: c.role === 'head_coach' ? `${c.name} (Head Coach)` : c.name }))
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const result = await api.setCoachAttendanceSessionCoaches({ month, year, branchId: branchId || undefined, coachIds })
+      onSaved(result)
+    } catch (err) {
+      setError(err.message || 'Gagal menyimpan coach bertugas')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4">
+        <div className="fixed inset-0 bg-navy-900/60 backdrop-blur-[2px]" onClick={saving ? undefined : onClose} />
+        <form onSubmit={submit} className="relative bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-navy-700" />
+              <h3 className="font-bold text-navy-900">Atur Coach Bertugas Massal</h3>
+            </div>
+            {!saving && <button type="button" onClick={onClose} aria-label="Tutup" className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>}
+          </div>
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</div>}
+          <p className="text-xs text-gray-500">
+            Berlaku untuk semua jadwal <b>event/tournament</b> pada <b>{MONTHS[month]} {year}</b> {branchLabel ? <>di <b>{branchLabel}</b></> : 'di semua cabang'}. Penugasan yang ada akan diganti. Kosongkan pilihan agar semua coach cabang boleh absen.
+          </p>
+          {choices.length === 0 ? (
+            <p className="text-xs text-gray-400">Tidak ada coach pada cabang ini.</p>
+          ) : (
+            <MultiSelectCheckbox options={choices} values={coachIds} onChange={setCoachIds} />
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose} disabled={saving} className="text-sm font-semibold text-gray-500 px-4 py-2 rounded-2xl hover:bg-gray-100 disabled:opacity-50">Batal</button>
+            <button type="submit" disabled={saving} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />} Terapkan
+            </button>
+          </div>
+        </form>
+      </div>
+    </ModalPortal>
+  )
+}
+
 export default function CoachAttendanceManager() {
   const [tab, setTab] = useState('schedule')
   const [branches, setBranches] = useState([])
@@ -565,6 +649,7 @@ export default function CoachAttendanceManager() {
   const [sessionsError, setSessionsError] = useState('')
   const [editor, setEditor] = useState(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkCoachOpen, setBulkCoachOpen] = useState(false)
 
   useEffect(() => {
     Promise.all([api.getMe(), api.getBranches(), api.getCoachAttendanceCoaches()])
@@ -733,6 +818,12 @@ export default function CoachAttendanceManager() {
                 <SlidersHorizontal size={13} /> Atur Jam Massal
               </button>
               <button
+                onClick={() => setBulkCoachOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-navy-700 border border-gray-200 hover:border-gold-300 rounded-2xl px-3 py-2"
+              >
+                <Users size={13} /> Atur Coach Massal
+              </button>
+              <button
                 onClick={() => setEditor({ mode: 'create' })}
                 className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-xs font-semibold px-3 py-2 rounded-2xl"
               >
@@ -777,7 +868,7 @@ export default function CoachAttendanceManager() {
                           <span className="text-gray-200">·</span>
                           <span>{session.branch ? `${session.branch.name} (${session.branch.code})` : 'Semua cabang'}</span>
                           <span className="text-gray-200">·</span>
-                          <span>{session.coach?.name || 'Semua coach'}</span>
+                          <span>{session.assignedCoaches?.length ? session.assignedCoaches.map((row) => row.user?.name).filter(Boolean).join(', ') : (session.coach?.name || 'Semua coach')}</span>
                           {session.trainingSession?.ageGroup ? <><span className="text-gray-200">·</span><span>{session.trainingSession.ageGroup}</span></> : null}
                         </div>
                       </div>
@@ -980,6 +1071,25 @@ export default function CoachAttendanceManager() {
           branches={branches}
           onClose={() => setEditor(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {bulkCoachOpen && (
+        <BulkCoachModal
+          month={month}
+          year={year}
+          branchId={branchId}
+          coaches={coaches}
+          branchLabel={(() => {
+            const found = branches.find((b) => b.id === branchId)
+            return found ? `${found.name} (${found.code})` : null
+          })()}
+          onClose={() => setBulkCoachOpen(false)}
+          onSaved={(res) => {
+            setBulkCoachOpen(false)
+            window.alert(`${res.updated} jadwal event/tournament diperbarui.`)
+            loadSessions()
+          }}
         />
       )}
 

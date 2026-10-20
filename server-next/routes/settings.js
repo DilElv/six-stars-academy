@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { runBpjsBilling, getBpjsStatus } from '../lib/bpjsBilling.js'
+import { runBpjsBilling, getBpjsStatus, listBpjsStudents, setBpjsExempt } from '../lib/bpjsBilling.js'
 
 const router = Router()
 
@@ -68,6 +68,29 @@ router.put('/bpjs', authenticate, authorize('admin', 'head_coach'), async (req, 
 router.get('/bpjs/status', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
     res.json(await getBpjsStatus({ month: req.query.month, year: req.query.year }))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Semua anak + status BPJS (dikecualikan / sudah ditagih) untuk periode terpilih.
+router.get('/bpjs/students', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    res.json(await listBpjsStudents({ month: req.query.month, year: req.query.year }))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Atur anak yang dikecualikan dari tagihan BPJS (exemptIds) atau ditagih lagi (includeIds).
+router.put('/bpjs/students', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    const { exemptIds, includeIds } = req.body || {}
+    if (exemptIds !== undefined && !Array.isArray(exemptIds)) return res.status(400).json({ error: 'exemptIds harus berupa daftar' })
+    if (includeIds !== undefined && !Array.isArray(includeIds)) return res.status(400).json({ error: 'includeIds harus berupa daftar' })
+    res.json(await setBpjsExempt({ exemptIds: exemptIds || [], includeIds: includeIds || [] }))
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
