@@ -52,7 +52,7 @@ export default function AdminEventDetailPage() {
       <div className="glass-card rounded-3xl p-5 space-y-3">
         <h1 className="font-bold text-navy-900 text-lg">{event.title}</h1>
         <div className="grid sm:grid-cols-2 gap-2 text-sm">
-          <InfoRow icon={Calendar} label="Tanggal" value={new Date(event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+          <InfoRow icon={Calendar} label="Tanggal" value={`${new Date(event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}${event.startTime ? ` · ${event.startTime}${event.endTime ? `–${event.endTime}` : ''} WIB` : ''}`} />
           {event.registrationDeadline && <InfoRow icon={Clock} label="Deadline" value={new Date(event.registrationDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />}
           {event.location && <InfoRow icon={MapPin} label="Lokasi" value={event.location} />}
           {event.fee > 0 && <InfoRow icon={Wallet} label="Biaya" value={formatRupiah(event.fee)} />}

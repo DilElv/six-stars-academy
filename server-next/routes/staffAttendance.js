@@ -4,7 +4,7 @@ import { authenticate, authorize } from '../middleware/auth.js'
 import { notifyUser } from '../lib/notify.js'
 import { assertBranchAccess, getUserBranchIds } from '../lib/branchAccess.js'
 
-import { windowState, closedMessage } from '../lib/coachAttendance.js'
+import { windowState, closedMessage, isCoachAssigned } from '../lib/coachAttendance.js'
 
 const router = Router()
 
@@ -30,7 +30,7 @@ async function findCoachSession(user, sessionId, assignedBranchIds) {
   if (startOfDay(session.date).getTime() !== startOfDay().getTime()) {
     throw Object.assign(new Error('Sesi absensi bukan untuk hari ini'), { status: 400 })
   }
-  if (session.coachId && session.coachId !== user.id) {
+  if (!(await isCoachAssigned(session, user.id))) {
     throw Object.assign(new Error('Sesi absensi ini bukan untuk Anda'), { status: 403 })
   }
   if (session.branchId && !assignedBranchIds.includes(session.branchId)) {

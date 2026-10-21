@@ -216,6 +216,7 @@ export default function JadwalCalendar({
                   <span className="flex items-center gap-1.5"><Clock size={12} className="text-gold-600" /> {s.startTime} - {s.endTime} WIB</span>
                   <span className="flex items-center gap-1.5"><MapPin size={12} className="text-gold-600" /> {s.location}</span>
                   {s.coach?.name && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> {s.coach.name}</span>}
+                  {s.coaches?.length > 0 && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> Bertugas: {s.coaches.map((row) => row.user?.name).filter(Boolean).join(', ')}</span>}
                 </div>
               ))}
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Trash2, Loader2, Users, Calendar } from 'lucide-react'
+import { Plus, Edit3, Trash2, Loader2, Users, Calendar } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AGE_GROUPS } from '@/lib/ageGroups'
 import { AppSelect } from '@/components/ui/app-select'
@@ -13,7 +13,7 @@ import ModalPortal from '@/components/ui/modal-portal'
 
 const emptyForm = {
   title: '', description: '', type: 'tournament', ageGroups: [],
-  date: '', registrationDeadline: '', location: '', fee: 0, branchIds: [], allBranches: true, coachIds: [],
+  date: '', registrationDeadline: '', location: '', startTime: '', endTime: '', fee: 0, branchIds: [], allBranches: true, coachIds: [],
 }
 
 const TYPE_OPTIONS = [
@@ -35,6 +35,7 @@ export default function HeadCoachEventPage() {
   const [newBranchName, setNewBranchName] = useState('')
   const [addingBranch, setAddingBranch] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -48,7 +49,30 @@ export default function HeadCoachEventPage() {
 
   useEffect(() => { load() }, [])
 
+  function openEdit(e) {
+    const assigned = [...new Set((e.attendanceSessions || []).flatMap((session) => (session.assignedCoaches || []).map((row) => row.userId)))]
+    setForm({
+      title: e.title || '',
+      description: e.description || '',
+      type: e.type || 'tournament',
+      ageGroups: e.ageGroup ? e.ageGroup.split(',').map((ag) => ag.trim()).filter(Boolean) : [],
+      date: new Date(e.date).toLocaleDateString('en-CA'),
+      registrationDeadline: e.registrationDeadline ? new Date(e.registrationDeadline).toLocaleDateString('en-CA') : '',
+      location: e.location || '',
+      startTime: e.startTime || '',
+      endTime: e.endTime || '',
+      fee: e.fee || 0,
+      allBranches: !e.branches?.length,
+      branchIds: (e.branches || []).map((b) => b.branchId || b.branch?.id).filter(Boolean),
+      coachIds: assigned,
+    })
+    setEditingId(e.id)
+    setError('')
+    setShowForm(true)
+  }
+
   function openCreate() {
+    setEditingId(null)
     setForm(emptyForm)
     setError('')
     setShowForm(true)
@@ -80,7 +104,9 @@ export default function HeadCoachEventPage() {
     setSaving(true)
     setError('')
     try {
-      await api.createEvent({ ...form, ageGroup: form.ageGroups.join(',') })
+      const payload = { ...form, ageGroup: form.ageGroups.join(',') }
+      if (editingId) await api.updateEvent(editingId, payload)
+      else await api.createEvent(payload)
       setShowForm(false)
       load()
     } catch (err) {
@@ -129,7 +155,7 @@ export default function HeadCoachEventPage() {
                   {eventStatusBadge(e.status)}
                 </div>
                 <div className="text-xs text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}{e.startTime ? ` · ${e.startTime}${e.endTime ? `–${e.endTime}` : ''} WIB` : ''}</span>
                   <span>{e.type}</span>
                   {e.ageGroup && e.ageGroup.split(',').map((ag) => <span key={ag} className="text-xs font-semibold bg-gold-50 text-navy-900 border border-gold-200 px-2 py-0.5 rounded-full">{ag.trim()}</span>)}
                   <span>{e.branches?.length ? e.branches.map((b) => b.branch.code).join(', ') : 'Semua Cabang'}</span>
@@ -137,12 +163,21 @@ export default function HeadCoachEventPage() {
                   {e.fee > 0 && <span>· {formatRupiah(e.fee)}</span>}
                 </div>
               </div>
-              <button
-                onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); handleDelete(e.id) }}
-                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0"
-              >
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); openEdit(e) }}
+                  className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"
+                  title="Edit event"
+                >
+                  <Edit3 size={14} />
+                </button>
+                <button
+                  onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); handleDelete(e.id) }}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </Link>
           ))}
         </div>
@@ -154,7 +189,7 @@ export default function HeadCoachEventPage() {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto modal-scroll" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100">
-              <h3 className="font-bold text-navy-900">Buat Event</h3>
+              <h3 className="font-bold text-navy-900">{editingId ? 'Edit Event' : 'Buat Event'}</h3>
             </div>
             <form onSubmit={handleCreate} className="p-5 space-y-3">
               {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
@@ -252,6 +287,17 @@ export default function HeadCoachEventPage() {
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Biaya Pendaftaran (Rp)</label>
                   <RupiahInput value={form.fee} onChange={(n) => setForm((f) => ({ ...f, fee: n }))} className="w-full" />
                 </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Mulai</label>
+                  <input type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Selesai</label>
+                  <input type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                </div>
+                <p className="sm:col-span-2 text-[11px] text-gray-400 -mt-1">Jam mulai dipakai menentukan jendela absen coach: buka 30 menit sebelum mulai, tutup 30 menit sesudah mulai.</p>
               </div>
               <Field label="Deskripsi" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} textarea />
               <button

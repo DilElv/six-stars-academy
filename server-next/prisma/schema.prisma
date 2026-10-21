@@ -55,6 +55,7 @@ model User {
   coachAttendanceSessions        CoachAttendanceSession[] @relation("CoachAttendanceSessionCoach")
   createdCoachAttendanceSessions CoachAttendanceSession[] @relation("CoachAttendanceSessionCreator")
   assignedAttendanceSessions     CoachAttendanceSessionCoach[]
+  scheduleAssignments            ScheduleCoach[]
 
   @@map("users")
 }
@@ -160,6 +161,11 @@ model CoachAttendanceSession {
   coach             User?    @relation("CoachAttendanceSessionCoach", fields: [coachId], references: [id], onDelete: SetNull)
   trainingSessionId String?  @unique
   trainingSession   TrainingSession? @relation(fields: [trainingSessionId], references: [id], onDelete: Cascade)
+  // Jadwal latihan (Schedule) yang menjadi sumber sesi ini: jam & coach bertugas mengikuti jadwal.
+  scheduleId        String?  @unique
+  schedule          Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  // true = jam diatur manual dan tidak ditimpa saat jadwal/event berubah.
+  windowManual      Boolean  @default(false)
   eventId           String?
   event             Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
@@ -480,6 +486,9 @@ model Event {
   ageGroup             String?
   date                 DateTime
   registrationDeadline DateTime?
+  // Jam mulai/selesai event "HH:mm" (WIB); dipakai menghitung jendela absen coach.
+  startTime            String?
+  endTime              String?
   location             String?
   fee                  Int       @default(0)
   status               String    @default("open")
@@ -693,10 +702,28 @@ model Schedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Coach yang bertugas (banyak); kosong = semua coach cabang. Sesi absensi
+  // coach dibuat otomatis dari jadwal ini.
+  coaches           ScheduleCoach[]
+  attendanceSession CoachAttendanceSession?
+
   // One branch can't have two jadwal on the same date — prevents double-
   // booking; a different branch on the same date is unaffected.
   @@unique([branchId, date])
   @@map("schedules")
+}
+
+model ScheduleCoach {
+  id         String   @id @default(cuid())
+  scheduleId String
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([scheduleId, userId])
+  @@index([userId])
+  @@map("schedule_coaches")
 }
 
 model CmsContent {

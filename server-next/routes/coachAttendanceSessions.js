@@ -6,10 +6,12 @@ import {
   startOfDay,
   normalizeWindow,
   windowState,
+  windowFromTimes,
   assertManageSession,
   ensureTrainingSessionAttendance,
   generateMonthAttendanceSessions,
   setSessionCoaches,
+  setScheduleCoaches,
 } from '../lib/coachAttendance.js'
 
 const router = Router()
@@ -18,7 +20,8 @@ const SESSION_INCLUDE = {
   branch: { select: { id: true, name: true, code: true } },
   coach: { select: { id: true, name: true, photo: true } },
   trainingSession: { select: { id: true, topicTitle: true, ageGroup: true, duration: true } },
-  event: { select: { id: true, title: true, type: true } },
+  event: { select: { id: true, title: true, type: true, startTime: true, endTime: true } },
+  schedule: { select: { id: true, startTime: true, endTime: true, location: true } },
   assignedCoaches: { include: { user: { select: { id: true, name: true, photo: true } } } },
   _count: { select: { attendances: true } },
 }
@@ -99,6 +102,7 @@ router.get('/coaches', authenticate, authorize('admin', 'head_coach'), async (re
 router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
   try {
     const branchIds = await getUserBranchIds(req.user.id)
+    if (req.user.role === 'coach' && branchIds.length === 0) return res.json([])
     const sessions = await prisma.coachAttendanceSession.findMany({
       where: {
         type: 'training',
@@ -106,12 +110,20 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
         date: startOfDay(),
         AND: [
           { OR: [{ branchId: null }, { branchId: { in: branchIds.length ? branchIds : ['__none__'] } }] },
-          { OR: [{ coachId: null }, { coachId: req.user.id }] },
+          // Sesi untuk satu coach (topik latihan), atau sesi dengan daftar coach
+          // bertugas (jadwal latihan); daftar kosong = semua coach cabang.
+          {
+            OR: [
+              { coachId: req.user.id },
+              { coachId: null, OR: [{ assignedCoaches: { none: {} } }, { assignedCoaches: { some: { userId: req.user.id } } }] },
+            ],
+          },
         ],
       },
       include: {
         branch: { select: { id: true, name: true, code: true } },
         trainingSession: { select: { id: true, topicTitle: true, ageGroup: true, duration: true } },
+        schedule: { select: { id: true, startTime: true, endTime: true, location: true } },
         attendances: { where: { userId: req.user.id } },
       },
       orderBy: [{ checkInOpen: 'asc' }, { title: 'asc' }],
@@ -156,9 +168,11 @@ router.get('/sources', authenticate, authorize('admin', 'head_coach'), async (re
       }),
       prisma.coachAttendanceSession.findMany({
         where: { date: { gte: day, lt: end } },
-        select: { trainingSessionId: true, eventId: true, branchId: true },
+        select: { trainingSessionId: true, eventId: true, branchId: true, scheduleId: true, status: true },
       }),
     ])
+    // Topik latihan di cabang yang jadwalnya sudah punya sesi absensi dianggap sudah tercakup.
+    const scheduledBranches = new Set(sessions.filter((s) => s.scheduleId && s.status === 'active' && s.branchId).map((s) => s.branchId))
 
     const trainingLinks = new Set(sessions.map((s) => s.trainingSessionId).filter(Boolean))
     const eventCounts = new Map()
@@ -171,7 +185,7 @@ router.get('/sources', authenticate, authorize('admin', 'head_coach'), async (re
     }
 
     res.json({
-      trainings: trainings.map((training) => ({ ...training, hasSession: trainingLinks.has(training.id) })),
+      trainings: trainings.map((training) => ({ ...training, hasSession: trainingLinks.has(training.id) || (!!training.branchId && scheduledBranches.has(training.branchId)) })),
       events: events.map((event) => {
         const needed = event.branches.length > 0 ? event.branches.length : 1
         return {
@@ -207,6 +221,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
       ...times,
     }
     const branchIds = await headCoachBranchIds(req)
+    let eventWindow = null
 
     if (trainingSessionId) {
       const training = await prisma.trainingSession.findUnique({ where: { id: trainingSessionId } })
@@ -216,6 +231,13 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
       }
       const linked = await prisma.coachAttendanceSession.findUnique({ where: { trainingSessionId }, select: { id: true } })
       if (linked) return res.status(409).json({ error: 'Jadwal untuk sesi latihan ini sudah ada' })
+      if (training.branchId) {
+        const fromSchedule = await prisma.coachAttendanceSession.findFirst({
+          where: { scheduleId: { not: null }, branchId: training.branchId, date: startOfDay(training.date), status: 'active' },
+          select: { id: true },
+        })
+        if (fromSchedule) return res.status(409).json({ error: 'Cabang ini sudah punya jadwal absensi dari Jadwal Latihan di tanggal itu. Atur coach & jam lewat jadwal tersebut.' })
+      }
       data = {
         ...data,
         type: 'training',
@@ -245,6 +267,7 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
         select: { id: true },
       })
       if (duplicate) return res.status(409).json({ error: 'Jadwal absensi event untuk cabang ini sudah ada' })
+      eventWindow = windowFromTimes(event.startTime, event.endTime)
       data = {
         ...data,
         type: event.type === 'tournament' ? 'tournament' : 'event',
@@ -259,8 +282,14 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     }
     if (!data.title) return res.status(400).json({ error: 'Nama/judul sesi wajib diisi' })
 
+    // Jam dari form dianggap manual, kecuali sama persis dengan jam yang
+    // dihitung dari jam event (tetap ikut berubah bila jam event diubah).
+    const sameAsEvent = !!eventWindow
+      && eventWindow.checkInOpen === data.checkInOpen
+      && eventWindow.checkInClose === data.checkInClose
+      && eventWindow.checkOutClose === data.checkOutClose
     const created = await prisma.coachAttendanceSession.create({
-      data: { ...data, createdById: req.user.id },
+      data: { ...data, windowManual: !sameAsEvent, createdById: req.user.id },
     })
     // Jadwal event/manual boleh punya banyak coach bertugas; kosong = semua coach cabang.
     if (Array.isArray(coachIds)) await setSessionCoaches(created.id, coachIds)
@@ -332,7 +361,7 @@ router.put('/window', authenticate, authorize('admin', 'head_coach'), async (req
       where.branchId = requestedBranch
     }
 
-    const result = await prisma.coachAttendanceSession.updateMany({ where, data: times })
+    const result = await prisma.coachAttendanceSession.updateMany({ where, data: { ...times, windowManual: true } })
     res.json({ updated: result.count, ...times })
   } catch (err) {
     console.error(err)
@@ -353,15 +382,30 @@ router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, r
     if (status !== undefined && !['active', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Status tidak valid' })
     }
+    // Mengubah jam lewat form = manual (tidak ditimpa jadwal/event). "resetWindow"
+    // mengembalikan jam ke hasil hitung dari jam jadwal/event.
+    const body = req.body || {}
+    const timesChanged = ['checkInOpen', 'checkInClose', 'checkOutClose'].some((key) => body[key] !== undefined && body[key] !== existing[key])
+    let windowData = { ...times, windowManual: timesChanged ? true : existing.windowManual }
+    if (body.resetWindow) {
+      const source = existing.scheduleId
+        ? await prisma.schedule.findUnique({ where: { id: existing.scheduleId }, select: { startTime: true, endTime: true } })
+        : existing.eventId
+          ? await prisma.event.findUnique({ where: { id: existing.eventId }, select: { startTime: true, endTime: true } })
+          : null
+      const computed = source ? windowFromTimes(source.startTime, source.endTime) : null
+      if (!computed) return res.status(400).json({ error: 'Jadwal/event ini belum punya jam mulai, jam tidak bisa direset' })
+      windowData = { ...computed, windowManual: false }
+    }
     const data = {
-      ...times,
+      ...windowData,
       title: title === undefined ? existing.title : title,
       note: note === undefined ? existing.note : (note || null),
       status: status === undefined ? existing.status : status,
       coachId: coachId === undefined ? existing.coachId : (coachId || null),
     }
     // Tanggal/cabang sesi latihan mengikuti sesi latihannya; event mengikuti event.
-    if (!existing.trainingSessionId && !existing.eventId) {
+    if (!existing.trainingSessionId && !existing.eventId && !existing.scheduleId) {
       data.date = date ? startOfDay(date) : existing.date
       data.branchId = branchId === undefined ? existing.branchId : (branchId || null)
       if (req.user.role === 'head_coach' && data.branchId) {
@@ -371,7 +415,11 @@ router.put('/:id', authenticate, authorize('admin', 'head_coach'), async (req, r
     }
 
     await prisma.coachAttendanceSession.update({ where: { id: existing.id }, data })
-    if (Array.isArray(coachIds)) await setSessionCoaches(existing.id, coachIds)
+    if (Array.isArray(coachIds)) {
+      await setSessionCoaches(existing.id, coachIds)
+      // Sumber kebenaran coach bertugas jadwal latihan ada di jadwalnya.
+      if (existing.scheduleId) await setScheduleCoaches(existing.scheduleId, coachIds)
+    }
     res.json(await prisma.coachAttendanceSession.findUnique({ where: { id: existing.id }, include: SESSION_INCLUDE }))
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message })

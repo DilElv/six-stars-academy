@@ -29,6 +29,38 @@ export function sameDay(a, b = new Date()) {
   return startOfDay(a).getTime() === startOfDay(b).getTime()
 }
 
+// Jam jadwal lama diketik bebas ("16.00", "9:30", "9"); jadikan "HH:mm" atau null.
+export function normalizeClock(value) {
+  const match = String(value ?? '').trim().match(/^(\d{1,2})(?:[.:](\d{1,2}))?$/)
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = match[2] === undefined ? 0 : Number(match[2])
+  if (hours > 23 || minutes > 59) return null
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+function minutesToTime(total) {
+  const clamped = Math.min(23 * 60 + 59, Math.max(0, total))
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`
+}
+
+// Jendela absen dari jam mulai/selesai kegiatan: buka 30 menit sebelum mulai,
+// tutup 30 menit sesudah mulai, absen pulang sampai 60 menit setelah selesai
+// (atau 2 jam setelah mulai bila jam selesai kosong). Null bila jam mulai tidak valid.
+export function windowFromTimes(startTimeRaw, endTimeRaw) {
+  const startTime = normalizeClock(startTimeRaw)
+  const endTime = normalizeClock(endTimeRaw)
+  if (!startTime) return null
+  const start = timeToMinutes(startTime)
+  const end = endTime && timeToMinutes(endTime) > start ? timeToMinutes(endTime) : start + 120
+  const checkInClose = Math.min(23 * 60 + 59, start + 30)
+  return {
+    checkInOpen: minutesToTime(Math.min(start - 30, checkInClose - 1)),
+    checkInClose: minutesToTime(checkInClose),
+    checkOutClose: minutesToTime(Math.max(checkInClose, end + 60)),
+  }
+}
+
 export function normalizeWindow(body) {
   const checkInOpen = body.checkInOpen || '00:00'
   const checkInClose = body.checkInClose || '23:59'
@@ -92,6 +124,25 @@ export async function ensureTrainingSessionAttendance(trainingSession, defaults 
   const date = startOfDay(trainingSession.date)
   const title = trainingSession.topicTitle || `Latihan ${trainingSession.ageGroup || ''}`.trim()
   const existing = await prisma.coachAttendanceSession.findUnique({ where: { trainingSessionId: trainingSession.id } })
+
+  // Cabang yang punya jadwal latihan di hari itu memakai sesi absensi dari
+  // jadwal (jam & coach bertugas ikut jadwal). Sesi topik tidak dibuat lagi
+  // supaya tidak ada dua absen untuk latihan yang sama; yang sudah ada dan
+  // belum dipakai absen dihapus.
+  if (trainingSession.branchId) {
+    const scheduled = await prisma.coachAttendanceSession.findFirst({
+      where: { scheduleId: { not: null }, branchId: trainingSession.branchId, date, status: 'active' },
+      select: { id: true },
+    })
+    if (scheduled) {
+      if (existing) {
+        const used = await prisma.staffAttendance.count({ where: { sessionId: existing.id } })
+        if (used === 0) await prisma.coachAttendanceSession.delete({ where: { id: existing.id } })
+      }
+      return null
+    }
+  }
+
   if (existing) {
     return prisma.coachAttendanceSession.update({
       where: { id: existing.id },
@@ -128,14 +179,16 @@ export async function ensureEventAttendance(event, defaults = DEFAULT_WINDOWS, {
   const out = []
   for (const branchId of targets) {
     const existing = await prisma.coachAttendanceSession.findFirst({ where: { eventId: event.id, branchId: branchId ?? null } })
+    const fromTimes = windowFromTimes(event.startTime, event.endTime)
     if (existing) {
+      // Jam dari event hanya menimpa jam yang belum diatur manual.
       out.push(await prisma.coachAttendanceSession.update({
         where: { id: existing.id },
-        data: { title: event.title, date, type },
+        data: { title: event.title, date, type, ...(fromTimes && !existing.windowManual ? fromTimes : {}) },
       }))
     } else {
       out.push(await prisma.coachAttendanceSession.create({
-        data: { type, title: event.title, date, branchId, eventId: event.id, ...defaults },
+        data: { type, title: event.title, date, branchId, eventId: event.id, ...defaults, ...(fromTimes || {}) },
       }))
     }
     // coachIds undefined = jangan sentuh penugasan yang sudah ada.
@@ -166,6 +219,57 @@ export async function isCoachAssigned(session, userId) {
   return assigned.length === 0 || assigned.includes(userId)
 }
 
+// Sesi absensi coach dari jadwal latihan (Schedule). Jam absen dihitung dari
+// jam jadwal selama belum diatur manual; coach bertugas = daftar di jadwal
+// (kosong = semua coach cabang). Jadwal nonaktif membatalkan sesinya.
+export async function ensureScheduleAttendance(schedule, { coachIds } = {}) {
+  if (!schedule) return null
+  const date = startOfDay(schedule.date)
+  const status = schedule.status === 'active' ? 'active' : 'cancelled'
+  const fromTimes = windowFromTimes(schedule.startTime, schedule.endTime)
+  const title = `Latihan${schedule.location ? ` — ${schedule.location}` : ''}`
+  const existing = await prisma.coachAttendanceSession.findUnique({ where: { scheduleId: schedule.id } })
+  let session
+  if (existing) {
+    session = await prisma.coachAttendanceSession.update({
+      where: { id: existing.id },
+      data: {
+        title, date, status,
+        branchId: schedule.branchId,
+        ...(fromTimes && !existing.windowManual ? fromTimes : {}),
+      },
+    })
+  } else {
+    session = await prisma.coachAttendanceSession.create({
+      data: { type: 'training', title, date, status, branchId: schedule.branchId, scheduleId: schedule.id, ...DEFAULT_WINDOWS, ...(fromTimes || {}) },
+    })
+  }
+  if (Array.isArray(coachIds)) await setSessionCoaches(session.id, coachIds)
+
+  // Sesi absensi dari topik latihan di cabang & hari yang sama digantikan sesi jadwal.
+  if (status === 'active') {
+    const duplicates = await prisma.coachAttendanceSession.findMany({
+      where: { id: { not: session.id }, scheduleId: null, trainingSessionId: { not: null }, branchId: schedule.branchId, date },
+      select: { id: true },
+    })
+    for (const dup of duplicates) {
+      const used = await prisma.staffAttendance.count({ where: { sessionId: dup.id } })
+      if (used === 0) await prisma.coachAttendanceSession.delete({ where: { id: dup.id } })
+    }
+  }
+  return session
+}
+
+// Ganti daftar coach bertugas pada jadwal latihan (tabel ScheduleCoach).
+export async function setScheduleCoaches(scheduleId, coachIds) {
+  const ids = [...new Set((coachIds || []).filter(Boolean))]
+  await prisma.$transaction([
+    prisma.scheduleCoach.deleteMany({ where: { scheduleId, ...(ids.length ? { userId: { notIn: ids } } : {}) } }),
+    ...(ids.length ? [prisma.scheduleCoach.createMany({ data: ids.map((userId) => ({ scheduleId, userId })), skipDuplicates: true })] : []),
+  ])
+  return ids
+}
+
 // Dipakai tombol "Generate Jadwal Bulan Ini": melengkapi jadwal untuk semua
 // sesi latihan & event pada bulan terpilih. `branchIds` membatasi head coach
 // ke cabangnya sendiri.
@@ -186,6 +290,19 @@ export async function generateMonthAttendanceSessions(year, month, branchIds = n
 
   let created = 0
   let existing = 0
+  const schedules = await prisma.schedule.findMany({
+    where: { date: { gte: start, lt: end }, ...(branchIds ? { branchId: { in: branchIds } } : {}) },
+    include: { coaches: true },
+  })
+  for (const schedule of schedules) {
+    const has = await prisma.coachAttendanceSession.findUnique({ where: { scheduleId: schedule.id }, select: { id: true } })
+    if (has) {
+      existing += 1
+      continue
+    }
+    await ensureScheduleAttendance(schedule, { coachIds: schedule.coaches.map((row) => row.userId) })
+    created += 1
+  }
   for (const training of trainings) {
     const has = await prisma.coachAttendanceSession.findUnique({ where: { trainingSessionId: training.id }, select: { id: true } })
     if (has) {
@@ -212,6 +329,7 @@ export async function generateMonthAttendanceSessions(year, month, branchIds = n
           branchId,
           eventId: event.id,
           ...DEFAULT_WINDOWS,
+          ...(windowFromTimes(event.startTime, event.endTime) || {}),
         },
       })
       created += 1

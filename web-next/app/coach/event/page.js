@@ -82,7 +82,7 @@ export default function CoachEventPage() {
             </div>
 
             <div className="space-y-2 text-sm mb-4">
-              <Info icon={Calendar} label="Tanggal" value={new Date(selected.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+              <Info icon={Calendar} label="Tanggal" value={`${new Date(selected.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}${selected.startTime ? ` · ${selected.startTime}${selected.endTime ? `–${selected.endTime}` : ''} WIB` : ''}`} />
               {selected.registrationDeadline && <Info icon={Calendar} label="Deadline" value={new Date(selected.registrationDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />}
               <Info icon={Users} label="Tipe" value={selected.type} />
               <div className="flex items-center gap-2 text-sm">

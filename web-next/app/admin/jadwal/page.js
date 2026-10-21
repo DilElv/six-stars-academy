@@ -10,8 +10,15 @@ import { BranchSelect } from '@/components/ui/branch-select'
 import { DatePicker, MultiDatePicker } from '@/components/ui/date-picker'
 import JadwalCalendar from '@/components/JadwalCalendar'
 import ModalPortal from '@/components/ui/modal-portal'
+import ScheduleDutyCoaches from '@/components/ScheduleDutyCoaches'
 
-const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', branchId: '' }
+// Jam lama diketik bebas ("16.00"); input waktu butuh "HH:mm".
+function toTimeInput(value) {
+  const m = String(value || '').trim().match(/^(\d{1,2})(?:[.:](\d{1,2}))?$/)
+  return m ? `${m[1].padStart(2, '0')}:${(m[2] || '0').padStart(2, '0')}` : ''
+}
+
+const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', coachIds: [], branchId: '' }
 
 export default function AdminJadwalPage() {
   const [tab, setTab] = useState('kalender')
@@ -59,10 +66,11 @@ export default function AdminJadwalPage() {
   function openEdit(s) {
     setForm({
       dates: [format(new Date(s.date), 'yyyy-MM-dd')],
-      startTime: s.startTime,
-      endTime: s.endTime,
+      startTime: toTimeInput(s.startTime),
+      endTime: toTimeInput(s.endTime),
       location: s.location,
       coachId: s.coachId || '',
+      coachIds: (s.coaches || []).map((row) => row.userId),
       branchId: s.branchId || '',
     })
     setEditSchedule(s)
@@ -125,6 +133,8 @@ export default function AdminJadwalPage() {
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Lokasi</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>
                 <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Head Coach</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Coach Bertugas</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Jendela Absen</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
               </tr>
             </thead>
@@ -138,6 +148,8 @@ export default function AdminJadwalPage() {
                     {s.branch ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-navy-50 text-navy-700">{s.branch.code}</span> : <span className="text-xs text-gray-300">-</span>}
                   </td>
                   <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.coaches?.length ? s.coaches.map((row) => row.user?.name).filter(Boolean).join(', ') : 'Semua coach cabang'}</td>
+                      <td className="px-3 py-3 text-gray-500 whitespace-nowrap">{s.attendanceSession ? `${s.attendanceSession.checkInOpen}–${s.attendanceSession.checkInClose}${s.attendanceSession.windowManual ? ' (manual)' : ''}` : '-'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => openEdit(s)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Edit3 size={14} /></button>
@@ -167,7 +179,7 @@ export default function AdminJadwalPage() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Cabang</label>
                 <BranchSelect
                   value={form.branchId}
-                  onChange={(v) => setForm((f) => ({ ...f, branchId: v, dates: [] }))}
+                  onChange={(v) => setForm((f) => ({ ...f, branchId: v, dates: [], coachIds: [] }))}
                   className="w-full"
                   allLabel="- Pilih Cabang -"
                   placeholder="- Pilih Cabang -"
@@ -197,11 +209,11 @@ export default function AdminJadwalPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Mulai</label>
-                  <input required placeholder="16.00" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                  <input required type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Jam Selesai</label>
-                  <input required placeholder="18.00" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
+                  <input required type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm" />
                 </div>
               </div>
               <div>
@@ -219,6 +231,7 @@ export default function AdminJadwalPage() {
                   options={coaches.map((c) => ({ value: c.id, label: c.branch ? `${c.name} (${c.branch.code})` : c.name }))}
                 />
               </div>
+              <ScheduleDutyCoaches branchId={form.branchId} values={form.coachIds} onChange={(vals) => setForm((f) => ({ ...f, coachIds: vals }))} />
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan
               </button>

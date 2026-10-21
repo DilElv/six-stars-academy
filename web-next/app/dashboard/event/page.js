@@ -94,7 +94,7 @@ function ParentEventContent() {
             </div>
 
             <div className="space-y-2 text-sm mb-4">
-              <Info icon={Calendar} label="Tanggal" value={new Date(selected.event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+              <Info icon={Calendar} label="Tanggal" value={`${new Date(selected.event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}${selected.event.startTime ? ` · ${selected.event.startTime}${selected.event.endTime ? `–${selected.event.endTime}` : ''} WIB` : ''}`} />
               {selected.event.registrationDeadline && <Info icon={Calendar} label="Deadline" value={new Date(selected.event.registrationDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />}
               <Info icon={Trophy} label="Tipe" value={selected.event.type} />
               {selected.event.ageGroup && (

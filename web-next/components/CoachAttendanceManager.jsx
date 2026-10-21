@@ -112,7 +112,9 @@ const emptyForm = {
 
 function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
   const editing = !!initial?.id
-  const linked = !!(initial?.trainingSessionId || initial?.eventId)
+  const linked = !!(initial?.trainingSessionId || initial?.eventId || initial?.scheduleId)
+  const source = initial?.schedule || initial?.event || null
+  const [resetWindow, setResetWindow] = useState(false)
   const [mode, setMode] = useState('manual')
   const [date, setDate] = useState(dateInput(initial?.date))
   const [form, setForm] = useState(() => editing ? {
@@ -165,7 +167,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
   )
   const selectedEvent = availableEvents.find((row) => row.id === sourceId) || null
   // Jadwal event/tournament bisa punya banyak coach bertugas; latihan & manual satu coach.
-  const multiCoach = editing ? !!initial?.eventId : mode === 'event'
+  const multiCoach = editing ? !!(initial?.eventId || initial?.scheduleId) : mode === 'event'
   const coachChoices = coaches
     .filter((c) => {
       const branch = editing && linked ? initial.branchId : (mode === 'event' ? eventBranchId : form.branchId)
@@ -190,6 +192,7 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
           ...times,
           ...(multiCoach ? { coachIds: form.coachIds } : { coachId: form.coachId || null }),
           ...(linked ? {} : { date, branchId: form.branchId || null, title: form.title }),
+          ...(resetWindow ? { resetWindow: true } : {}),
           status: form.status,
         })
       } else if (mode === 'training') {
@@ -461,6 +464,19 @@ function SessionEditor({ initial, coaches, branches, onClose, onSaved }) {
               <p className="text-[11px] text-gray-400 leading-relaxed">
                 Coach hanya bisa absen masuk di antara jam buka–tutup, dan absen pulang maksimal sampai batas yang diisi.
               </p>
+              {editing && source?.startTime && (
+                <div className="rounded-2xl bg-navy-50/60 border border-navy-100 px-3 py-2.5 text-[11px] text-navy-700 leading-relaxed">
+                  Jam otomatis dari {initial.scheduleId ? 'jadwal latihan' : 'event'}: mulai <b>{source.startTime}</b>{source.endTime ? <> – selesai <b>{source.endTime}</b></> : null}
+                  {' '}(buka 30 menit sebelum, tutup 30 menit sesudah mulai, pulang sampai 1 jam setelah selesai).{' '}
+                  {initial.windowManual && !resetWindow ? (
+                    <button type="button" onClick={() => setResetWindow(true)} className="font-semibold underline">Kembalikan ke jam otomatis</button>
+                  ) : resetWindow ? (
+                    <b>Akan dikembalikan ke jam otomatis saat disimpan.</b>
+                  ) : (
+                    <span>Jam masih otomatis dan ikut berubah bila jam {initial.scheduleId ? 'jadwal' : 'event'} diubah.</span>
+                  )}
+                </div>
+              )}
             </section>
 
             <section className="space-y-3">
@@ -864,7 +880,13 @@ export default function CoachAttendanceManager() {
                           )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-400 flex-wrap">
-                          <span>{typeLabel(session.type)}</span>
+                          <span>{session.scheduleId ? 'Jadwal latihan' : session.eventId ? typeLabel(session.type) : session.trainingSessionId ? 'Topik latihan' : typeLabel(session.type)}</span>
+                          {(session.schedule?.startTime || session.event?.startTime) && (
+                            <>
+                              <span className="text-gray-200">·</span>
+                              <span>mulai {session.schedule?.startTime || session.event?.startTime}</span>
+                            </>
+                          )}
                           <span className="text-gray-200">·</span>
                           <span>{session.branch ? `${session.branch.name} (${session.branch.code})` : 'Semua cabang'}</span>
                           <span className="text-gray-200">·</span>
@@ -877,6 +899,11 @@ export default function CoachAttendanceManager() {
                         Masuk <b>{session.checkInOpen}–{session.checkInClose}</b>
                         <span className="text-gray-300">·</span>
                         Pulang maks. <b>{session.checkOutClose}</b>
+                        {(session.scheduleId || session.eventId) && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${session.windowManual ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                            {session.windowManual ? 'manual' : 'otomatis'}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-gray-400 min-w-[52px] text-center">
                         {session._count?.attendances || 0} absen

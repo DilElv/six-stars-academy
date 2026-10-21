@@ -114,8 +114,14 @@ router.get('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
   }
 })
 
+// Jam event "HH:mm" (kosong = belum diatur).
+function cleanTime(value) {
+  const text = String(value || '').trim()
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(text) ? text : null
+}
+
 router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds, coachIds } = req.body
+  const { title, description, type, ageGroup, date, registrationDeadline, location, startTime, endTime, fee, status, branchIds, coachIds } = req.body
   if (!date || isNaN(new Date(date).getTime())) return res.status(400).json({ error: 'Tanggal event tidak valid' })
   try {
     const event = await prisma.$transaction(async (tx) => {
@@ -125,6 +131,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
           date: new Date(date),
           registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
           location, fee: fee || 0, status: status || 'open',
+          startTime: cleanTime(startTime), endTime: cleanTime(endTime),
           createdById: req.user.id,
         },
       })
@@ -156,7 +163,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
 })
 
 router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, res) => {
-  const { title, description, type, ageGroup, date, registrationDeadline, location, fee, status, branchIds, coachIds } = req.body
+  const { title, description, type, ageGroup, date, registrationDeadline, location, startTime, endTime, fee, status, branchIds, coachIds } = req.body
   try {
     const event = await prisma.$transaction(async (tx) => {
       const updated = await tx.event.update({
@@ -166,6 +173,8 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
           date: date ? new Date(date) : undefined,
           registrationDeadline: registrationDeadline !== undefined ? (registrationDeadline ? new Date(registrationDeadline) : null) : undefined,
           location, fee, status,
+          startTime: startTime !== undefined ? cleanTime(startTime) : undefined,
+          endTime: endTime !== undefined ? cleanTime(endTime) : undefined,
         },
       })
       if (branchIds !== undefined) await setEventBranches(tx, req.params.id, branchIds)
