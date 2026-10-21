@@ -93,6 +93,12 @@ function SessionAttendance({ session, onOpenModal }) {
         )}
       </div>
 
+      {session.schedule?.coachNote && !cancelled && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-100 text-amber-800 text-[11px] px-3 py-2 whitespace-pre-line">
+          <b>Catatan head coach:</b> {session.schedule.coachNote}
+        </div>
+      )}
+
       <WindowInfo windowInfo={windowInfo} fallback={cancelled ? null : 'Menunggu jadwal absensi dibuat admin/head coach.'} />
 
       {hasCheckedIn && (

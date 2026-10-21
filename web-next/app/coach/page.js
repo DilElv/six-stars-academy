@@ -11,6 +11,7 @@ import { AGE_GROUPS } from '@/lib/ageGroups'
 import AgeGroupBarChart from '@/components/charts/AgeGroupBarChart'
 import AttendanceTrendChart from '@/components/charts/AttendanceTrendChart'
 import StaffCheckinCard from '@/components/StaffCheckinCard'
+import CoachDutySchedule from '@/components/CoachDutySchedule'
 
 function StatusChip({ label, value, color }) {
   return (
@@ -96,6 +97,8 @@ export default function CoachDasborPage() {
       </div>
 
       <StaffCheckinCard />
+
+      <CoachDutySchedule />
 
       <div className="glass-card rounded-3xl p-6">
         <div className="flex items-center justify-between mb-4">

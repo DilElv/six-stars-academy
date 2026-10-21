@@ -18,7 +18,7 @@ function toTimeInput(value) {
   return m ? `${m[1].padStart(2, '0')}:${(m[2] || '0').padStart(2, '0')}` : ''
 }
 
-const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', coachIds: [], branchId: '' }
+const emptyForm = { dates: [], startTime: '', endTime: '', location: '', coachId: '', coachIds: [], coachNote: '', branchId: '' }
 
 export default function HeadCoachJadwalPage() {
   const [tab, setTab] = useState('kalender')
@@ -86,6 +86,7 @@ export default function HeadCoachJadwalPage() {
       location: s.location,
       coachId: s.coachId || '',
       coachIds: (s.coaches || []).map((row) => row.userId),
+      coachNote: s.coachNote || '',
       branchId: s.branchId || '',
     })
     setEditSchedule(s)
@@ -172,7 +173,9 @@ export default function HeadCoachJadwalPage() {
                       <td className="px-3 py-3 text-gray-500">{s.startTime} - {s.endTime}</td>
                       <td className="px-3 py-3 text-gray-500">{s.location}</td>
                       <td className="px-3 py-3 text-gray-500">{s.coach?.name || '-'}</td>
-                      <td className="px-3 py-3 text-gray-500">{s.coaches?.length ? s.coaches.map((row) => row.user?.name).filter(Boolean).join(', ') : 'Semua coach cabang'}</td>
+                      <td className="px-3 py-3 text-gray-500">{s.coaches?.length ? s.coaches.map((row) => row.user?.name).filter(Boolean).join(', ') : 'Semua coach cabang'}
+                        {s.coachNote && <div className="text-[11px] text-gray-400 italic max-w-[220px] truncate" title={s.coachNote}>Catatan: {s.coachNote}</div>}
+                      </td>
                       <td className="px-3 py-3 text-gray-500 whitespace-nowrap">{s.attendanceSession ? `${s.attendanceSession.checkInOpen}–${s.attendanceSession.checkInClose}${s.attendanceSession.windowManual ? ' (manual)' : ''}` : '-'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -257,6 +260,18 @@ export default function HeadCoachJadwalPage() {
                 />
               </div>
               <ScheduleDutyCoaches branchId={form.branchId} values={form.coachIds} onChange={(vals) => setForm((f) => ({ ...f, coachIds: vals }))} />
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Catatan untuk Coach <span className="font-normal text-gray-400">(opsional)</span></label>
+                <textarea
+                  rows={3}
+                  maxLength={500}
+                  value={form.coachNote}
+                  onChange={(e) => setForm((f) => ({ ...f, coachNote: e.target.value }))}
+                  placeholder="Contoh: bawa 10 bola & cone, fokus passing pendek, laporkan siswa yang absen"
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">Dikirim sebagai notifikasi dan tampil di jadwal coach yang bertugas.</p>
+              </div>
               <button type="submit" disabled={saving || form.dates.length === 0 || !form.branchId} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
                 {saving && <Loader2 size={14} className="animate-spin" />} Simpan
               </button>

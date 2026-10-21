@@ -217,6 +217,12 @@ export default function JadwalCalendar({
                   <span className="flex items-center gap-1.5"><MapPin size={12} className="text-gold-600" /> {s.location}</span>
                   {s.coach?.name && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> {s.coach.name}</span>}
                   {s.coaches?.length > 0 && <span className="flex items-center gap-1.5"><Users size={12} className="text-gold-600" /> Bertugas: {s.coaches.map((row) => row.user?.name).filter(Boolean).join(', ')}</span>}
+                  {s.assignedToMe && s.coaches?.length > 0 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Anda bertugas</span>}
+                  {s.coachNote && (
+                    <div className="basis-full mt-1 rounded-xl bg-amber-50 border border-amber-100 text-amber-800 px-3 py-2 whitespace-pre-line">
+                      <b>Catatan head coach:</b> {s.coachNote}
+                    </div>
+                  )}
                 </div>
               ))}
 

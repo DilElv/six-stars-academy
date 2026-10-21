@@ -22,7 +22,7 @@ const SESSION_INCLUDE = {
   coach: { select: { id: true, name: true, photo: true } },
   trainingSession: { select: { id: true, topicTitle: true, ageGroup: true, duration: true } },
   event: { select: { id: true, title: true, type: true, startTime: true, endTime: true } },
-  schedule: { select: { id: true, startTime: true, endTime: true, location: true } },
+  schedule: { select: { id: true, startTime: true, endTime: true, location: true, coachNote: true } },
   assignedCoaches: { include: { user: { select: { id: true, name: true, photo: true } } } },
   _count: { select: { attendances: true } },
 }
@@ -142,7 +142,7 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
       include: {
         branch: { select: { id: true, name: true, code: true } },
         trainingSession: { select: { id: true, topicTitle: true, ageGroup: true, duration: true } },
-        schedule: { select: { id: true, startTime: true, endTime: true, location: true } },
+        schedule: { select: { id: true, startTime: true, endTime: true, location: true, coachNote: true } },
         attendances: { where: { userId: req.user.id } },
       },
       orderBy: [{ checkInOpen: 'asc' }, { title: 'asc' }],

@@ -694,6 +694,8 @@ model Schedule {
   startTime String
   endTime   String
   location  String
+  // Catatan head coach untuk coach yang bertugas (hanya terlihat staf & coach bertugas).
+  coachNote String?
   coachId   String?
   coach     User?    @relation(fields: [coachId], references: [id])
   status    String   @default("active")
