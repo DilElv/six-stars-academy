@@ -1,12 +1,13 @@
 'use client'
 
-import { Home, User, Calendar, Wallet, FileText, Trophy, ShoppingCart, Store } from 'lucide-react'
+import { Home, User, Calendar, Wallet, FileText, Trophy, ShoppingCart, Store, HeartPulse } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
 const navItems = [
   { href: '/dashboard', label: 'Dasbor', icon: Home },
   { href: '/dashboard/profil', label: 'Profil Anak', icon: User },
   { href: '/dashboard/jadwal', label: 'Jadwal', icon: Calendar },
+  { href: '/dashboard/bpjs', label: 'BPJS', icon: HeartPulse },
   { href: '/dashboard/keranjang', label: 'Keranjang', icon: ShoppingCart },
   { href: '/dashboard/toko', label: 'Toko', icon: Store },
   { href: '/dashboard/pembayaran', label: 'Pembayaran', icon: Wallet },

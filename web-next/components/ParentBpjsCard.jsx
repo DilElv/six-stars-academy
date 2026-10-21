@@ -69,6 +69,9 @@ export default function ParentBpjsCard({ onChanged, showCartLink = true }) {
           {adding && <Loader2 size={14} className="animate-spin" />} Tambah ke Keranjang
         </button>
       )}
+      <Link href="/dashboard/bpjs" className="text-xs font-semibold text-navy-600 hover:text-navy-800 underline">
+        Riwayat
+      </Link>
       {showCartLink && info.state === 'in_cart' && (
         <Link href="/dashboard/keranjang" className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl">
           Bayar <ArrowRight size={14} />

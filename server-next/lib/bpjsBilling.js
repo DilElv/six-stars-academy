@@ -67,8 +67,8 @@ export async function runBpjsBilling({ month, year, amount, studentIds } = {}) {
     await notifyUser(student.userId, {
       type: 'bpjs_billing',
       title: 'Tagihan BPJS',
-      message: `${label} sebesar Rp${value.toLocaleString('id-ID')} sudah masuk sebagai tagihan. Silakan bayar dari menu Perpanjang Paket.`,
-      link: '/dashboard/pembayaran',
+      message: `${label} sebesar Rp${value.toLocaleString('id-ID')} sudah masuk sebagai tagihan. Silakan bayar dari menu BPJS.`,
+      link: '/dashboard/bpjs',
     })
   }
 

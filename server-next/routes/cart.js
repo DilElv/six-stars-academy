@@ -403,25 +403,89 @@ router.post('/mark-paid', authenticate, authorize('admin', 'head_coach'), async 
   }
 })
 
-// BPJS untuk parent: status periode berjalan + tambah sendiri ke keranjang.
-// Nominal & periode selalu dari pengaturan server (parent tidak menentukan harga).
+// BPJS untuk parent: status periode berjalan, riwayat per bulan, dan tambah
+// sendiri ke keranjang. Nominal & periode selalu dari pengaturan server
+// (parent tidak menentukan harga); satu tagihan per bulan.
+function bpjsItemState(item, month, year) {
+  if (item.status === 'checked_out') return item.payment?.status === 'success' ? 'paid' : 'pending'
+  if (item.status === 'open') {
+    const past = item.periodYear < year || (item.periodYear === year && item.periodMonth < month)
+    return past ? 'overdue' : 'in_cart'
+  }
+  return 'canceled'
+}
+
 async function bpjsStateFor(student) {
   const settings = await getBpjsSettings()
   const now = new Date()
   const month = now.getMonth() + 1
   const year = now.getFullYear()
-  const item = await prisma.cartItem.findFirst({
-    where: { studentId: student.id, type: 'bpjs', periodMonth: month, periodYear: year },
-    orderBy: { createdAt: 'desc' },
-    include: { payment: { select: { status: true } } },
+  const items = await prisma.cartItem.findMany({
+    where: { studentId: student.id, type: 'bpjs', periodMonth: { not: null }, periodYear: { not: null } },
+    orderBy: [{ periodYear: 'desc' }, { periodMonth: 'desc' }, { createdAt: 'desc' }],
+    include: { payment: { select: { id: true, status: true, paidAt: true, paymentMethod: true } } },
   })
+
+  // Satu baris per periode: item terbaru yang belum dibatalkan.
+  const byPeriod = new Map()
+  for (const item of items) {
+    const key = `${item.periodYear}-${item.periodMonth}`
+    const state = bpjsItemState(item, month, year)
+    if (state === 'canceled') continue
+    if (!byPeriod.has(key)) {
+      byPeriod.set(key, {
+        id: item.id,
+        month: item.periodMonth,
+        year: item.periodYear,
+        label: bpjsLabel(item.periodMonth, item.periodYear),
+        amount: item.amount,
+        state,
+        paymentId: item.payment?.id || null,
+        paidAt: state === 'paid' ? (item.payment?.paidAt || null) : null,
+        paymentMethod: state === 'paid' ? (item.payment?.paymentMethod || null) : null,
+      })
+    }
+  }
+  const history = [...byPeriod.values()]
+  const current = history.find((row) => row.month === month && row.year === year) || null
+
   let state = 'none'
   if (student.bpjsExempt) state = 'exempt'
-  else if (item?.status === 'checked_out' && item.payment?.status === 'success') state = 'paid'
-  else if (item?.status === 'checked_out') state = 'pending'
-  else if (item?.status === 'open') state = 'in_cart'
-  const canAdd = !student.bpjsExempt && settings.enabled && settings.amount > 0 && (state === 'none' || item?.status === 'canceled')
-  return { enabled: settings.enabled, amount: settings.amount, label: bpjsLabel(month, year), period: { month, year }, state, canAdd, itemId: item?.id || null }
+  else if (current) state = current.state === 'overdue' ? 'in_cart' : current.state
+
+  // Tanggal tagih tiap bulan: parent baru bisa menambah tagihan bulan ini sejak tanggal itu.
+  const dueDate = new Date(year, month - 1, settings.day)
+  const billingStarted = now.getDate() >= settings.day
+  const canAdd = !student.bpjsExempt && settings.enabled && settings.amount > 0 && !current && billingStarted
+
+  // Tagihan berikutnya: bulan ini bila belum ada tagihan, selain itu bulan depan.
+  const nextMonth = current ? month + 1 : month
+  const nextYear = nextMonth > 12 ? year + 1 : year
+  const nextIndex = ((nextMonth - 1) % 12) + 1
+  const nextBilling = settings.enabled && !student.bpjsExempt
+    ? { month: nextIndex, year: nextYear, label: bpjsLabel(nextIndex, nextYear), date: new Date(nextYear, nextIndex - 1, settings.day).toISOString() }
+    : null
+
+  const paid = history.filter((row) => row.state === 'paid')
+  return {
+    enabled: settings.enabled,
+    amount: settings.amount,
+    billingDay: settings.day,
+    exempt: !!student.bpjsExempt,
+    label: bpjsLabel(month, year),
+    period: { month, year },
+    dueDate: dueDate.toISOString(),
+    billingStarted,
+    state,
+    canAdd,
+    itemId: current?.id || null,
+    paidAt: current?.paidAt || null,
+    nextBilling,
+    overdueCount: history.filter((row) => row.state === 'overdue').length,
+    paidCount: paid.length,
+    paidTotal: paid.reduce((sum, row) => sum + row.amount, 0),
+    history,
+  }
 }
 
 router.get('/bpjs/me', authenticate, authorize('parent'), async (req, res) => {
@@ -442,6 +506,7 @@ router.post('/bpjs/me', authenticate, authorize('parent'), async (req, res) => {
     const info = await bpjsStateFor(student)
     if (info.state === 'exempt') return res.status(400).json({ error: 'Anak Anda tidak dikenai tagihan BPJS' })
     if (!info.enabled || info.amount <= 0) return res.status(400).json({ error: 'Tagihan BPJS belum diaktifkan' })
+    if (!info.billingStarted && !info.itemId) return res.status(400).json({ error: `Tagihan BPJS bulan ini baru bisa dibayar mulai tanggal ${info.billingDay}` })
     if (!info.canAdd) return res.status(400).json({ error: 'Tagihan BPJS periode ini sudah ada atau sudah dibayar' })
     // Item 'canceled' lama diganti baris baru; periode+anak tetap satu yang aktif.
     const item = await prisma.cartItem.create({
