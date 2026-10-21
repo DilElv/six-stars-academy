@@ -260,6 +260,25 @@ export async function ensureScheduleAttendance(schedule, { coachIds } = {}) {
   return session
 }
 
+// Melengkapi sesi absensi untuk jadwal latihan yang belum punya (mis. dibuat
+// sebelum fitur ini ada atau sinkronisasi sebelumnya gagal), supaya latihan
+// selalu muncul di Absensi Coach. Murah: hanya jadwal tanpa sesi yang diproses.
+export async function ensureSchedulesAttendanceInRange(start, end, branchIds = null) {
+  const missing = await prisma.schedule.findMany({
+    where: {
+      date: { gte: start, lt: end },
+      status: 'active',
+      attendanceSession: null,
+      ...(branchIds ? { branchId: { in: branchIds } } : {}),
+    },
+    include: { coaches: true },
+  })
+  for (const schedule of missing) {
+    await ensureScheduleAttendance(schedule, { coachIds: schedule.coaches.map((row) => row.userId) })
+  }
+  return missing.length
+}
+
 // Ganti daftar coach bertugas pada jadwal latihan (tabel ScheduleCoach).
 export async function setScheduleCoaches(scheduleId, coachIds) {
   const ids = [...new Set((coachIds || []).filter(Boolean))]

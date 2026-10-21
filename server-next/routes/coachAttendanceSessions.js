@@ -12,6 +12,7 @@ import {
   generateMonthAttendanceSessions,
   setSessionCoaches,
   setScheduleCoaches,
+  ensureSchedulesAttendanceInRange,
 } from '../lib/coachAttendance.js'
 
 const router = Router()
@@ -59,6 +60,16 @@ router.get('/', authenticate, authorize('admin', 'head_coach'), async (req, res)
       where.branchId = req.query.branchId
     }
 
+    // Jadwal latihan yang belum punya sesi absensi dilengkapi dulu agar latihan tidak hilang dari daftar.
+    const range = req.query.month && req.query.year ? monthRange(Number(req.query.month), Number(req.query.year)) : null
+    if (range) {
+      try {
+        await ensureSchedulesAttendanceInRange(range.gte, range.lt, branchIds)
+      } catch (healErr) {
+        console.error('Gagal melengkapi sesi absensi dari jadwal:', healErr)
+      }
+    }
+
     const sessions = await prisma.coachAttendanceSession.findMany({
       where,
       include: SESSION_INCLUDE,
@@ -103,6 +114,14 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
   try {
     const branchIds = await getUserBranchIds(req.user.id)
     if (req.user.role === 'coach' && branchIds.length === 0) return res.json([])
+    try {
+      const today = startOfDay()
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      await ensureSchedulesAttendanceInRange(today, tomorrow, branchIds.length ? branchIds : null)
+    } catch (healErr) {
+      console.error('Gagal melengkapi sesi absensi hari ini dari jadwal:', healErr)
+    }
     const sessions = await prisma.coachAttendanceSession.findMany({
       where: {
         type: 'training',
