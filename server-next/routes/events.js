@@ -9,6 +9,30 @@ import { ensureEventAttendance } from '../lib/coachAttendance.js'
 
 const router = Router()
 
+// Coach yang baru ditugaskan pada event dikabari lewat notifikasi.
+async function notifyEventCoaches(event, userIds) {
+  try {
+    const ids = [...new Set(userIds)].filter(Boolean)
+    const when = new Date(event.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' })
+    const time = event.startTime ? `, ${event.startTime}${event.endTime ? `–${event.endTime}` : ''} WIB` : ''
+    for (const userId of ids) {
+      await notifyUser(userId, {
+        type: 'event_duty_assigned',
+        title: 'Anda Bertugas di Event',
+        message: `${event.title} — ${when}${time}${event.location ? ` di ${event.location}` : ''}.`,
+        link: '/coach',
+      })
+    }
+  } catch (err) {
+    console.error('Gagal mengirim notifikasi tugas event:', err)
+  }
+}
+
+async function assignedCoachIds(eventId) {
+  const rows = await prisma.coachAttendanceSessionCoach.findMany({ where: { session: { eventId } }, select: { userId: true } })
+  return [...new Set(rows.map((row) => row.userId))]
+}
+
 async function setEventBranches(tx, eventId, branchIds) {
   await tx.eventBranch.deleteMany({ where: { eventId } })
   if (Array.isArray(branchIds) && branchIds.length > 0) {
@@ -50,12 +74,18 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
       include: {
         createdBy: { select: { name: true } },
         branches: { include: { branch: { select: { id: true, name: true, code: true } } } },
-        attendanceSessions: { select: { assignedCoaches: { select: { user: { select: { id: true, name: true } } } } } },
+        attendanceSessions: { select: { assignedCoaches: { select: { userId: true, user: { select: { id: true, name: true } } } } } },
         _count: { select: { participants: true } },
       },
       orderBy: { date: 'desc' },
     })
-    res.json(events)
+    // Coach: tandai event yang secara khusus menugaskan dirinya (kartu "Anda bertugas").
+    res.json(req.user.role === 'coach'
+      ? events.map((event) => ({
+        ...event,
+        assignedToMe: event.attendanceSessions.some((session) => session.assignedCoaches.some((row) => row.userId === req.user.id)),
+      }))
+      : events)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
@@ -94,7 +124,7 @@ router.get('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), asyn
       include: {
         createdBy: { select: { name: true, email: true } },
         branches: { include: { branch: { select: { id: true, name: true, code: true } } } },
-        attendanceSessions: { select: { branchId: true, assignedCoaches: { select: { user: { select: { id: true, name: true } } } } } },
+        attendanceSessions: { select: { branchId: true, assignedCoaches: { select: { userId: true, user: { select: { id: true, name: true } } } } } },
         participants: {
           include: {
             student: {
@@ -151,6 +181,7 @@ router.post('/', authenticate, authorize('head_coach', 'admin'), async (req, res
     try {
       const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
       await ensureEventAttendance(fullEvent, undefined, { coachIds })
+      if (Array.isArray(coachIds)) await notifyEventCoaches(fullEvent, coachIds)
     } catch (syncErr) {
       console.error('Gagal membuat jadwal absensi event:', syncErr)
     }
@@ -182,7 +213,9 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
     })
     try {
       const fullEvent = await prisma.event.findUnique({ where: { id: event.id }, include: { branches: true } })
+      const before = Array.isArray(coachIds) ? await assignedCoachIds(event.id) : []
       await ensureEventAttendance(fullEvent, undefined, { coachIds })
+      if (Array.isArray(coachIds)) await notifyEventCoaches(fullEvent, coachIds.filter((id) => !before.includes(id)))
     } catch (syncErr) {
       console.error('Gagal menyinkronkan jadwal absensi event:', syncErr)
     }

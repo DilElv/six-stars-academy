@@ -59,9 +59,10 @@ export default function CoachEventPage() {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-bold text-navy-900">{e.title}</span>
                   {statusBadge(e.status)}
+                  {e.assignedToMe && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Anda bertugas</span>}
                 </div>
                 <div className="text-xs text-gray-400 flex flex-wrap gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                  <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(e.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}{e.startTime ? ` · ${e.startTime}${e.endTime ? `–${e.endTime}` : ''} WIB` : ''}</span>
                   <span>{e.type}</span>
                   {e.ageGroup && e.ageGroup.split(',').map((ag) => <span key={ag} className="text-xs font-semibold bg-gold-50 text-navy-900 border border-gold-200 px-2 py-0.5 rounded-full">{ag.trim()}</span>)}
                   {e._count?.participants != null && <span>· {e._count.participants} peserta</span>}
