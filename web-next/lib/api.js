@@ -116,6 +116,20 @@ export async function cancelPayment(id) {
   return request(`/payments/${id}`, { method: 'DELETE' })
 }
 
+// Admin/head coach membatalkan pembayaran parent yang menggantung (pending).
+export async function cancelPaymentAsStaff(id) {
+  return request(`/payments/${id}/cancel`, { method: 'POST' })
+}
+
+// BPJS periode berjalan untuk parent + tambah sendiri ke keranjang.
+export async function getMyBpjs() {
+  return request('/cart/bpjs/me')
+}
+
+export async function addMyBpjs() {
+  return request('/cart/bpjs/me', { method: 'POST' })
+}
+
 // Keranjang belanja parent: item (perpanjangan paket, BPJS, merchandise) yang
 // digabung jadi satu checkout.
 export async function getMyCart() {
@@ -440,6 +454,15 @@ export async function updateBpjsStudents(payload) {
 
 export async function runBpjsBilling(payload = {}) {
   return request('/settings/bpjs/run', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+// Penugasan coach ke cabang oleh head coach/admin.
+export async function getCoachAssignments() {
+  return request('/branches/assignments')
+}
+
+export async function updateCoachAssignment(userId, branchIds) {
+  return request(`/branches/assignments/${userId}`, { method: 'PUT', body: JSON.stringify({ branchIds }) })
 }
 
 export async function getFields(branchId) {

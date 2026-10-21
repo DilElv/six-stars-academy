@@ -76,6 +76,11 @@ export default function CoachDasborPage() {
         <div className="relative">
           <h1 className="font-bold text-white text-lg">Dasbor Coach</h1>
           <p className="text-sm text-gray-400 mt-1">Pilih kelompok umur untuk mengisi absensi atau topik latihan.</p>
+          {me && !me.branches?.length && (
+            <div className="mt-3 text-xs font-semibold text-amber-200 bg-amber-400/15 border border-amber-300/30 rounded-2xl px-3 py-2">
+              Anda belum ditugaskan ke cabang mana pun. Hubungi head coach agar bisa absen dan melihat data anak.
+            </div>
+          )}
           {me?.branches?.length > 0 && (
             <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-300">
               <MapPin size={12} className="text-gold-400" />

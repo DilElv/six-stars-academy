@@ -8,6 +8,7 @@ import { notifyUser } from '../lib/notify.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { resolveCustomPackage } from '../lib/studentCustomPackage.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
+import { getBpjsSettings, bpjsLabel } from '../lib/bpjsBilling.js'
 
 const router = Router()
 
@@ -44,7 +45,28 @@ async function listCart(studentId) {
     include: { addedBy: { select: { name: true, role: true } } },
   })
   const total = items.reduce((sum, i) => sum + i.amount, 0)
-  return { items, total }
+  return { items, total, pendingPayment: await findPendingCheckout(studentId) }
+}
+
+// Checkout keranjang yang sudah dibuat tetapi belum dibayar. Item-nya berstatus
+// 'checked_out' sehingga tidak tampil di keranjang; tanpa info ini parent dan
+// admin tidak melihat tagihan itu dan tidak bisa membatalkannya.
+async function findPendingCheckout(studentId) {
+  const payment = await prisma.payment.findFirst({
+    where: { studentId, paymentType: 'cart', status: 'pending' },
+    orderBy: { createdAt: 'desc' },
+    include: { cartItems: { select: { id: true, label: true, category: true, amount: true } } },
+  })
+  if (!payment) return null
+  return {
+    id: payment.id,
+    totalAmount: payment.totalAmount,
+    paymentMethod: payment.paymentMethod,
+    paymentLink: payment.paymentLink,
+    qrString: payment.qrString,
+    createdAt: payment.createdAt,
+    items: payment.cartItems,
+  }
 }
 
 function itemNote(metadata) {
@@ -381,6 +403,68 @@ router.post('/mark-paid', authenticate, authorize('admin', 'head_coach'), async 
   }
 })
 
+// BPJS untuk parent: status periode berjalan + tambah sendiri ke keranjang.
+// Nominal & periode selalu dari pengaturan server (parent tidak menentukan harga).
+async function bpjsStateFor(student) {
+  const settings = await getBpjsSettings()
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const year = now.getFullYear()
+  const item = await prisma.cartItem.findFirst({
+    where: { studentId: student.id, type: 'bpjs', periodMonth: month, periodYear: year },
+    orderBy: { createdAt: 'desc' },
+    include: { payment: { select: { status: true } } },
+  })
+  let state = 'none'
+  if (student.bpjsExempt) state = 'exempt'
+  else if (item?.status === 'checked_out' && item.payment?.status === 'success') state = 'paid'
+  else if (item?.status === 'checked_out') state = 'pending'
+  else if (item?.status === 'open') state = 'in_cart'
+  const canAdd = !student.bpjsExempt && settings.enabled && settings.amount > 0 && (state === 'none' || item?.status === 'canceled')
+  return { enabled: settings.enabled, amount: settings.amount, label: bpjsLabel(month, year), period: { month, year }, state, canAdd, itemId: item?.id || null }
+}
+
+router.get('/bpjs/me', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
+    if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
+    res.json(await bpjsStateFor(student))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.post('/bpjs/me', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const student = await prisma.student.findFirst({ where: { userId: req.user.id } })
+    if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
+    const info = await bpjsStateFor(student)
+    if (info.state === 'exempt') return res.status(400).json({ error: 'Anak Anda tidak dikenai tagihan BPJS' })
+    if (!info.enabled || info.amount <= 0) return res.status(400).json({ error: 'Tagihan BPJS belum diaktifkan' })
+    if (!info.canAdd) return res.status(400).json({ error: 'Tagihan BPJS periode ini sudah ada atau sudah dibayar' })
+    // Item 'canceled' lama diganti baris baru; periode+anak tetap satu yang aktif.
+    const item = await prisma.cartItem.create({
+      data: {
+        studentId: student.id,
+        type: 'bpjs',
+        category: TYPE_CATEGORY.bpjs,
+        label: info.label,
+        amount: info.amount,
+        periodMonth: info.period.month,
+        periodYear: info.period.year,
+        metadata: { periodMonth: info.period.month, periodYear: info.period.year, note: null },
+        addedById: req.user.id,
+        status: 'open',
+      },
+    })
+    res.status(201).json(item)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Checkout seluruh keranjang jadi SATU pembayaran Rintisan. Tiap item tetap
 // terpisah sebagai baris kategori di laporan keuangan (lihat routes/ledger.js).
 router.post('/checkout', authenticate, authorize('parent'), async (req, res) => {
@@ -454,7 +538,8 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
 // menunggak. Tagihan di sini TIDAK pernah ikut dihitung sebagai pendapatan.
 router.get('/outstanding', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
   try {
-    const where = { status: 'open' }
+    // Termasuk item yang sudah di-checkout tetapi pembayarannya masih menggantung.
+    const where = { OR: [{ status: 'open' }, { status: 'checked_out', payment: { status: 'pending' } }] }
     if (req.user.role === 'head_coach') {
       const branchIds = await getUserBranchIds(req.user.id)
       where.student = { branchId: { in: branchIds } }
@@ -465,6 +550,7 @@ router.get('/outstanding', authenticate, authorize('admin', 'head_coach'), async
       include: {
         student: { select: { id: true, fullName: true, studentId: true, branch: { select: { code: true } } } },
         addedBy: { select: { name: true, role: true } },
+        payment: { select: { id: true, status: true } },
       },
     })
     const total = items.reduce((sum, i) => sum + i.amount, 0)

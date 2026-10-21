@@ -56,6 +56,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
     // Coach: absensi hanya lewat sesi yang dijadwalkan admin/head coach dan
     // hanya di dalam jendela jam buka-tutup.
     if (req.user.role === 'coach') {
+      if (assignedBranchIds.length === 0) return res.status(403).json({ error: 'Anda belum ditugaskan ke cabang mana pun oleh head coach' })
       if (!sessionId) return res.status(400).json({ error: 'Pilih sesi absensi terlebih dahulu' })
       const session = await findCoachSession(req.user, sessionId, assignedBranchIds)
       const state = windowState(session)

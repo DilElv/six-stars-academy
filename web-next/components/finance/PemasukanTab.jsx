@@ -27,6 +27,7 @@ export default function PemasukanTab() {
   const [currentUser, setCurrentUser] = useState(null)
   const [missing, setMissing] = useState({ count: 0, total: 0, items: [] })
   const [outstanding, setOutstanding] = useState({ count: 0, total: 0, items: [] })
+  const [cancellingId, setCancellingId] = useState('')
 
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
 
@@ -39,6 +40,19 @@ export default function PemasukanTab() {
 
   useEffect(load, [month, year])
   useEffect(() => { setCategoryFilter('') }, [month, year])
+
+  async function cancelPending(paymentId) {
+    if (!confirm('Batalkan pembayaran yang menggantung? Item kembali jadi tagihan terbuka.')) return
+    setCancellingId(paymentId)
+    try {
+      await api.cancelPaymentAsStaff(paymentId)
+      load()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setCancellingId('')
+    }
+  }
 
   async function handleDelete(item) {
     const warning = item.source === 'payment'
@@ -152,6 +166,16 @@ export default function PemasukanTab() {
                     {o.addedBy?.name ? ` · dititipkan oleh ${o.addedBy.name}` : ''}
                   </div>
                 </div>
+                {o.payment?.status === 'pending' && (
+                  <button
+                    onClick={() => cancelPending(o.payment.id)}
+                    disabled={cancellingId === o.payment.id}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
+                    title="Sudah di-checkout parent tapi belum dibayar. Klik untuk membatalkan dan mengembalikan ke tagihan terbuka."
+                  >
+                    {cancellingId === o.payment.id ? 'Membatalkan...' : 'Menunggu bayar · Batalkan'}
+                  </button>
+                )}
                 <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(o.amount)}</div>
               </div>
             ))}

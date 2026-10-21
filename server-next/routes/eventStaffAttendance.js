@@ -31,13 +31,14 @@ async function sessionForEvent(event, branchId) {
   })
 }
 
-async function accessibleEvent(userId, eventId, branchId) {
+async function accessibleEvent(userId, eventId, branchId, userRole) {
   const branchIds = await getUserBranchIds(userId)
   const event = await prisma.event.findUnique({ where: { id: eventId }, include: { branches: true } })
   if (!event) throw Object.assign(new Error('Event tidak ditemukan'), { status: 404 })
   if (event.status !== 'open') throw Object.assign(new Error('Event tidak aktif'), { status: 400 })
   if (!sameDay(event.date)) throw Object.assign(new Error('Absensi event hanya tersedia pada tanggal event'), { status: 400 })
   if (branchIds.length === 0) {
+    if (userRole === 'coach') throw Object.assign(new Error('Anda belum ditugaskan ke cabang mana pun oleh head coach'), { status: 403 })
     if (event.branches.length > 0) throw Object.assign(new Error('Event ini bukan untuk cabang Anda'), { status: 403 })
     return { event, branchId: null }
   }
@@ -57,6 +58,7 @@ async function canVerify(req, record) {
 router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req, res) => {
   try {
     const branchIds = await getUserBranchIds(req.user.id)
+    if (req.user.role === 'coach' && branchIds.length === 0) return res.json([])
     const start = dayStart()
     const end = new Date(start); end.setDate(end.getDate() + 1)
     const events = await prisma.event.findMany({
@@ -96,7 +98,7 @@ router.post('/checkin', authenticate, authorize('coach', 'head_coach'), async (r
   const { eventId, branchId, photo, latitude, longitude, locationName } = req.body
   if (!eventId || !photo) return res.status(400).json({ error: 'Event dan foto selfie wajib diisi' })
   try {
-    const access = await accessibleEvent(req.user.id, eventId, branchId)
+    const access = await accessibleEvent(req.user.id, eventId, branchId, req.user.role)
     const session = await sessionForEvent(access.event, access.branchId)
     if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
     if (!(await isCoachAssigned(session, req.user.id))) return res.status(403).json({ error: 'Anda tidak ditugaskan pada event ini' })
@@ -123,7 +125,7 @@ router.post('/checkout', authenticate, authorize('coach', 'head_coach'), async (
   const { eventId, branchId, photo, latitude, longitude, locationName } = req.body
   if (!eventId || !photo) return res.status(400).json({ error: 'Event dan foto selfie wajib diisi' })
   try {
-    const access = await accessibleEvent(req.user.id, eventId, branchId)
+    const access = await accessibleEvent(req.user.id, eventId, branchId, req.user.role)
     const session = await sessionForEvent(access.event, access.branchId)
     if (!session) return res.status(400).json({ error: 'Jadwal absensi event ini belum dibuat admin/head coach' })
     if (!(await isCoachAssigned(session, req.user.id))) return res.status(403).json({ error: 'Anda tidak ditugaskan pada event ini' })

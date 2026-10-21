@@ -1,6 +1,6 @@
 import prisma from './prisma.js'
 import { isConfigured, queryPayment } from './rintisan.js'
-import { syncPaymentWithRintisan, convertPendingRegistration } from './paymentHelpers.js'
+import { syncPaymentWithRintisan, convertPendingRegistration, releasePendingPayment } from './paymentHelpers.js'
 import { logPaymentAudit } from './paymentAudit.js'
 
 // Background safety net for payments that were never confirmed because
@@ -16,6 +16,11 @@ const INTERVAL_MS = 5 * 60_000
 const PAYMENT_MAX_AGE_DAYS = 14
 const PENDING_REGISTRATION_MAX_AGE_DAYS = 3
 const BATCH_SIZE = 25
+// Batas bayar di gateway 2 hari (lihat createBillingFor); lewat itu tagihan
+// tidak mungkin dibayar lagi, jadi pembayaran menggantung dilepas.
+const PAYMENT_EXPIRY_HOURS = 60
+// Checkout tanpa transactionId = pembuatan billing gagal di tengah jalan.
+const ORPHAN_PAYMENT_MINUTES = 30
 
 function daysAgo(days) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
@@ -41,6 +46,45 @@ async function reconcilePayments() {
       }
     } catch (err) {
       console.error(`Reconcile payment ${payment.id} failed:`, err.message)
+    }
+  }
+}
+
+// Pembayaran keranjang yang menggantung: kedaluwarsa atau tak pernah punya
+// billing. Item dikembalikan ke keranjang (status 'open') supaya parent bisa
+// checkout ulang atau menghapusnya, dan admin tidak melihat tagihan "hantu".
+async function releaseStalePayments() {
+  const expired = new Date(Date.now() - PAYMENT_EXPIRY_HOURS * 60 * 60 * 1000)
+  const orphan = new Date(Date.now() - ORPHAN_PAYMENT_MINUTES * 60 * 1000)
+  const stale = await prisma.payment.findMany({
+    where: {
+      status: 'pending',
+      paymentType: 'cart',
+      OR: [
+        { transactionId: { not: null }, createdAt: { lt: expired } },
+        { transactionId: null, paymentMethod: null, createdAt: { lt: orphan } },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    take: BATCH_SIZE,
+  })
+  for (const payment of stale) {
+    try {
+      // Pastikan benar-benar belum dibayar sebelum dilepas.
+      const fresh = payment.transactionId ? await syncPaymentWithRintisan(payment) : payment
+      if (fresh.status === 'success') continue
+      const released = await releasePendingPayment(payment, { mode: 'fail', reason: 'Kedaluwarsa — tidak dibayar sampai batas waktu' })
+      if (released.released) {
+        await logPaymentAudit({
+          paymentId: payment.id,
+          action: 'cancel',
+          studentId: payment.studentId,
+          amount: payment.totalAmount,
+          note: 'Dilepas otomatis: pembayaran keranjang kedaluwarsa, item dikembalikan ke keranjang',
+        })
+      }
+    } catch (err) {
+      console.error(`Release stale payment ${payment.id} failed:`, err.message)
     }
   }
 }
@@ -71,6 +115,7 @@ export function startPaymentReconciler() {
     running = true
     try {
       await reconcilePayments()
+      await releaseStalePayments()
       await reconcilePendingRegistrations()
     } catch (err) {
       console.error('Payment reconciliation sweep failed:', err.message)

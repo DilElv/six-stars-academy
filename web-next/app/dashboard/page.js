@@ -1,5 +1,6 @@
 'use client'
 
+import ParentBpjsCard from '@/components/ParentBpjsCard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw, ReceiptText, CreditCard } from 'lucide-react'
@@ -301,6 +302,8 @@ export default function ParentDasborPage() {
           </div>
         </div>
       </div>
+
+      <ParentBpjsCard />
 
       {/* Latest report */}
       {latestReport?.assessment && (

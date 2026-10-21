@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, Trash2, Loader2, Package, HeartPulse, Shirt, Plus, CheckCircle2, ArrowRight } from 'lucide-react'
+import { ShoppingCart, Trash2, Loader2, Package, HeartPulse, Shirt, Plus, CheckCircle2, ArrowRight, ExternalLink, XCircle } from 'lucide-react'
 import * as api from '@/lib/api'
 import PaymentMethodModal from '@/components/PaymentMethodModal'
 import RenewalModal from '@/components/RenewalModal'
+import ParentBpjsCard from '@/components/ParentBpjsCard'
 
 const CATEGORY_ICON = {
   'Perpanjangan Paket': Package,
@@ -31,6 +32,8 @@ export default function KeranjangPage() {
   const [showRenewal, setShowRenewal] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [paid, setPaid] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [bpjsKey, setBpjsKey] = useState(0)
 
   function load() {
     api.getMyCart().then(setCart).catch((err) => setError(err.message))
@@ -49,6 +52,22 @@ export default function KeranjangPage() {
       setError(err.message)
     } finally {
       setRemoving('')
+    }
+  }
+
+  // Batalkan checkout yang menggantung: item kembali ke keranjang, tidak nyangkut.
+  async function handleCancelPending() {
+    if (!cart?.pendingPayment || !confirm('Batalkan pembayaran yang sedang menunggu? Item akan kembali ke keranjang.')) return
+    setCancelling(true)
+    setError('')
+    try {
+      await api.cancelPayment(cart.pendingPayment.id)
+      load()
+      setBpjsKey((k) => k + 1)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -72,6 +91,40 @@ export default function KeranjangPage() {
       </div>
 
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>}
+
+      {cart.pendingPayment && !paid && (
+        <div className="glass-card rounded-3xl p-4 sm:p-5 border-l-4 border-amber-400">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <div className="font-bold text-navy-900 text-sm">Pembayaran menunggu ({formatRupiah(cart.pendingPayment.totalAmount)})</div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {(cart.pendingPayment.items || []).map((i) => i.label).join(', ') || 'Tagihan keranjang'} sudah di-checkout tetapi belum dibayar.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {cart.pendingPayment.paymentLink && (
+                <a
+                  href={cart.pendingPayment.paymentLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold px-4 py-2 rounded-2xl"
+                >
+                  <ExternalLink size={14} /> Lanjutkan Bayar
+                </a>
+              )}
+              <button
+                onClick={handleCancelPending}
+                disabled={cancelling}
+                className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50"
+              >
+                {cancelling ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />} Batalkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ParentBpjsCard key={bpjsKey} onChanged={load} />
 
       {paid ? (
         <div className="glass-card rounded-3xl p-8 text-center">

@@ -199,6 +199,7 @@ router.post('/scan', authenticate, authorize('coach', 'head_coach', 'admin'), as
 
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
+      if (branchIds.length === 0) return res.status(403).json({ error: 'Anda belum ditugaskan ke cabang mana pun oleh head coach' })
       if (card.student.branchId && !branchIds.includes(card.student.branchId)) {
         return res.status(403).json({ error: 'Siswa ini bukan dari cabang Anda' })
       }
@@ -228,6 +229,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
+      if (branchIds.length === 0) return res.status(403).json({ error: 'Anda belum ditugaskan ke cabang mana pun oleh head coach' })
       const students = await prisma.student.findMany({
         where: { id: { in: records.map((r) => r.studentId) } },
         select: { id: true, branchId: true },

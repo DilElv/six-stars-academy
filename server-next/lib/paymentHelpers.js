@@ -84,6 +84,28 @@ export async function syncPaymentWithRintisan(payment) {
   return payment
 }
 
+// Melepas pembayaran yang masih menunggu: item keranjang yang terikat
+// dikembalikan ke status 'open' supaya tidak menggantung di "checked_out".
+// mode 'delete' menghapus barisnya (batal oleh parent/admin); mode 'fail'
+// menandainya gagal agar riwayat tetap ada (kedaluwarsa). Aman dipanggil
+// berulang dan tidak menyentuh pembayaran yang sudah lunas.
+export async function releasePendingPayment(payment, { mode = 'delete', reason } = {}) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${payment.id}))`
+    const current = await tx.payment.findUnique({ where: { id: payment.id } })
+    if (!current || current.status !== 'pending' || current.effectsAppliedAt) {
+      return { released: false, status: current?.status ?? null }
+    }
+    await tx.cartItem.updateMany({ where: { paymentId: current.id }, data: { paymentId: null, status: 'open' } })
+    if (mode === 'fail') {
+      await tx.payment.update({ where: { id: current.id }, data: { status: 'failed', failReason: reason || null } })
+    } else {
+      await tx.payment.delete({ where: { id: current.id } })
+    }
+    return { released: true, status: mode === 'fail' ? 'failed' : 'deleted' }
+  })
+}
+
 // Applies the business effect of a successful payment, based on its type.
 // Idempotent: safe to call more than once for the same payment.
 export async function applyPaymentSuccess(payment) {

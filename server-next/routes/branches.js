@@ -46,6 +46,42 @@ router.post('/quick', authenticate, authorize('admin', 'head_coach'), async (req
   }
 })
 
+// Penugasan coach ke cabang oleh head coach/admin: coach hanya bisa absen dan
+// melihat anak di cabang yang ditugaskan (UserBranch). Tanpa penugasan, coach
+// tidak bisa absen sama sekali.
+router.get('/assignments', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    const coaches = await prisma.user.findMany({
+      where: { role: 'coach', status: { not: 'inactive' } },
+      select: { id: true, name: true, email: true, photo: true, branches: { select: { branchId: true } } },
+      orderBy: { name: 'asc' },
+    })
+    res.json(coaches.map((c) => ({ id: c.id, name: c.name, email: c.email, photo: c.photo, branchIds: c.branches.map((b) => b.branchId) })))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.put('/assignments/:userId', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  const branchIds = Array.isArray(req.body?.branchIds) ? [...new Set(req.body.branchIds.filter(Boolean))] : null
+  if (!branchIds) return res.status(400).json({ error: 'branchIds wajib berupa daftar' })
+  try {
+    const coach = await prisma.user.findUnique({ where: { id: req.params.userId }, select: { id: true, role: true } })
+    if (!coach || coach.role !== 'coach') return res.status(404).json({ error: 'Coach tidak ditemukan' })
+    const valid = await prisma.branch.findMany({ where: { id: { in: branchIds }, status: 'active' }, select: { id: true } })
+    if (valid.length !== branchIds.length) return res.status(400).json({ error: 'Ada cabang yang tidak valid' })
+    await prisma.$transaction([
+      prisma.userBranch.deleteMany({ where: { userId: coach.id } }),
+      prisma.userBranch.createMany({ data: branchIds.map((branchId) => ({ userId: coach.id, branchId })) }),
+    ])
+    res.json({ id: coach.id, branchIds })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
   const { name, code } = req.body
   try {

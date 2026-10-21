@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
-import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan } from '../lib/paymentHelpers.js'
+import { checkoutPayment, applyPaymentSuccess, applyPaymentFailed, convertPendingRegistration, failPendingRegistration, syncPaymentWithRintisan, releasePendingPayment } from '../lib/paymentHelpers.js'
 import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymentMethod, isDuplicatePartnerTrxError } from '../lib/rintisan.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
 import { missingProofWhere } from '../lib/paymentProof.js'
+import { getUserBranchIds } from '../lib/branchAccess.js'
 
 const router = Router()
 
@@ -309,6 +310,37 @@ router.post('/event', authenticate, authorize('parent'), async (req, res) => {
   }
 })
 
+// Admin/head coach membatalkan pembayaran keranjang/perpanjangan parent yang
+// menggantung (pending). Item dikembalikan ke tagihan terbuka; kalau gateway
+// ternyata sudah menerima pembayaran, pembatalan ditolak.
+router.post('/:id/cancel', authenticate, authorize('admin', 'head_coach'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true } })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    if (req.user.role === 'head_coach' && !(await getUserBranchIds(req.user.id)).includes(payment.student.branchId)) {
+      return res.status(403).json({ error: 'Anda hanya dapat mengelola pembayaran anak di cabang Anda' })
+    }
+    if (payment.status !== 'pending') return res.status(400).json({ error: 'Hanya pembayaran yang masih menunggu dibayar yang bisa dibatalkan' })
+    const fresh = payment.transactionId ? await syncPaymentWithRintisan(payment) : payment
+    if (fresh.status === 'success') return res.status(409).json({ error: 'Pembayaran ini sudah lunas, tidak bisa dibatalkan' })
+    const released = await releasePendingPayment(payment)
+    if (!released.released) return res.status(400).json({ error: 'Pembayaran sudah tidak menunggu dibayar' })
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'cancel',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before: paymentSnapshot(payment),
+      note: `${req.user.role === 'admin' ? 'Admin' : 'Head coach'} membatalkan pembayaran yang menggantung`,
+    })
+    res.json({ message: 'Dibatalkan' })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Parent-facing polling target: actively asks Rintisan whether this payment
 // has been paid yet (on top of the passive webhook), so "lunas" detection
 // doesn't depend on Rintisan's callback URL being reachable/registered.
@@ -335,12 +367,14 @@ router.delete('/:id', authenticate, authorize('parent'), async (req, res) => {
     if (!payment || payment.student.userId !== req.user.id) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
     if (payment.status !== 'pending') return res.status(400).json({ error: 'Hanya pembayaran yang masih menunggu dibayar yang bisa dibatalkan' })
 
-    await prisma.$transaction(async (tx) => {
-      // Kalau ini pembayaran keranjang, kembalikan itemnya ke keranjang supaya
-      // bisa di-checkout ulang (Payment dihapus -> paymentId jadi null).
-      await tx.cartItem.updateMany({ where: { paymentId: payment.id }, data: { paymentId: null, status: 'open' } })
-      await tx.payment.delete({ where: { id: payment.id } })
-    })
+    // Tanya gateway dulu: kalau ternyata sudah dibayar, jangan dibatalkan
+    // (uang masuk tapi tagihan hilang).
+    const fresh = payment.transactionId ? await syncPaymentWithRintisan(payment) : payment
+    if (fresh.status === 'success') return res.status(409).json({ error: 'Pembayaran ini sudah lunas, tidak bisa dibatalkan' })
+
+    // Item keranjang dikembalikan ke status 'open' supaya bisa di-checkout ulang.
+    const released = await releasePendingPayment(payment)
+    if (!released.released) return res.status(400).json({ error: 'Pembayaran sudah tidak menunggu dibayar' })
     await logPaymentAudit({
       paymentId: payment.id,
       action: 'cancel',
