@@ -720,6 +720,15 @@ export async function uploadPaymentProof(id, proofUrl, proofNote) {
   return request(`/payments/${id}/proof`, { method: 'POST', body: JSON.stringify({ proofUrl, proofNote }) })
 }
 
+// Pantau tagihan parent yang belum lunas (admin & head coach).
+export async function getUnpaidParents(filters) {
+  return request(`/billing/unpaid${buildQuery(filters)}`)
+}
+
+export async function logPaymentReminder(studentIds, amount) {
+  return request('/billing/remind', { method: 'POST', body: JSON.stringify({ studentIds, amount }) })
+}
+
 export async function confirmPaymentWithoutProof(id) {
   return request(`/payments/${id}/confirm-no-proof`, { method: 'POST' })
 }

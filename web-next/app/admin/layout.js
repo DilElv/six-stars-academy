@@ -1,6 +1,6 @@
 'use client'
 
-import { Home, Users, Shield, UserCog, Wallet, ClipboardList, Calendar, Trophy, Globe, Settings, ShieldCheck, Store, Banknote, UserCheck, HeartPulse } from 'lucide-react'
+import { Home, Users, Shield, UserCog, Wallet, ClipboardList, Calendar, Trophy, Globe, Settings, ShieldCheck, Store, Banknote, UserCheck, HeartPulse, ReceiptText } from 'lucide-react'
 import DashboardShell from '@/components/DashboardShell'
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { href: '/admin/data-admin', label: 'Data Admin', icon: ShieldCheck },
   { href: '/admin/toko', label: 'Toko', icon: Store },
   { href: '/admin/pembayaran', label: 'Keuangan', icon: Wallet },
+  { href: '/admin/tagihan', label: 'Tagihan Parent', icon: ReceiptText },
   { href: '/admin/payroll', label: 'Payroll', icon: Banknote },
   { href: '/admin/bpjs', label: 'BPJS', icon: HeartPulse },
   { href: '/admin/absensi', label: 'Absensi', icon: ClipboardList },

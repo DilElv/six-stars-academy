@@ -48,6 +48,7 @@ model User {
   ledgerEntries            LedgerEntry[]
   branches                 UserBranch[]
   cartItemsAdded           CartItem[]        @relation("CartItemAddedBy")
+  paymentRemindersSent     PaymentReminder[] @relation("PaymentReminderSender")
   paymentAudits            PaymentAuditLog[] @relation("PaymentAuditActor")
   paymentProofsUploaded    Payment[]         @relation("PaymentProofUploader")
   payrolls                 CoachPayroll[]    @relation("CoachPayrollCoach")
@@ -315,6 +316,7 @@ model Student {
   studentCard       StudentCard?
   eventParticipants EventParticipant[]
   cartItems         CartItem[]
+  paymentReminders  PaymentReminder[]
 
   @@map("students")
 }
@@ -891,4 +893,22 @@ model CoachPayroll {
   @@unique([coachId, month, year])
   @@index([month, year])
   @@map("coach_payrolls")
+}
+
+// Catatan pengingat tagihan yang dikirim admin/head coach ke parent (lewat
+// WhatsApp). Hanya jejak "kapan terakhir diingatkan" supaya parent tidak
+// diingatkan berulang oleh dua staf.
+model PaymentReminder {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sentById  String?
+  sentBy    User?    @relation("PaymentReminderSender", fields: [sentById], references: [id], onDelete: SetNull)
+  channel   String   @default("whatsapp")
+  amount    Int
+  createdAt DateTime @default(now())
+
+  @@index([studentId, createdAt])
+  @@index([sentById])
+  @@map("payment_reminders")
 }

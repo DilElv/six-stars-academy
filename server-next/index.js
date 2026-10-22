@@ -28,6 +28,7 @@ import { rejectInlineImages } from './middleware/rejectInlineImages.js'
 import branchPackagesRoutes from './routes/branchPackages.js'
 import ledgerRoutes from './routes/ledger.js'
 import eventStaffAttendanceRoutes from './routes/eventStaffAttendance.js'
+import billingRoutes from './routes/billing.js'
 import cartRoutes from './routes/cart.js'
 import productsRoutes from './routes/products.js'
 import payrollRoutes from './routes/payroll.js'
@@ -69,6 +70,7 @@ app.use('/api/branch-packages', branchPackagesRoutes)
 app.use('/api/ledger', ledgerRoutes)
 app.use('/api/event-staff-attendance', eventStaffAttendanceRoutes)
 app.use('/api/cart', cartRoutes)
+app.use('/api/billing', billingRoutes)
 app.use('/api/products', productsRoutes)
 app.use('/api/payroll', payrollRoutes)
 
