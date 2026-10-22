@@ -725,6 +725,10 @@ export async function getUnpaidParents(filters) {
   return request(`/billing/unpaid${buildQuery(filters)}`)
 }
 
+export async function deleteUnpaidItems(itemIds) {
+  return request('/billing/delete', { method: 'POST', body: JSON.stringify({ itemIds }) })
+}
+
 export async function logPaymentReminder(studentIds, amount) {
   return request('/billing/remind', { method: 'POST', body: JSON.stringify({ studentIds, amount }) })
 }

@@ -3,6 +3,8 @@ import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
 import { toGatewayPhone } from '../lib/phone.js'
+import { syncPaymentWithRintisan, releasePendingPayment } from '../lib/paymentHelpers.js'
+import { logPaymentAudit } from '../lib/paymentAudit.js'
 
 const router = Router()
 
@@ -139,6 +141,56 @@ router.post('/remind', async (req, res) => {
       data: students.map((s) => ({ studentId: s.id, sentById: req.user.id, amount: Number(amount) || 0 })),
     })
     res.json({ ok: true, at: new Date().toISOString() })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// POST /delete { itemIds: string[] } — hapus manual tagihan belum lunas (sekali
+// atau banyak sekaligus). Item ditandai `canceled`, bukan dihapus permanen, supaya
+// penagihan otomatis (mis. BPJS) tidak membuatnya lagi untuk periode yang sama.
+// Tagihan yang sudah di-checkout dilepas dulu dari pembayaran yang menggantung;
+// yang ternyata sudah lunas di gateway dilewati.
+router.post('/delete', async (req, res) => {
+  try {
+    const { itemIds } = req.body
+    if (!Array.isArray(itemIds) || itemIds.length === 0) return res.status(400).json({ error: 'itemIds wajib diisi' })
+    const branchScope = await scopeBranchIds(req.user)
+    const items = await prisma.cartItem.findMany({
+      where: {
+        id: { in: itemIds },
+        OR: [{ status: 'open' }, { status: 'checked_out', payment: { status: 'pending' } }],
+        ...(branchScope ? { student: { branchId: { in: branchScope } } } : {}),
+      },
+      include: { payment: true },
+    })
+
+    let deleted = 0
+    let skipped = 0
+    const handledPayments = new Set()
+    for (const item of items) {
+      if (item.payment && item.status === 'checked_out') {
+        if (!handledPayments.has(item.payment.id)) {
+          handledPayments.add(item.payment.id)
+          const fresh = item.payment.transactionId ? await syncPaymentWithRintisan(item.payment) : item.payment
+          if (fresh.status === 'success') { skipped++; continue }
+          const released = await releasePendingPayment(item.payment)
+          if (!released.released) { skipped++; continue }
+        }
+      }
+      const result = await prisma.cartItem.updateMany({ where: { id: item.id, status: { in: ['open', 'checked_out'] } }, data: { status: 'canceled', paymentId: null } })
+      if (result.count === 0) { skipped++; continue }
+      deleted++
+      await logPaymentAudit({
+        studentId: item.studentId,
+        action: 'invoice_delete',
+        actor: req.user,
+        amount: item.amount,
+        note: `Hapus tagihan dari Tagihan Parent: ${item.label}`,
+      })
+    }
+    res.json({ deleted, skipped })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BellRing, ChevronDown, CheckCircle2, MessageCircle, RefreshCw, Search, Users, Wallet, AlertTriangle } from 'lucide-react'
+import { BellRing, ChevronDown, CheckCircle2, MessageCircle, RefreshCw, Trash2, Search, Users, Wallet, AlertTriangle } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
 import { formatRupiah } from '@/components/finance/shared'
@@ -45,6 +45,7 @@ export default function UnpaidMonitor() {
   const [branchFilter, setBranchFilter] = useState('')
   const [branches, setBranches] = useState([])
   const [open, setOpen] = useState({})
+  const [deleting, setDeleting] = useState(false)
 
   const load = useCallback((silent = false) => {
     if (!silent) setRefreshing(true)
@@ -83,6 +84,28 @@ export default function UnpaidMonitor() {
     load(true)
   }
 
+  async function removeItems(itemIds, message) {
+    if (itemIds.length === 0 || !confirm(message)) return
+    setDeleting(true)
+    try {
+      const res = await api.deleteUnpaidItems(itemIds)
+      if (res.skipped) alert(`${res.deleted} tagihan dihapus. ${res.skipped} dilewati karena sudah lunas atau sudah berubah.`)
+      await load(true)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const removeOne = (i) => removeItems([i.id], `Hapus tagihan "${i.label}" (${i.studentName}, ${formatRupiah(i.amount)})? Tagihan hilang dari daftar parent dan tidak dibuat ulang otomatis.`)
+  const removeParent = (p) => removeItems(p.items.map((i) => i.id), `Hapus semua ${p.items.length} tagihan ${p.parentName || 'parent ini'} (${formatRupiah(p.total)})?`)
+  const removeAllShown = () => {
+    const ids = parents.flatMap((p) => p.items.map((i) => i.id))
+    const total = parents.reduce((s, p) => s + p.total, 0)
+    removeItems(ids, `Hapus SEMUA ${ids.length} tagihan dari ${parents.length} parent yang tampil (${formatRupiah(total)})? Tagihan hilang dari daftar parent dan tidak dibuat ulang otomatis.`)
+  }
+
   if (!data && !error) return <div className="text-sm text-gray-400">Memuat...</div>
 
   const summary = data?.summary
@@ -100,9 +123,16 @@ export default function UnpaidMonitor() {
           <h1 className="font-bold text-navy-900 text-lg">Tagihan Parent</h1>
           <p className="text-xs text-gray-500">Parent yang masih punya tagihan belum lunas · {periodLabel}</p>
         </div>
+        <div className="flex items-center gap-2">
+        {parents.length > 0 && (
+          <button onClick={removeAllShown} disabled={deleting} className="flex items-center gap-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60">
+            <Trash2 size={13} /> Hapus semua{statusFilter !== 'all' || search || branchFilter ? ' (sesuai filter)' : ''}
+          </button>
+        )}
         <button onClick={() => load()} disabled={refreshing} className="flex items-center gap-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-navy-700 text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-60">
           <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Perbarui
         </button>
+        </div>
       </div>
 
       {error && <div className="text-sm text-red-600 bg-red-50 rounded-2xl px-4 py-3">{error}</div>}
@@ -179,6 +209,7 @@ export default function UnpaidMonitor() {
                   >
                     {p.lastReminder ? <BellRing size={14} /> : <MessageCircle size={14} />} {p.lastReminder ? 'Ingatkan lagi' : 'WhatsApp'}
                   </button>
+                  <button onClick={() => removeParent(p)} disabled={deleting} title="Hapus semua tagihan parent ini" className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl disabled:opacity-50"><Trash2 size={15} /></button>
                 </div>
                 {isOpen && (
                   <ul className="border-t border-gray-100 divide-y divide-gray-50 bg-gray-50/50">
@@ -192,6 +223,7 @@ export default function UnpaidMonitor() {
                           </div>
                         </div>
                         <div className="font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(i.amount)}</div>
+                        <button onClick={() => removeOne(i)} disabled={deleting} title="Hapus tagihan ini" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"><Trash2 size={14} /></button>
                       </li>
                     ))}
                   </ul>
