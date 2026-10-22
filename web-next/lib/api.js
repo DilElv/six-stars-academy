@@ -720,6 +720,10 @@ export async function uploadPaymentProof(id, proofUrl, proofNote) {
   return request(`/payments/${id}/proof`, { method: 'POST', body: JSON.stringify({ proofUrl, proofNote }) })
 }
 
+export async function confirmPaymentWithoutProof(id) {
+  return request(`/payments/${id}/confirm-no-proof`, { method: 'POST' })
+}
+
 // Daftar pembayaran lunas yang belum ada bukti (admin & head coach).
 export async function getMissingProof(filters) {
   return request(`/ledger/belum-bukti${buildQuery(filters)}`)

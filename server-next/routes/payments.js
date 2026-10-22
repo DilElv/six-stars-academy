@@ -211,6 +211,36 @@ router.post('/:id/proof', authenticate, async (req, res) => {
   }
 })
 
+// Admin mengonfirmasi manual pembayaran lunas yang tidak punya bukti. Setelah
+// dikonfirmasi, pembayaran dikecualikan dari syarat bukti (`proofExempt`) dan
+// langsung masuk laporan pemasukan. Hanya untuk yang belum ada bukti.
+router.post('/:id/confirm-no-proof', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({ where: { id: req.params.id } })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    if (payment.status !== 'success') return res.status(400).json({ error: 'Hanya pembayaran lunas yang bisa dikonfirmasi' })
+    if (payment.proofUrl || payment.proofExempt) return res.status(400).json({ error: 'Pembayaran ini sudah punya bukti atau sudah dikonfirmasi' })
+
+    const updated = await prisma.payment.update({ where: { id: payment.id }, data: { proofExempt: true } })
+
+    await logPaymentAudit({
+      paymentId: payment.id,
+      action: 'proof_confirmed_manual',
+      actor: req.user,
+      studentId: payment.studentId,
+      amount: payment.totalAmount,
+      before: { proofExempt: false },
+      after: { proofExempt: true },
+      note: 'Dikonfirmasi manual admin tanpa bukti pembayaran',
+    })
+
+    res.json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Parent starts a package renewal for their child.
 //
 // DINONAKTIFKAN: perpanjangan sekarang SATU jalur saja lewat tagihan

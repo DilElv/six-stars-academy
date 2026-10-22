@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search, AlertTriangle, Receipt } from 'lucide-react'
+import { TrendingUp, Plus, Trash2, Pencil, Eye, FileSpreadsheet, FileText, Search, AlertTriangle } from 'lucide-react'
 import * as api from '@/lib/api'
 import DailyLedgerChart from '@/components/charts/DailyLedgerChart'
 import CategoryBreakdownChart from '@/components/charts/CategoryBreakdownChart'
 import LedgerEntryModal from '@/components/finance/LedgerEntryModal'
 import PaymentEditModal from '@/components/finance/PaymentEditModal'
 import PaymentDetailModal from '@/components/finance/PaymentDetailModal'
-import PaymentProofUpload from '@/components/PaymentProofUpload'
+import MissingProofModal from '@/components/finance/MissingProofModal'
 import { exportLedgerToCSV, exportLedgerToPDF } from '@/lib/financeExport'
 import { AppSelect } from '@/components/ui/app-select'
 import { MONTH_LABELS, MonthFilter, useMonthFilter, formatRupiah, formatDateTime } from '@/components/finance/shared'
@@ -26,8 +26,7 @@ export default function PemasukanTab() {
   const [detailEntry, setDetailEntry] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [missing, setMissing] = useState({ count: 0, total: 0, items: [] })
-  const [outstanding, setOutstanding] = useState({ count: 0, total: 0, items: [] })
-  const [cancellingId, setCancellingId] = useState('')
+  const [showMissing, setShowMissing] = useState(false)
 
   useEffect(() => { api.getMe().then(setCurrentUser).catch(() => {}) }, [])
 
@@ -35,24 +34,10 @@ export default function PemasukanTab() {
     setLoading(true)
     api.getPemasukan({ month, year }).then((res) => { setItems(res.items); setTotal(res.total); setBreakdown(res.breakdown || []) }).finally(() => setLoading(false))
     api.getMissingProof({ branchId: undefined }).then(setMissing).catch(() => setMissing({ count: 0, total: 0, items: [] }))
-    api.getOutstandingCart().then((res) => setOutstanding({ count: res.items.length, total: res.total, items: res.items })).catch(() => setOutstanding({ count: 0, total: 0, items: [] }))
   }
 
   useEffect(load, [month, year])
   useEffect(() => { setCategoryFilter('') }, [month, year])
-
-  async function cancelPending(paymentId) {
-    if (!confirm('Batalkan pembayaran yang menggantung? Item kembali jadi tagihan terbuka.')) return
-    setCancellingId(paymentId)
-    try {
-      await api.cancelPaymentAsStaff(paymentId)
-      load()
-    } catch (err) {
-      alert(err.message)
-    } finally {
-      setCancellingId('')
-    }
-  }
 
   async function handleDelete(item) {
     const warning = item.source === 'payment'
@@ -118,69 +103,20 @@ export default function PemasukanTab() {
       </div>
 
       {missing.count > 0 && (
-        <div className="glass-card rounded-3xl p-4 sm:p-5 border-l-4 border-amber-400">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <AlertTriangle size={16} className="text-amber-500" />
-              <span className="text-sm font-bold text-navy-900">Belum ada bukti ({missing.count})</span>
-              <span className="text-xs text-gray-400">— belum dihitung di laporan sampai bukti diunggah</span>
-            </div>
+        <button
+          onClick={() => setShowMissing(true)}
+          className="w-full flex items-center justify-between gap-3 flex-wrap glass-card rounded-3xl px-4 py-3 border-l-4 border-amber-400 text-left hover:shadow-md transition-shadow"
+        >
+          <span className="flex items-center gap-2 flex-wrap">
+            <AlertTriangle size={16} className="text-amber-500" />
+            <span className="text-sm font-bold text-navy-900">{missing.count} pembayaran menunggu konfirmasi</span>
+            <span className="text-xs text-gray-400">tanpa bukti · belum masuk pemasukan</span>
+          </span>
+          <span className="flex items-center gap-2">
             <span className="text-sm font-extrabold text-amber-600">{formatRupiah(missing.total)}</span>
-          </div>
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {missing.items.map((m) => (
-              <div key={m.id} className="flex items-center gap-3 flex-wrap rounded-2xl bg-amber-50/60 border border-amber-100 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-navy-900 truncate">{m.description}</div>
-                  <div className="text-[11px] text-gray-500">
-                    {new Date(m.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    {m.paymentMethod ? ` · ${m.paymentMethod}` : ''}
-                    {m.parentName ? ` · ${m.parentName}` : ''}{m.parentPhone ? ` (${m.parentPhone})` : ''}
-                  </div>
-                </div>
-                <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(m.amount)}</div>
-                <PaymentProofUpload payment={m} onUploaded={load} compact />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {outstanding.count > 0 && (
-        <div className="glass-card rounded-3xl p-4 sm:p-5 border-l-4 border-rose-400">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Receipt size={16} className="text-rose-500" />
-              <span className="text-sm font-bold text-navy-900">Tagihan Belum Dibayar ({outstanding.count})</span>
-              <span className="text-xs text-gray-400">— belum dibayar, belum dihitung sebagai pendapatan</span>
-            </div>
-            <span className="text-sm font-extrabold text-rose-600">{formatRupiah(outstanding.total)}</span>
-          </div>
-          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-            {outstanding.items.map((o) => (
-              <div key={o.id} className="flex items-center gap-3 flex-wrap rounded-2xl bg-rose-50/60 border border-rose-100 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-navy-900 truncate">{o.label || o.category}</div>
-                  <div className="text-[11px] text-gray-500">
-                    {o.student?.fullName || '-'}{o.student?.branch?.code ? ` · ${o.student.branch.code}` : ''}
-                    {o.addedBy?.name ? ` · dititipkan oleh ${o.addedBy.name}` : ''}
-                  </div>
-                </div>
-                {o.payment?.status === 'pending' && (
-                  <button
-                    onClick={() => cancelPending(o.payment.id)}
-                    disabled={cancellingId === o.payment.id}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 hover:bg-red-100 hover:text-red-700 disabled:opacity-50"
-                    title="Sudah di-checkout parent tapi belum dibayar. Klik untuk membatalkan dan mengembalikan ke tagihan terbuka."
-                  >
-                    {cancellingId === o.payment.id ? 'Membatalkan...' : 'Menunggu bayar · Batalkan'}
-                  </button>
-                )}
-                <div className="text-sm font-bold text-navy-900 tabular-nums whitespace-nowrap">{formatRupiah(o.amount)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+            <span className="text-xs font-semibold text-navy-700 underline">Lihat</span>
+          </span>
+        </button>
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -240,7 +176,7 @@ export default function PemasukanTab() {
                         item.proofUrl ? (
                           <a href={item.proofUrl} target="_blank" rel="noopener noreferrer" className="ml-3.5 text-[11px] text-emerald-600 underline">Lihat bukti</a>
                         ) : (
-                          <span className="ml-3.5 text-[11px] text-amber-600">Data lama (tanpa bukti)</span>
+                          <span className="ml-3.5 text-[11px] text-amber-600">Tanpa bukti (dikonfirmasi admin)</span>
                         )
                       )}
                     </td>
@@ -274,6 +210,7 @@ export default function PemasukanTab() {
         </div>
       )}
 
+      {showMissing && <MissingProofModal missing={missing} isAdmin={currentUser?.role === 'admin'} onClose={() => setShowMissing(false)} onChanged={load} />}
       {detailEntry && <PaymentDetailModal item={detailEntry} onClose={() => setDetailEntry(null)} />}
       {showAdd && <LedgerEntryModal type="income" onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load() }} />}
       {editEntry?.source === 'manual' && <LedgerEntryModal type="income" entry={editEntry} onClose={() => setEditEntry(null)} onSaved={() => { setEditEntry(null); load() }} />}

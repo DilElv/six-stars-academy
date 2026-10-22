@@ -3,7 +3,7 @@
 import ParentBpjsCard from '@/components/ParentBpjsCard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw, ReceiptText, CreditCard } from 'lucide-react'
+import { Wallet, Calendar, FileText, ClipboardList, ChevronRight, Radar as RadarIcon, MapPin, Trophy, Check, AlertTriangle, RefreshCw, ReceiptText, CreditCard, ChevronDown, Trash2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import OvrGauge from '@/components/charts/OvrGauge'
 import SkillRadar from '@/components/charts/SkillRadar'
@@ -38,6 +38,8 @@ export default function ParentDasborPage() {
   const [error, setError] = useState('')
   const [showRenewal, setShowRenewal] = useState(false)
   const [tagihan, setTagihan] = useState(null)
+  const [missedOpen, setMissedOpen] = useState(false)
+  const [dismissedMissed, setDismissedMissed] = useState([])
 
   function load() {
     api.getMyCart().then(setTagihan).catch(() => {})
@@ -62,7 +64,25 @@ export default function ParentDasborPage() {
   const todayKey = new Date().toISOString().slice(0, 10)
   const todaysSessions = (trainingSessions || []).filter((ts) => new Date(ts.date).toISOString().slice(0, 10) === todayKey)
 
-  const missedAttendanceDates = student?.missedAttendanceDates || []
+  // Absensi yang "dihapus" parent hanya disembunyikan di perangkat ini (tidak mengubah data absensi).
+  const dismissKey = student?.id ? `missedAttendanceDismissed:${student.id}` : null
+  useEffect(() => {
+    if (!dismissKey) return
+    try { setDismissedMissed(JSON.parse(localStorage.getItem(dismissKey) || '[]')) } catch { setDismissedMissed([]) }
+  }, [dismissKey])
+
+  const missedKey = (ts) => `${ts.date}|${ts.startTime || ''}`
+  const missedAttendanceDates = (student?.missedAttendanceDates || []).filter((ts) => !dismissedMissed.includes(missedKey(ts)))
+
+  function saveDismissed(next) {
+    setDismissedMissed(next)
+    try { if (dismissKey) localStorage.setItem(dismissKey, JSON.stringify(next)) } catch {}
+  }
+  const dismissMissed = (ts) => saveDismissed([...dismissedMissed, missedKey(ts)])
+  const clearMissed = () => {
+    saveDismissed([...new Set([...dismissedMissed, ...missedAttendanceDates.map(missedKey)])])
+    setMissedOpen(false)
+  }
 
   if (loading) return null
   if (error) return <p className="text-sm text-red-500">{error}</p>
@@ -178,15 +198,25 @@ export default function ParentDasborPage() {
 
       {/* Forfeit warnings */}
       {missedAttendanceDates.length > 0 && (
-        <div className="space-y-2">
-          {missedAttendanceDates.map((ts) => (
-            <div key={`${ts.date}-${ts.startTime}`} className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 text-sm flex items-center gap-2">
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3">
+            <button type="button" onClick={() => setMissedOpen((o) => !o)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
               <AlertTriangle size={15} className="shrink-0" />
-              <span className="font-semibold">Absensi belum dicatat</span>
-              <span className="text-red-400">·</span>
-              <span>{new Date(ts.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-            </div>
-          ))}
+              <span className="font-semibold">{missedAttendanceDates.length} absensi belum dicatat</span>
+              <ChevronDown size={15} className={`shrink-0 transition-transform ${missedOpen ? 'rotate-180' : ''}`} />
+            </button>
+            <button type="button" onClick={clearMissed} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/70 hover:bg-white text-amber-800 shrink-0">Bersihkan</button>
+          </div>
+          {missedOpen && (
+            <ul className="border-t border-amber-200 divide-y divide-amber-100 bg-white/50">
+              {missedAttendanceDates.map((ts) => (
+                <li key={missedKey(ts)} className="flex items-center gap-2 px-4 py-2">
+                  <span className="flex-1">{new Date(ts.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}{ts.startTime ? ` · ${ts.startTime}` : ''}</span>
+                  <button type="button" onClick={() => dismissMissed(ts)} title="Hapus" className="p-1.5 text-amber-700 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
