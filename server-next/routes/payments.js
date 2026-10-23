@@ -389,8 +389,8 @@ router.get('/:id/sync', authenticate, authorize('parent'), async (req, res) => {
 
 // Parent cancels a payment they changed their mind about — only while still
 // pending (nothing to undo yet: session/package/registration state is only
-// touched once applyPaymentSuccess runs). Hard-deleted, not soft-cancelled,
-// so it doesn't clutter their payment history with a dead row.
+// touched once applyPaymentSuccess runs). Status failed dipakai sebagai jejak
+// pembatalan agar transaksi gateway tidak pernah hilang dari audit.
 router.delete('/:id', authenticate, authorize('parent'), async (req, res) => {
   try {
     const payment = await prisma.payment.findUnique({ where: { id: req.params.id }, include: { student: true } })
@@ -402,8 +402,9 @@ router.delete('/:id', authenticate, authorize('parent'), async (req, res) => {
     const fresh = payment.transactionId ? await syncPaymentWithRintisan(payment) : payment
     if (fresh.status === 'success') return res.status(409).json({ error: 'Pembayaran ini sudah lunas, tidak bisa dibatalkan' })
 
-    // Item keranjang dikembalikan ke status 'open' supaya bisa di-checkout ulang.
-    const released = await releasePendingPayment(payment)
+    // Item keranjang dikembalikan ke status 'open' supaya bisa di-checkout ulang;
+    // pembatalan dicatat sebagai failed, bukan menghapus riwayat transaksi.
+    const released = await releasePendingPayment(payment, { mode: 'fail', reason: 'Dibatalkan oleh parent' })
     if (!released.released) return res.status(400).json({ error: 'Pembayaran sudah tidak menunggu dibayar' })
     await logPaymentAudit({
       paymentId: payment.id,

@@ -10,7 +10,7 @@ import { BranchSelect } from '@/components/ui/branch-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
 import { DatePicker } from '@/components/ui/date-picker'
 import { totalSessionsFor } from '@/lib/sessionInfo'
-import ScholarshipField from '@/components/ScholarshipField'
+import ScholarshipRateField from '@/components/ScholarshipRateField'
 import ModalPortal from '@/components/ui/modal-portal'
 
 function formatRupiah(n) {
@@ -25,8 +25,8 @@ export default function AddStudentModal({ branches, packages, canManageScholarsh
     amount: '',
     registrationFee: '750000',
     paymentStatus: 'pending',
-    registrationScholarshipPercent: 0,
-    sppScholarshipPercent: 0,
+    scholarshipCategory: '',
+    scholarshipMonthlyRate: '',
   })
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -62,9 +62,11 @@ export default function AddStudentModal({ branches, packages, canManageScholarsh
   const totalSessions = selectedPackage ? totalSessionsFor({ package: selectedPackage }) : 0
   const pkgAmount = form.amount !== '' ? Number(form.amount) : (selectedPackage?.price || 0)
   const regFee = Number(form.registrationFee) || 0
-  const subtotal = pkgAmount + regFee
-  const discount = Math.round(pkgAmount * form.sppScholarshipPercent / 100) + Math.round(regFee * form.registrationScholarshipPercent / 100)
-  const total = Math.max(subtotal - discount, 0)
+  const hasScholarshipRate = form.scholarshipMonthlyRate !== ''
+  const scholarshipRate = Math.max(0, Number(form.scholarshipMonthlyRate) || 0)
+  const total = hasScholarshipRate && selectedPackage
+    ? scholarshipRate * Math.max(1, Number(selectedPackage.durationMonths) || 1)
+    : pkgAmount + regFee
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -234,15 +236,11 @@ export default function AddStudentModal({ branches, packages, canManageScholarsh
               {canManageScholarship && (
                 <div className="pt-3 border-t border-gray-100 space-y-3">
                   <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">Beasiswa</h4>
-                  <ScholarshipField
-                    label="Beasiswa Biaya Pendaftaran"
-                    percent={form.registrationScholarshipPercent}
-                    onChange={(p) => setForm((f) => ({ ...f, registrationScholarshipPercent: p }))}
-                  />
-                  <ScholarshipField
-                    label="Beasiswa SPP / Paket"
-                    percent={form.sppScholarshipPercent}
-                    onChange={(p) => setForm((f) => ({ ...f, sppScholarshipPercent: p }))}
+                  <ScholarshipRateField
+                    monthlyRate={form.scholarshipMonthlyRate}
+                    category={form.scholarshipCategory}
+                    onRateChange={(value) => setForm((f) => ({ ...f, scholarshipMonthlyRate: value }))}
+                    onCategoryChange={(value) => setForm((f) => ({ ...f, scholarshipCategory: value }))}
                   />
                 </div>
               )}
@@ -250,19 +248,13 @@ export default function AddStudentModal({ branches, packages, canManageScholarsh
               {form.packageId && (
                 <div className="bg-navy-50 rounded-2xl p-3.5 space-y-1.5 text-xs">
                   <div className="flex justify-between text-gray-500">
-                    <span>Harga Paket</span>
-                    <span className="font-medium text-navy-900">{formatRupiah(pkgAmount)}</span>
+                    <span>{hasScholarshipRate ? `Tarif beasiswa × ${selectedPackage?.durationMonths || 1} bulan` : 'Harga Paket'}</span>
+                    <span className="font-medium text-navy-900">{formatRupiah(hasScholarshipRate ? scholarshipRate * (selectedPackage?.durationMonths || 1) : pkgAmount)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-500">
+                  {!hasScholarshipRate && <div className="flex justify-between text-gray-500">
                     <span>Biaya Pendaftaran</span>
                     <span className="font-medium text-navy-900">{formatRupiah(regFee)}</span>
-                  </div>
-                  {discount > 0 && (
-                    <div className="flex justify-between text-emerald-600">
-                      <span>Diskon Beasiswa</span>
-                      <span className="font-medium">-{formatRupiah(discount)}</span>
-                    </div>
-                  )}
+                  </div>}
                   <div className="flex justify-between pt-1.5 border-t border-navy-100 font-bold text-navy-900 text-sm">
                     <span>Total Dibayar</span>
                     <span>{formatRupiah(total)}</span>

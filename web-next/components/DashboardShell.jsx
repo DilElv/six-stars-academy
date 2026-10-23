@@ -63,7 +63,11 @@ export default function DashboardShell({ role, title, navItems, children }) {
   // pending/expired payment can't reach other dashboard pages by clicking a
   // nav link after the first redirect.
   useEffect(() => {
-    if (user?.access === 'payment-only' && !['/dashboard/pembayaran', '/dashboard/event'].includes(pathname)) {
+    // Parent dengan tagihan pending tetap boleh membuka Toko dan Keranjang:
+    // keduanya adalah bagian dari alur invoice/payment yang sama. Sebelumnya
+    // mereka selalu dilempar kembali ke Pembayaran, sehingga menu Toko terlihat
+    // rusak walau API katalog sebenarnya tersedia.
+    if (user?.access === 'payment-only' && !['/dashboard/pembayaran', '/dashboard/event', '/dashboard/toko', '/dashboard/keranjang'].includes(pathname)) {
       router.replace('/dashboard/pembayaran')
     }
   }, [pathname, user, router])

@@ -17,7 +17,7 @@ import { DatePicker } from '@/components/ui/date-picker'
 import ModalPortal from '@/components/ui/modal-portal'
 import { totalSessionsFor, PAYMENT_STATUS_BADGE, STUDENT_STATUS_BADGE } from '@/lib/sessionInfo'
 import AgeGroupFilter from '@/components/AgeGroupFilter'
-import ScholarshipField from '@/components/ScholarshipField'
+import ScholarshipRateField from '@/components/ScholarshipRateField'
 
 function initials(name = '') {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
@@ -224,8 +224,8 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
     registrationFee: '750000',
     amount: '',
     paymentStatus: 'pending',
-    registrationScholarshipPercent: student.registrationScholarshipPercent || 0,
-    sppScholarshipPercent: student.sppScholarshipPercent || 0,
+    scholarshipCategory: student.scholarshipCategory || '',
+    scholarshipMonthlyRate: student.scholarshipMonthlyRate == null ? '' : String(student.scholarshipMonthlyRate),
   })
   const [regPayment, setRegPayment] = useState(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -431,15 +431,11 @@ function EditModal({ student, branches, packages, onClose, onSaved }) {
           )}
           <div className="border-t border-gray-100 pt-3 space-y-3">
             <h4 className="text-xs font-bold text-navy-900 uppercase tracking-wider">Beasiswa</h4>
-            <ScholarshipField
-              label="Beasiswa Biaya Pendaftaran"
-              percent={form.registrationScholarshipPercent}
-              onChange={(p) => setForm((f) => ({ ...f, registrationScholarshipPercent: p }))}
-            />
-            <ScholarshipField
-              label="Beasiswa SPP / Paket"
-              percent={form.sppScholarshipPercent}
-              onChange={(p) => setForm((f) => ({ ...f, sppScholarshipPercent: p }))}
+            <ScholarshipRateField
+              monthlyRate={form.scholarshipMonthlyRate}
+              category={form.scholarshipCategory}
+              onRateChange={(value) => setForm((f) => ({ ...f, scholarshipMonthlyRate: value }))}
+              onCategoryChange={(value) => setForm((f) => ({ ...f, scholarshipCategory: value }))}
             />
           </div>
           <div>

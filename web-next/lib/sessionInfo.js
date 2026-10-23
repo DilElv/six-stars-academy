@@ -20,6 +20,7 @@ export const PAYMENT_STATUS_BADGE = {
 // amber state distinct from 'active'/'inactive'.
 export const STUDENT_STATUS_BADGE = {
   active: { label: 'Aktif', color: 'bg-emerald-400/20 text-emerald-300' },
+  pending_payment: { label: 'Menunggu Pembayaran', color: 'bg-amber-400/20 text-amber-300' },
   needs_renewal: { label: 'Perlu Perpanjang', color: 'bg-amber-400/20 text-amber-300' },
   inactive: { label: 'Nonaktif', color: 'bg-white/10 text-gray-300' },
 }

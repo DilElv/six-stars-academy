@@ -183,11 +183,14 @@ router.get('/me', authenticate, async (req, res) => {
     if (user.role === 'parent') {
       const student = await prisma.student.findFirst({ where: { userId: user.id }, orderBy: { createdAt: 'asc' } })
       if (student) {
-        const hasPendingPayment = await prisma.payment.findFirst({
-          where: { studentId: student.id, status: 'pending' },
-        })
+        const [hasPendingPayment, hasOpenPackageInvoice] = await Promise.all([
+          prisma.payment.findFirst({ where: { studentId: student.id, status: 'pending' } }),
+          // Invoice otomatis beasiswa belum memiliki Payment sampai Parent
+          // checkout, jadi ikut dikunci ke alur pembayaran dari awal.
+          prisma.cartItem.findFirst({ where: { studentId: student.id, type: 'package', status: 'open' } }),
+        ])
         const expired = student.packageEndDate && new Date(student.packageEndDate) < new Date()
-        if (hasPendingPayment || expired) {
+        if (hasPendingPayment || hasOpenPackageInvoice || expired) {
           access = 'payment-only'
         }
       }

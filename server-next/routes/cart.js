@@ -189,7 +189,18 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
         label: `Perpanjangan Paket — ${pkg.name}`,
         category: TYPE_CATEGORY.package,
         amount: finalAmount,
-        metadata: { packageId: pkg.id, packageName: pkg.name, custom: !!pkg.isCustom, note: note?.trim() || null },
+        // Snapshot harga: rate beasiswa yang dipakai invoice tidak boleh ikut
+        // berubah kalau admin mengubah tarif siswa setelah invoice dibuat.
+        metadata: {
+          packageId: pkg.id,
+          packageName: pkg.name,
+          custom: !!pkg.isCustom,
+          scholarshipCategory: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? student.scholarshipCategory : null,
+          scholarshipMonthlyRate: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? student.scholarshipMonthlyRate : null,
+          durationMonths: pkg.durationMonths,
+          pricingMode: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? 'scholarship_monthly_final' : 'regular',
+          note: note?.trim() || null,
+        },
       }
     } else if (type === 'merchandise' && productId) {
       // Item diambil dari katalog merchandise: nama & harga selalu dari produk
@@ -540,20 +551,28 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
     const student = await prisma.student.findFirst({ where: { userId: req.user.id }, include: { user: true } })
     if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
 
-    const items = await prisma.cartItem.findMany({ where: { studentId: student.id, status: 'open' }, orderBy: { createdAt: 'asc' } })
-    if (items.length === 0) return res.status(400).json({ error: 'Belum ada tagihan yang harus dibayar' })
+    // Serialisasi checkout per anak. Tanpa lock ini, dua klik/dua tab dapat
+    // membuat dua Payment dan dua QR untuk invoice yang sama.
+    const checkoutState = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${student.id}))`
+      const pending = await tx.payment.findFirst({
+        where: { studentId: student.id, paymentType: 'cart', status: 'pending' },
+        include: { cartItems: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (pending) return { pending }
 
-    // Satu periode perpanjangan = satu item. Ini jaring pengaman terakhir
-    // supaya parent tidak pernah ditagih dua kali untuk paket yang sama.
-    const packageItems = items.filter((i) => i.type === 'package')
-    if (packageItems.length > 1) {
-      return res.status(400).json({ error: 'Ada lebih dari satu tagihan perpanjangan paket. Hapus yang tidak perlu dulu sebelum checkout.' })
-    }
+      const items = await tx.cartItem.findMany({ where: { studentId: student.id, status: 'open' }, orderBy: { createdAt: 'asc' } })
+      if (items.length === 0) throw Object.assign(new Error('Belum ada tagihan yang harus dibayar'), { status: 400 })
 
-    const total = items.reduce((sum, i) => sum + i.amount, 0)
-    const itemIds = items.map((i) => i.id)
+      // Satu periode perpanjangan = satu item. Ini jaring pengaman terakhir
+      // supaya parent tidak pernah ditagih dua kali untuk paket yang sama.
+      const packageItems = items.filter((i) => i.type === 'package')
+      if (packageItems.length > 1) {
+        throw Object.assign(new Error('Ada lebih dari satu tagihan perpanjangan paket. Hapus yang tidak perlu dulu sebelum checkout.'), { status: 400 })
+      }
 
-    const payment = await prisma.$transaction(async (tx) => {
+      const total = items.reduce((sum, i) => sum + i.amount, 0)
       const created = await tx.payment.create({
         data: {
           studentId: student.id,
@@ -564,9 +583,21 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
           status: 'pending',
         },
       })
-      await tx.cartItem.updateMany({ where: { id: { in: itemIds } }, data: { paymentId: created.id, status: 'checked_out' } })
-      return created
+      await tx.cartItem.updateMany({ where: { id: { in: items.map((i) => i.id) } }, data: { paymentId: created.id, status: 'checked_out' } })
+      return { payment: created, itemIds: items.map((i) => i.id), total }
     })
+
+    // Retry idempoten: bila QR/link sudah pernah dibuat, kirim kembali record
+    // yang sama alih-alih memanggil gateway untuk kedua kali.
+    if (checkoutState.pending) {
+      const pending = checkoutState.pending
+      if (pending.transactionId && (pending.paymentLink || pending.qrString)) {
+        return res.status(201).json({ payment: pending, rintisan: null, resumed: true })
+      }
+      return res.status(409).json({ error: 'Pembayaran sebelumnya masih diproses. Muat ulang beberapa saat lagi atau batalkan dari menu Perpanjang Paket.' })
+    }
+
+    const { payment, itemIds, total } = checkoutState
 
     // Gratis penuh (mis. beasiswa 100%): tidak ada yang bisa ditagih Rintisan,
     // jadi langsung terapkan efek sukses.
@@ -587,12 +618,17 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
       })
       res.status(201).json({ payment: updated, rintisan })
     } catch (err) {
-      // Billing gagal dibuat: kembalikan item ke keranjang agar bisa dicoba lagi.
-      await prisma.cartItem.updateMany({ where: { id: { in: itemIds } }, data: { paymentId: null, status: 'open' } })
-      await prisma.payment.delete({ where: { id: payment.id } }).catch(() => {})
+      // Gateway gagal/QR gagal dibuat: pertahankan Payment sebagai riwayat
+      // gagal, lalu buka kembali item secara atomik supaya parent bisa hapus
+      // atau mencoba lagi. Jangan hapus transaksi historis.
+      await prisma.$transaction(async (tx) => {
+        await tx.cartItem.updateMany({ where: { id: { in: itemIds }, paymentId: payment.id }, data: { paymentId: null, status: 'open' } })
+        await tx.payment.updateMany({ where: { id: payment.id, status: 'pending' }, data: { status: 'failed', failReason: err.message || 'Gagal membuat tagihan gateway' } })
+      }).catch((rollbackErr) => console.error('Gagal mengembalikan item checkout:', rollbackErr))
       throw err
     }
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(400).json({ error: err.message || 'Gagal membuat tagihan' })
   }

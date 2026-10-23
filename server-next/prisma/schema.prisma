@@ -298,11 +298,14 @@ model Student {
   bpjsExempt                     Boolean   @default(false)
   branchId                       String?
   branch                         Branch?   @relation(fields: [branchId], references: [id])
-  // Beasiswa (scholarship) — admin-only, set from Data Anak. 0 = none.
-  // registrationScholarshipPercent only ever matters at initial registration;
-  // sppScholarshipPercent is re-applied automatically on every renewal.
+  // Legacy beasiswa persentase. Dipertahankan untuk data lama; beasiswa baru
+  // menggunakan tarif final bulanan di bawah agar tidak terkena diskon paket.
   registrationScholarshipPercent Float     @default(0)
   sppScholarshipPercent          Float     @default(0)
+  // null = tarif reguler. Nilai 0 valid (beasiswa penuh). Tarif ini permanen
+  // sampai admin/head coach mengubahnya dan selalu dikalikan durasi paket.
+  scholarshipCategory            String?
+  scholarshipMonthlyRate         Int?
   // "Anak Lama" — a legacy member kept on a hidden custom-priced package
   // (see Package.isCustom) instead of the standard Pengaturan catalog.
   isOldMember                    Boolean   @default(false)

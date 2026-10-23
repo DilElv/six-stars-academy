@@ -24,6 +24,12 @@ export async function getEffectivePrice(packageId, branchId) {
 // their price is already final and no scholarship is stacked on top of it.
 export async function resolvePackagePrice(pkg, student) {
   if (!pkg) return 0
+  // Beasiswa tarif bulanan adalah harga FINAL. Jangan pernah menggabungkannya
+  // dengan BranchPackage, harga katalog, custom-package, atau persen beasiswa
+  // lama. `null` berarti siswa reguler; 0 tetap tarif beasiswa yang valid.
+  if (student?.scholarshipMonthlyRate !== null && student?.scholarshipMonthlyRate !== undefined) {
+    return Math.max(0, Math.round(student.scholarshipMonthlyRate || 0)) * Math.max(1, Number(pkg.durationMonths) || 1)
+  }
   if (pkg.isCustom) return Math.max(0, Math.round(pkg.price || 0))
   const base = await getEffectivePrice(pkg.id, student?.branchId)
   const percent = student?.sppScholarshipPercent || 0

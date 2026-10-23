@@ -26,7 +26,7 @@ export default function RenewalModal({ onClose, onDone }) {
   const [loading, setLoading] = useState(true)
   const [packages, setPackages] = useState([])
   const [selectedPackage, setSelectedPackage] = useState(null)
-  const [scholarshipPercent, setScholarshipPercent] = useState(0)
+  const [scholarshipMonthlyRate, setScholarshipMonthlyRate] = useState(null)
   const [openItems, setOpenItems] = useState([])
   const [pendingPayment, setPendingPayment] = useState(null)
   const [payOpen, setPayOpen] = useState(false)
@@ -47,7 +47,7 @@ export default function RenewalModal({ onClose, onDone }) {
       // keterangan & nominal yang mereka tetapkan) ditampilkan apa adanya.
       setOpenItems(cart?.items || [])
       setPendingPayment((payments || []).find((p) => p.status === 'pending' && p.paymentType === 'cart') || null)
-      setScholarshipPercent(child?.sppScholarshipPercent || 0)
+       setScholarshipMonthlyRate(child?.scholarshipMonthlyRate ?? null)
       // "Anak lama" dengan paket custom (Package.isCustom) tidak pernah memilih
       // dari katalog standar — hanya paket miliknya sendiri yang ditawarkan.
       if (child?.customPackage) return setPackages([child.customPackage])
@@ -60,12 +60,12 @@ export default function RenewalModal({ onClose, onDone }) {
     load().finally(() => setLoading(false))
   }, [])
 
-  // Harga khusus (paket custom) adalah harga final; paket katalog dapat
-  // dipotong beasiswa SPP — sama persis dengan perhitungan server.
+  // Tarif beasiswa bulanan adalah harga final; jangan tampilkan atau hitung
+  // diskon persen lagi. Nominal server tetap sumber kebenaran saat cart dibuat.
   function priceFor(pkg) {
+    if (scholarshipMonthlyRate !== null) return { final: scholarshipMonthlyRate * Math.max(1, Number(pkg.durationMonths) || 1), discount: 0, scholarship: true }
     if (pkg.isCustom) return { final: pkg.price, discount: 0 }
-    const discount = scholarshipPercent > 0 ? Math.round(pkg.price * scholarshipPercent / 100) : 0
-    return { final: pkg.price - discount, discount }
+    return { final: pkg.price, discount: 0 }
   }
 
   // Membuat tagihannya lebih dulu supaya nominal yang ditampilkan pada layar
@@ -224,7 +224,7 @@ export default function RenewalModal({ onClose, onDone }) {
                   <div className="space-y-2 mb-5 max-h-72 overflow-y-auto pr-1">
                     {packages.length === 0 && <div className="text-sm text-gray-400 py-4 text-center">Belum ada paket tersedia.</div>}
                     {packages.map((pkg) => {
-                      const { final, discount } = priceFor(pkg)
+                       const { final, discount, scholarship } = priceFor(pkg)
                       const active = selectedPackage?.id === pkg.id
                       return (
                         <button
@@ -237,7 +237,13 @@ export default function RenewalModal({ onClose, onDone }) {
                           <div className="font-semibold text-navy-900 text-sm flex items-center gap-1.5">
                             {pkg.name}{active && <Check size={13} className="text-gold-500" />}
                           </div>
-                          {discount > 0 ? (
+                           {scholarship ? (
+                             <div className="text-xs mt-0.5">
+                               <span className="text-gray-400">{pkg.sessionsPerWeek}x/minggu · {pkg.durationMonths} bulan · </span>
+                               <span className="text-emerald-600 font-semibold">{formatRupiah(final)}</span>
+                               <div className="text-emerald-600">Tarif beasiswa final {formatRupiah(scholarshipMonthlyRate)}/bulan</div>
+                             </div>
+                           ) : discount > 0 ? (
                             <div className="text-xs mt-0.5">
                               <span className="text-gray-400">{pkg.sessionsPerWeek}x/minggu &middot; </span>
                               <span className="text-gray-400 line-through">{formatRupiah(pkg.price)}</span>{' '}

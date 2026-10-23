@@ -116,12 +116,18 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
   const canManageScholarship = ['admin', 'head_coach'].includes(req.user.role)
   const registrationScholarshipPercent = canManageScholarship ? Math.max(0, Math.min(100, Number(req.body.registrationScholarshipPercent) || 0)) : 0
   const sppScholarshipPercent = canManageScholarship ? Math.max(0, Math.min(100, Number(req.body.sppScholarshipPercent) || 0)) : 0
+  const monthlyRateSupplied = canManageScholarship && req.body.scholarshipMonthlyRate !== undefined && req.body.scholarshipMonthlyRate !== ''
+  const scholarshipMonthlyRate = monthlyRateSupplied ? Math.round(Number(req.body.scholarshipMonthlyRate)) : null
+  const scholarshipCategory = monthlyRateSupplied ? (String(req.body.scholarshipCategory || 'Beasiswa').trim().slice(0, 80) || 'Beasiswa') : null
 
   try {
     if (!parentEmail || !parentEmail.toLowerCase().endsWith('@sixstars.id')) {
       return res.status(400).json({ error: 'Email untuk login harus menggunakan domain @sixstars.id' })
     }
     if (!parentPassword || parentPassword.length < 6) return res.status(400).json({ error: 'Password minimal 6 karakter' })
+    if (monthlyRateSupplied && (!Number.isSafeInteger(scholarshipMonthlyRate) || scholarshipMonthlyRate < 0)) {
+      return res.status(400).json({ error: 'Tarif beasiswa bulanan harus berupa nominal bulat minimal 0' })
+    }
     // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
     if (!isValidPhone(parentPhone)) return res.status(400).json({ error: PHONE_ERROR })
     const parentPhoneClean = cleanPhone(parentPhone)
@@ -135,7 +141,9 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
     // Resolves to the branch's BranchPackage override (Pengaturan > Harga
     // Paket) when one exists, matching what the picker actually displayed —
     // `amount` from the body is a rare explicit override, not the norm.
-    const pkgAmount = pkg
+    const pkgAmount = pkg && monthlyRateSupplied
+      ? scholarshipMonthlyRate * Math.max(1, Number(pkg.durationMonths) || 1)
+      : pkg
       ? (amount !== undefined && amount !== '' ? Math.max(0, Math.round(Number(amount))) : await getEffectivePrice(pkg.id, branchId || null))
       : 0
     const ageGroup = assignAgeGroup(dateOfBirth)
@@ -146,17 +154,21 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
         data: { name: parentName, email: parentEmail, password: hashed, role: 'parent', phone: parentPhoneClean },
       })
 
-      // Derived from the highest existing studentId, not a row count — count()
-      // collides with an existing ID as soon as any student has ever been
-      // deleted (e.g. SS-0001 deleted leaves count()=1, regenerating the
-      // still-in-use SS-0002 and throwing a P2002 that got misreported as
-      // "Email sudah terdaftar" since the catch-all only checked the error
-      // code, not which field it was on).
-      const lastStudent = await tx.student.findFirst({ orderBy: { studentId: 'desc' }, select: { studentId: true } })
-      const lastNum = lastStudent ? parseInt(lastStudent.studentId.replace('SS-', ''), 10) || 0 : 0
+      // Nomor siswa harus naik secara numerik, bukan urutan teks (SS-9999
+      // secara leksikografis berada setelah SS-10000). Lock menutup balapan
+      // dua pendaftaran bersamaan; MAX numerik aman meski ada data terhapus.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('student-id-sequence'))`
+      const [sequence] = await tx.$queryRaw`
+        SELECT COALESCE(MAX(NULLIF(regexp_replace("studentId", '\\D', '', 'g'), '')::int), 0) AS "lastNum"
+        FROM "students"
+        WHERE "studentId" ~ '^SS-[0-9]+$'
+      `
+      const lastNum = Number(sequence?.lastNum) || 0
       const studentId = `SS-${String(lastNum + 1).padStart(4, '0')}`
       const startDate = new Date()
-      const period = pkg ? computePackagePeriod(startDate, pkg) : null
+      // Beasiswa yang ditagihkan lewat Parent belum mengaktifkan masa paket.
+      // Masa aktif baru dibuat oleh applyPaymentSuccess setelah gateway lunas.
+      const period = pkg && !monthlyRateSupplied ? computePackagePeriod(startDate, pkg) : null
 
       const student = await tx.student.create({
         data: {
@@ -172,44 +184,81 @@ router.post('/', authenticate, authorize('admin', 'head_coach'), async (req, res
           parentEmail,
           address: '',
           packageId: pkg?.id || null,
-          packageStartDate: pkg ? startDate : null,
+          packageStartDate: period ? startDate : null,
           packageEndDate: period?.packageEndDate || null,
-          totalSessions: pkg ? monthlySessionLimit(pkg) : null,
-          sessionMonth: pkg ? startDate.getMonth() + 1 : null,
-          sessionYear: pkg ? startDate.getFullYear() : null,
+          totalSessions: period ? monthlySessionLimit(pkg) : null,
+          sessionMonth: period ? startDate.getMonth() + 1 : null,
+          sessionYear: period ? startDate.getFullYear() : null,
           branchId: branchId || null,
           sessionsUsed: sessionsUsed ? Math.max(0, Math.round(Number(sessionsUsed))) : 0,
-          registrationScholarshipPercent,
-          sppScholarshipPercent,
+          // Persen lama tidak boleh ikut mengurangi tarif final baru.
+          registrationScholarshipPercent: monthlyRateSupplied ? 0 : registrationScholarshipPercent,
+          sppScholarshipPercent: monthlyRateSupplied ? 0 : sppScholarshipPercent,
+          scholarshipCategory,
+          scholarshipMonthlyRate,
+          status: monthlyRateSupplied ? 'pending_payment' : undefined,
         },
       })
 
       if (pkg) {
-        const regFee = registrationFee ?? 750000
-        const discount = Math.round(pkgAmount * sppScholarshipPercent / 100) + Math.round(regFee * registrationScholarshipPercent / 100)
-        const totalAmount = Math.max(0, pkgAmount + regFee - discount)
-
-        await tx.payment.create({
-          data: {
-            studentId: student.id,
-            packageId: pkg.id,
-            amount: pkgAmount,
-            registrationFee: regFee,
-            totalAmount,
-            paymentType: 'registration',
-            status: paymentStatus || 'pending',
-            paidAt: paymentStatus === 'success' ? new Date() : null,
-            effectsAppliedAt: paymentStatus === 'success' ? new Date() : null,
-          },
-        })
+        if (monthlyRateSupplied) {
+          // Invoice snapshot: nominal dan tarif tersimpan di CartItem, sehingga
+          // perubahan tarif siswa besok tidak mengubah tagihan historis ini.
+          await tx.cartItem.create({
+            data: {
+              studentId: student.id,
+              type: 'package',
+              label: `Pendaftaran Beasiswa — ${pkg.name}`,
+              category: 'Perpanjangan Paket',
+              amount: pkgAmount,
+              metadata: {
+                packageId: pkg.id,
+                packageName: pkg.name,
+                scholarshipCategory,
+                scholarshipMonthlyRate,
+                durationMonths: pkg.durationMonths,
+                pricingMode: 'scholarship_monthly_final',
+                note: `Tarif beasiswa final Rp${scholarshipMonthlyRate.toLocaleString('id-ID')}/bulan × ${pkg.durationMonths} bulan`,
+              },
+              addedById: req.user.id,
+              status: 'open',
+            },
+          })
+        } else {
+          const regFee = registrationFee ?? 750000
+          const discount = Math.round(pkgAmount * sppScholarshipPercent / 100) + Math.round(regFee * registrationScholarshipPercent / 100)
+          const totalAmount = Math.max(0, pkgAmount + regFee - discount)
+          await tx.payment.create({
+            data: {
+              studentId: student.id,
+              packageId: pkg.id,
+              amount: pkgAmount,
+              registrationFee: regFee,
+              totalAmount,
+              paymentType: 'registration',
+              status: paymentStatus || 'pending',
+              paidAt: paymentStatus === 'success' ? new Date() : null,
+              effectsAppliedAt: paymentStatus === 'success' ? new Date() : null,
+            },
+          })
+        }
       }
 
       await tx.studentCard.create({
         data: { studentId: student.id, qrCode: crypto.randomBytes(16).toString('hex'), cardNumber: student.studentId },
       })
 
-      return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, student }
+      return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, student, scholarshipInvoice: monthlyRateSupplied }
     })
+
+    if (result.scholarshipInvoice) {
+      await notifyUser(result.student.userId, {
+        type: 'cart_item_added',
+        title: 'Tagihan Beasiswa Baru',
+        message: `Tagihan pendaftaran ${result.student.fullName} sudah dibuat sesuai tarif beasiswa. Silakan buka menu Pembayaran untuk melanjutkan.`,
+        link: '/dashboard/pembayaran',
+      }).catch((err) => console.error('Gagal mengirim notifikasi tagihan beasiswa:', err))
+    }
 
     res.status(201).json(result)
   } catch (err) {
@@ -388,12 +437,22 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
   } = req.body
   const canManageScholarship = ['admin', 'head_coach'].includes(req.user.role)
   const { registrationScholarshipPercent, sppScholarshipPercent } = req.body
+  const scholarshipRateProvided = canManageScholarship && req.body.scholarshipMonthlyRate !== undefined
+  const scholarshipMonthlyRate = scholarshipRateProvided && req.body.scholarshipMonthlyRate !== '' && req.body.scholarshipMonthlyRate !== null
+    ? Math.round(Number(req.body.scholarshipMonthlyRate))
+    : null
+  const scholarshipCategory = scholarshipRateProvided && scholarshipMonthlyRate !== null
+    ? (String(req.body.scholarshipCategory || 'Beasiswa').trim().slice(0, 80) || 'Beasiswa')
+    : null
   for (const value of [sessionsUsed, totalSessions]) {
     if (value !== undefined && value !== '' && (!Number.isInteger(Number(value)) || Number(value) < 0)) return res.status(400).json({ error: 'Sesi harus berupa bilangan bulat minimal 0' })
   }
   // Nomor HP wajib: diawali 0, hanya angka, tanpa spasi (lihat lib/phone.js).
   if (parentPhone !== undefined && parentPhone !== '' && !isValidPhone(parentPhone)) {
     return res.status(400).json({ error: PHONE_ERROR })
+  }
+  if (scholarshipRateProvided && scholarshipMonthlyRate !== null && (!Number.isSafeInteger(scholarshipMonthlyRate) || scholarshipMonthlyRate < 0)) {
+    return res.status(400).json({ error: 'Tarif beasiswa bulanan harus berupa nominal bulat minimal 0' })
   }
   try {
     const student = await prisma.$transaction(async (tx) => {
@@ -415,6 +474,16 @@ router.put('/:id', authenticate, authorize('head_coach', 'admin'), async (req, r
       }
       if (canManageScholarship && sppScholarshipPercent !== undefined) {
         data.sppScholarshipPercent = Math.max(0, Math.min(100, Number(sppScholarshipPercent) || 0))
+      }
+      if (scholarshipRateProvided) {
+        // Tarif final menggantikan persen untuk perhitungan masa depan; invoice
+        // lama tidak disentuh karena nominal snapshot-nya sudah tersimpan.
+        data.scholarshipMonthlyRate = scholarshipMonthlyRate
+        data.scholarshipCategory = scholarshipCategory
+        if (scholarshipMonthlyRate !== null) {
+          data.registrationScholarshipPercent = 0
+          data.sppScholarshipPercent = 0
+        }
       }
 
       // Changing the package re-derives the end date from today (same as a
@@ -627,7 +696,16 @@ router.post('/:id/renew', authenticate, authorize('admin', 'head_coach'), async 
           label: invoiceLabel,
           category: 'Perpanjangan Paket',
           amount: resolvedAmount,
-          metadata: { packageId: pkg.id, packageName: pkg.name, custom: !!pkg.isCustom, note: note?.trim() || null },
+          metadata: {
+            packageId: pkg.id,
+            packageName: pkg.name,
+            custom: !!pkg.isCustom,
+            scholarshipCategory: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? student.scholarshipCategory : null,
+            scholarshipMonthlyRate: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? student.scholarshipMonthlyRate : null,
+            durationMonths: pkg.durationMonths,
+            pricingMode: student.scholarshipMonthlyRate !== null && student.scholarshipMonthlyRate !== undefined ? 'scholarship_monthly_final' : 'regular',
+            note: note?.trim() || null,
+          },
           addedById: req.user.id,
           status: 'open',
         },
