@@ -7,6 +7,7 @@ import { LogOut, X, Grid2x2 } from 'lucide-react'
 import * as api from '@/lib/api'
 import NotificationBell from './NotificationBell'
 import WhatsAppFloatingButton from './WhatsAppFloatingButton'
+import FloatingCartButton from './FloatingCartButton'
 
 const MAX_TABS = 4
 
@@ -252,6 +253,7 @@ export default function DashboardShell({ role, title, navItems, children }) {
           </div>
         </div>
       )}
+      {role === 'parent' && !moreOpen && <FloatingCartButton />}
       {/* Tombol Chat Admin (hanya coach & parent; admin dan head coach tidak memakainya) */}
       {SHOW_WA_ADMIN_BUTTON && role !== 'admin' && role !== 'head_coach' && !moreOpen && (
         <WhatsAppFloatingButton

@@ -127,11 +127,17 @@ export async function getMyBpjs() {
 }
 
 export async function addMyBpjs() {
-  return request('/cart/bpjs/me', { method: 'POST' })
+  return request('/cart/bpjs/me', { method: 'POST' }).then(notifyCartChanged)
 }
 
 // Keranjang belanja parent: item (perpanjangan paket, BPJS, merchandise) yang
 // digabung jadi satu checkout.
+// Beritahu komponen lain (mis. badge keranjang mengambang) bahwa isi keranjang berubah.
+function notifyCartChanged(result) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('cart-changed'))
+  return result
+}
+
 export async function getMyCart() {
   return request('/cart/me')
 }
@@ -141,11 +147,11 @@ export async function getStudentCart(studentId) {
 }
 
 export async function addCartItem(payload) {
-  return request('/cart', { method: 'POST', body: JSON.stringify(payload) })
+  return request('/cart', { method: 'POST', body: JSON.stringify(payload) }).then(notifyCartChanged)
 }
 
 export async function deleteCartItem(id) {
-  return request(`/cart/${id}`, { method: 'DELETE' })
+  return request(`/cart/${id}`, { method: 'DELETE' }).then(notifyCartChanged)
 }
 
 // Ubah item tagihan yang belum dibayar (harga/keterangan). Admin/head_coach.
@@ -164,7 +170,7 @@ export async function getOutstandingCart() {
 }
 
 export async function checkoutCart(paymentMethod) {
-  return request('/cart/checkout', { method: 'POST', body: JSON.stringify({ paymentMethod }) })
+  return request('/cart/checkout', { method: 'POST', body: JSON.stringify({ paymentMethod }) }).then(notifyCartChanged)
 }
 
 // Katalog merchandise: admin mengelola (`/products/all`), parent melihat yang
