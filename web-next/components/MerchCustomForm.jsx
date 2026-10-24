@@ -9,7 +9,15 @@ import * as api from '@/lib/api'
 // menampilkan nomor yang sudah dipakai sebagai tombol nonaktif, jadi pembeli
 // langsung tahu nomor mana yang masih kosong.
 export function missingRequired(product, values) {
-  return (product?.customFields || []).find((f) => f.required && !String(values?.[f.key] ?? '').trim())
+  return (product?.customFields || []).find((f) => {
+    const text = String(values?.[f.key] ?? '').trim()
+    if (!text) return f.required
+    if (f.type === 'number') {
+      const n = Number(text)
+      return !Number.isInteger(n) || n < 0 || n > 999 || (f.blockedNumbers || []).includes(n)
+    }
+    return false
+  })
 }
 
 export default function MerchCustomForm({ product, values, onChange }) {
@@ -79,46 +87,38 @@ export default function MerchCustomForm({ product, values, onChange }) {
 
 function NumberPicker({ field, info, loading, value, onPick }) {
   const taken = useMemo(() => new Set(info?.taken || field.blockedNumbers || []), [info, field])
-  const all = useMemo(() => Array.from({ length: Math.max(0, field.max - field.min + 1) }, (_, i) => field.min + i), [field])
-  const free = all.filter((n) => !taken.has(n)).length
+  const sorted = useMemo(() => [...taken].sort((a, b) => a - b), [taken])
 
   if (loading) return <div className="text-xs text-gray-400 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> Memuat nomor...</div>
 
+  const text = String(value ?? '')
+  const n = Number(text)
+  const valid = text !== '' && Number.isInteger(n) && n >= 0 && n <= 999
+  const isTaken = valid && taken.has(n)
+
   return (
-    <div>
-      <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1.5">
-        <span>{value ? `Dipilih: ${value}` : 'Pilih nomor yang masih kosong'}</span>
-        <span>{free} nomor tersedia</span>
-      </div>
-      <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5 max-h-44 overflow-y-auto pr-1">
-        {all.map((n) => {
-          const isTaken = taken.has(n)
-          const active = Number(value) === n
-          return (
-            <button
-              key={n}
-              type="button"
-              disabled={isTaken}
-              onClick={() => onPick(active && !field.required ? '' : n)}
-              title={isTaken ? 'Sudah dipakai' : `Nomor ${n}`}
-              className={`rounded-lg py-1.5 text-xs font-semibold tabular-nums transition-colors ${
-                isTaken
-                  ? 'bg-gray-100 text-gray-300 line-through cursor-not-allowed'
-                  : active
-                  ? 'bg-navy-900 text-white'
-                  : 'bg-white border border-gray-200 text-navy-700 hover:border-gold-400'
-              }`}
-            >
-              {n}
-            </button>
-          )
-        })}
-      </div>
-      <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-1.5">
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white border border-gray-200" /> Kosong</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100" /> Terpakai</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-navy-900" /> Pilihanmu</span>
-      </div>
+    <div className="space-y-1.5">
+      <input
+        type="number"
+        inputMode="numeric"
+        min="0"
+        max="999"
+        value={text}
+        onChange={(e) => onPick(e.target.value)}
+        placeholder="Ketik nomor punggung"
+        className={`w-full rounded-2xl border px-3 py-2.5 text-sm tabular-nums bg-gray-50 ${isTaken ? 'border-red-300' : valid ? 'border-emerald-300' : 'border-gray-200'}`}
+      />
+      {text !== '' && !valid && <p className="text-[11px] text-red-500">Masukkan angka bulat 0–999.</p>}
+      {isTaken && <p className="text-[11px] text-red-500 font-semibold">Nomor {n} sudah dipakai. Pilih nomor lain.</p>}
+      {valid && !isTaken && <p className="text-[11px] text-emerald-600 font-semibold">Nomor {n} tersedia.</p>}
+      {sorted.length > 0 && (
+        <div>
+          <div className="text-[11px] text-gray-400 mb-1">Nomor yang sudah dipakai:</div>
+          <div className="flex flex-wrap gap-1">
+            {sorted.map((t) => <span key={t} className="rounded-md bg-gray-100 text-gray-500 text-[11px] font-semibold tabular-nums px-1.5 py-0.5 line-through">{t}</span>)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

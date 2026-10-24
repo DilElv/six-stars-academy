@@ -3,7 +3,7 @@ import pkg from '@prisma/client'
 import prisma from '../lib/prisma.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
-import { sanitizeCustomFields, productFields, orderedNumbers, FULFILLMENT } from '../lib/merch.js'
+import { sanitizeCustomFields, productFields, orderedNumbers, FULFILLMENT, NUMBER_MIN, NUMBER_MAX } from '../lib/merch.js'
 
 const { Prisma } = pkg
 const router = Router()
@@ -84,8 +84,8 @@ router.get('/:id/numbers', authenticate, async (req, res) => {
       fields.push({
         key: field.key,
         label: field.label,
-        min: field.min,
-        max: field.max,
+        min: NUMBER_MIN,
+        max: NUMBER_MAX,
         blocked,
         ordered: ordered.map((o) => ({ number: o.number, paid: o.paid, ...(staff ? { studentName: o.studentName } : {}) })),
         taken: [...new Set([...blocked, ...ordered.map((o) => o.number)])].sort((a, b) => a - b),
@@ -109,7 +109,7 @@ router.put('/:id/blocked-numbers', authenticate, authorize('admin', 'head_coach'
     if (!field) return res.status(400).json({ error: 'Opsi nomor tidak ditemukan' })
     if (!Array.isArray(numbers)) return res.status(400).json({ error: 'Daftar nomor tidak valid' })
     const next = fields.map((f) => (f.key === fieldKey
-      ? { ...f, blockedNumbers: [...new Set(numbers.map((n) => Math.round(Number(n))).filter((n) => Number.isInteger(n) && n >= f.min && n <= f.max))].sort((a, b) => a - b) }
+      ? { ...f, blockedNumbers: [...new Set(numbers.map((n) => Math.round(Number(n))).filter((n) => Number.isInteger(n) && n >= NUMBER_MIN && n <= NUMBER_MAX))].sort((a, b) => a - b) }
       : f))
     const updated = await prisma.product.update({ where: { id: product.id }, data: { customFields: next } })
     res.json(updated)

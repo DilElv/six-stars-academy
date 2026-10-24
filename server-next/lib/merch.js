@@ -8,6 +8,9 @@ import prisma from './prisma.js'
 // oleh admin (blockedNumbers) + sudah dipesan (item keranjang aktif atau lunas).
 export const FIELD_TYPES = ['text', 'select', 'number']
 const MAX_FIELDS = 8
+// Nomor bebas diketik pembeli (tanpa rentang yang diatur admin); admin hanya menentukan nomor yang tidak boleh dipakai.
+export const NUMBER_MIN = 0
+export const NUMBER_MAX = 999
 
 function slug(label) {
   return String(label).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'opsi'
@@ -45,10 +48,10 @@ export function sanitizeCustomFields(input) {
       if (choices.length === 0) return { error: `Opsi "${label}" butuh minimal satu pilihan` }
       field.choices = choices
     } else {
-      field.min = intIn(raw.min, 0, 999, 1)
-      field.max = intIn(raw.max, field.min, 999, Math.max(field.min, 99))
+      field.min = NUMBER_MIN
+      field.max = NUMBER_MAX
       field.unique = raw.unique !== false
-      field.blockedNumbers = [...new Set((Array.isArray(raw.blockedNumbers) ? raw.blockedNumbers : []).map((v) => Math.round(Number(v))).filter((v) => Number.isInteger(v) && v >= field.min && v <= field.max))].sort((a, b) => a - b)
+      field.blockedNumbers = [...new Set((Array.isArray(raw.blockedNumbers) ? raw.blockedNumbers : []).map((v) => Math.round(Number(v))).filter((v) => Number.isInteger(v) && v >= NUMBER_MIN && v <= NUMBER_MAX))].sort((a, b) => a - b)
     }
     fields.push(field)
   }
@@ -107,7 +110,7 @@ export function validateCustomValues(product, values) {
       custom.push({ key: field.key, label: field.label, value: text })
     } else {
       const n = Number(text)
-      if (!Number.isInteger(n) || n < field.min || n > field.max) return { error: `${field.label} harus angka ${field.min}–${field.max}` }
+      if (!Number.isInteger(n) || n < NUMBER_MIN || n > NUMBER_MAX) return { error: `${field.label} harus berupa angka bulat ${NUMBER_MIN}–${NUMBER_MAX}` }
       if (field.blockedNumbers?.includes(n)) return { error: `${field.label} ${n} sudah dipakai` }
       custom.push({ key: field.key, label: field.label, value: n })
     }

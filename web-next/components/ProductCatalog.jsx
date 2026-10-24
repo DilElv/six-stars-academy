@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package, Hash, SlidersHorizontal } from 'lucide-react'
+import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package, SlidersHorizontal } from 'lucide-react'
 import * as api from '@/lib/api'
 import ModalPortal from '@/components/ui/modal-portal'
 import { AppSelect } from '@/components/ui/app-select'
@@ -26,7 +26,6 @@ function stockLabel(stock) {
 export default function ProductCatalog() {
   const [products, setProducts] = useState(null)
   const [editTarget, setEditTarget] = useState(null) // null | 'new' | product
-  const [numbersTarget, setNumbersTarget] = useState(null)
   const [error, setError] = useState('')
 
   function load() {
@@ -96,11 +95,6 @@ export default function ProductCatalog() {
                   <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold-400 text-navy-900 flex items-center gap-1"><SlidersHorizontal size={10} /> Custom</span>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
-                  {p.customFields?.some((f) => f.type === 'number' && f.unique) && (
-                    <button onClick={() => setNumbersTarget(p)} title="Atur nomor yang tidak bisa dipesan" className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
-                      <Hash size={13} />
-                    </button>
-                  )}
                   <button onClick={() => setEditTarget(p)} className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
                     <Pencil size={13} />
                   </button>
@@ -121,8 +115,6 @@ export default function ProductCatalog() {
           ))}
         </div>
       )}
-
-      {numbersTarget && <NumbersManagerModal product={numbersTarget} onClose={() => setNumbersTarget(null)} onChanged={load} />}
 
       {editTarget && (
         <ProductModal
@@ -293,7 +285,7 @@ function ProductModal({ product, onClose, onSaved }) {
 const PRESETS = [
   { label: 'Nama Punggung', type: 'text', required: true, maxLength: 15 },
   { label: 'Ukuran', type: 'select', required: true, choices: ['S', 'M', 'L', 'XL'] },
-  { label: 'Nomor Punggung', type: 'number', required: true, min: 1, max: 99, unique: true },
+  { label: 'Nomor Punggung', type: 'number', required: true, unique: true, blockedNumbers: [] },
   { label: 'Catatan', type: 'text', required: false, maxLength: 60 },
 ]
 
@@ -343,17 +335,7 @@ function CustomFieldsEditor({ fields, onChange }) {
             </div>
           )}
           {f.type === 'number' && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
-                Dari
-                <input type="number" min="0" max="999" value={f.min ?? 1} onChange={(e) => update(i, { min: Number(e.target.value) })} className="w-16 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm" />
-                sampai
-                <input type="number" min="0" max="999" value={f.max ?? 99} onChange={(e) => update(i, { max: Number(e.target.value) })} className="w-16 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm" />
-              </div>
-              <label className="flex items-center gap-2 text-xs text-navy-800">
-                <input type="checkbox" checked={f.unique !== false} onChange={(e) => update(i, { unique: e.target.checked })} className="rounded" /> Nomor tidak boleh kembar (yang sudah dipesan jadi terkunci)
-              </label>
-            </div>
+            <BlockedNumbersInput value={f.blockedNumbers || []} onChange={(blockedNumbers) => update(i, { blockedNumbers })} />
           )}
         </div>
       ))}
@@ -372,115 +354,49 @@ function CustomFieldsEditor({ fields, onChange }) {
   )
 }
 
-// Nomor punggung yang tidak bisa dipesan: admin/head coach mengetik nomornya satu per
-// satu (mis. nomor milik pemain lama). Nomor yang sudah dipesan parent otomatis terkunci.
-function NumbersManagerModal({ product, onClose, onChanged }) {
-  const fieldDefs = (product.customFields || []).filter((f) => f.type === 'number' && f.unique)
-  const [fieldKey, setFieldKey] = useState(fieldDefs[0]?.key)
-  const [info, setInfo] = useState(null)
+// Admin/head coach cukup mengetik nomor yang tidak boleh dipesan (mis. milik pemain
+// lama). Pembeli bebas memilih nomor lain; nomor yang sudah dipesan terkunci otomatis.
+function BlockedNumbersInput({ value, onChange }) {
   const [input, setInput] = useState('')
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  function load() {
-    api.getProductNumbers(product.id).then((res) => setInfo(res.fields)).catch((err) => setError(err.message))
-  }
-  useEffect(load, [product.id])
-
-  const field = info?.find((f) => f.key === fieldKey)
-
-  async function save(numbers) {
-    setBusy(true)
-    setError('')
-    try {
-      await api.setBlockedNumbers(product.id, fieldKey, numbers)
-      load()
-      onChanged?.()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function addNumber(e) {
-    e.preventDefault()
-    if (!field || busy || input.trim() === '') return
-    const n = Number(input)
-    if (!Number.isInteger(n) || n < field.min || n > field.max) return setError(`Masukkan angka ${field.min}–${field.max}`)
-    if (field.blocked.includes(n)) return setError(`Nomor ${n} sudah ada di daftar`)
-    if (field.ordered.some((o) => o.number === n)) return setError(`Nomor ${n} sudah dipesan parent`)
+  function add() {
+    const nums = input.split(/[\s,;]+/).filter(Boolean).map(Number)
+    if (nums.length === 0) return
+    if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 999)) return setError('Isi dengan angka bulat 0–999. Beberapa nomor dipisah koma.')
+    onChange([...new Set([...value, ...nums])].sort((a, b) => a - b))
     setInput('')
-    await save([...field.blocked, n])
+    setError('')
   }
-
-  const removeNumber = (n) => save(field.blocked.filter((x) => x !== n))
 
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-        <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[88vh] overflow-y-auto modal-scroll p-5" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-navy-900 text-sm">Nomor Tidak Tersedia · {product.name}</h3>
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-          </div>
-          <p className="text-xs text-gray-400 mb-3">Ketik nomor yang sudah dipakai, satu per satu, lalu tekan Tambah. Nomor di daftar ini tidak bisa dipesan parent.</p>
-          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</div>}
-          {fieldDefs.length > 1 && (
-            <div className="mb-3"><AppSelect value={fieldKey} onChange={(v) => { setFieldKey(v); setError('') }} className="w-full" options={fieldDefs.map((f) => ({ value: f.key, label: f.label }))} /></div>
-          )}
-          {!field ? <Loader2 size={18} className="animate-spin text-navy-300" /> : (
-            <div className="space-y-4">
-              <form onSubmit={addNumber} className="flex gap-2">
-                <input
-                  type="number"
-                  min={field.min}
-                  max={field.max}
-                  value={input}
-                  onChange={(e) => { setInput(e.target.value); setError('') }}
-                  placeholder={`Nomor ${field.min}–${field.max}`}
-                  className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm tabular-nums"
-                />
-                <button type="submit" disabled={busy || input === ''} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 rounded-2xl disabled:opacity-50">
-                  {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Tambah
-                </button>
-              </form>
-
-              <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1.5">Nomor yang tidak bisa dipesan ({field.blocked.length})</div>
-                {field.blocked.length === 0 ? (
-                  <p className="text-xs text-gray-400">Belum ada. Semua nomor {field.min}–{field.max} masih bisa dipesan.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {field.blocked.map((n) => (
-                      <span key={n} className="inline-flex items-center gap-1 rounded-xl bg-gray-100 text-navy-800 text-xs font-semibold tabular-nums pl-2.5 pr-1 py-1">
-                        {n}
-                        <button type="button" onClick={() => removeNumber(n)} disabled={busy} title="Buka kembali nomor ini" className="p-0.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50"><X size={12} /></button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1.5">Sudah dipesan parent ({field.ordered.length})</div>
-                {field.ordered.length === 0 ? (
-                  <p className="text-xs text-gray-400">Belum ada pesanan.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {[...field.ordered].sort((a, b) => a.number - b.number).map((o) => (
-                      <span key={o.number} title={o.paid ? 'Lunas' : 'Belum lunas'} className={`rounded-xl text-xs font-semibold px-2.5 py-1 ${o.paid ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-                        {o.number}{o.studentName ? ` · ${o.studentName}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+    <div className="space-y-1.5">
+      <label className="block text-xs font-semibold text-gray-500">Nomor yang tidak bisa dipesan</label>
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setError('') }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          inputMode="numeric"
+          placeholder="Ketik nomor, mis. 10 atau 7, 9, 23"
+          className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2 text-sm tabular-nums"
+        />
+        <button type="button" onClick={add} className="text-xs font-semibold px-3 rounded-xl bg-navy-900 text-white hover:bg-navy-800">Tambah</button>
       </div>
-    </ModalPortal>
+      {error && <p className="text-[11px] text-red-500">{error}</p>}
+      {value.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((n) => (
+            <span key={n} className="inline-flex items-center gap-1 rounded-lg bg-gray-100 text-navy-800 text-xs font-semibold tabular-nums pl-2 pr-1 py-0.5">
+              {n}
+              <button type="button" onClick={() => onChange(value.filter((x) => x !== n))} title="Buka kembali" className="p-0.5 rounded text-gray-400 hover:text-red-600"><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] text-gray-400">Belum ada nomor yang ditutup. Pembeli bebas memilih nomor apa pun.</p>
+      )}
+      <p className="text-[10px] text-gray-400">Simpan produk agar perubahan berlaku. Nomor yang sudah dipesan parent otomatis tidak bisa dipakai orang lain.</p>
+    </div>
   )
 }
