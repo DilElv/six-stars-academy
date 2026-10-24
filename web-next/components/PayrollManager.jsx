@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Banknote, Loader2, RefreshCw, Pencil, Trash2, CheckCircle2, Clock, Save, X, CalendarCheck } from 'lucide-react'
+import { Banknote, Loader2, RefreshCw, Pencil, Trash2, CheckCircle2, Clock, Save, X, CalendarCheck, Users } from 'lucide-react'
 import * as api from '@/lib/api'
 import { AppSelect } from '@/components/ui/app-select'
 
@@ -25,6 +25,8 @@ export default function PayrollManager() {
   const [error, setError] = useState('')
   const [flash, setFlash] = useState('')
   const [editEntry, setEditEntry] = useState(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [currentRole, setCurrentRole] = useState('')
 
   function load() {
     setLoading(true)
@@ -36,6 +38,7 @@ export default function PayrollManager() {
   }
 
   useEffect(load, [month, year])
+  useEffect(() => { api.getMe().then((u) => setCurrentRole(u.role)).catch(() => {}) }, [])
 
   async function handleGenerate() {
     setBusy('generate')
@@ -115,6 +118,12 @@ export default function PayrollManager() {
             options={[year - 1, year, year + 1].map((y) => ({ value: String(y), label: String(y) }))}
           />
           <button
+            onClick={() => setBulkOpen(true)}
+            className="flex items-center gap-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-navy-700 text-sm font-semibold px-4 py-2 rounded-2xl"
+          >
+            <Users size={14} /> Atur Honor Massal
+          </button>
+          <button
             onClick={handleGenerate}
             disabled={busy === 'generate'}
             className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 py-2 rounded-2xl disabled:opacity-50"
@@ -176,9 +185,19 @@ export default function PayrollManager() {
                       </div>
                     </td>
                     <td className="px-3 py-3 text-gray-500 text-xs">{coach.branches?.map((b) => b.branch.code).join(', ') || '-'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums text-gray-600">{formatRupiah(payroll?.dailyRate ?? coach.dailyRate)}</td>
+                    <td className="px-3 py-3 text-right">
+                      <RateCell
+                        value={payroll?.dailyRate ?? coach.dailyRate}
+                        locked={paid || (currentRole === 'head_coach' && coach.role === 'head_coach')}
+                        onSave={async (v) => {
+                          await api.setCoachDailyRate(coach.id, v, month, year)
+                          load()
+                        }}
+                      />
+                    </td>
                     <td className="px-3 py-3 text-center">
                       <div className="font-semibold text-navy-900 tabular-nums">{stats.daysPresent}</div>
+                      {stats.eventDays > 0 && <div className="text-[10px] text-emerald-600 mt-0.5">termasuk {stats.eventDays} hari event</div>}
                       {(stats.pending > 0 || stats.rejected > 0 || stats.missingCheckout > 0) && (
                         <div className="text-[10px] text-gray-400 mt-0.5">
                           {stats.pending > 0 && `${stats.pending} pending`}
@@ -225,8 +244,18 @@ export default function PayrollManager() {
 
       <p className="text-xs text-gray-400 flex items-start gap-1.5">
         <CalendarCheck size={13} className="mt-0.5 shrink-0" />
-        Hari hadir dihitung dari absen masuk (absen ke 2 cabang di hari yang sama tetap dihitung 1 hari). Atur honor harian tiap coach di menu Data Coach.
+        Total honor = honor per hari × hari hadir (absen latihan dan absen event, 1 hari dihitung sekali) + bonus − potongan. Klik nominal honor per hari untuk mengubahnya; total langsung dihitung otomatis.
       </p>
+
+      {bulkOpen && (
+        <BulkRateModal
+          month={month}
+          year={year}
+          isAdmin={currentRole === 'admin'}
+          onClose={() => setBulkOpen(false)}
+          onSaved={(n) => { setBulkOpen(false); setFlash(`Honor harian diperbarui untuk ${n} coach.`); load() }}
+        />
+      )}
 
       {editEntry && (
         <EditPayrollModal
@@ -332,6 +361,110 @@ function EditPayrollModal({ entry, onClose, onSaved }) {
           </div>
           <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function RateCell({ value, locked, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function commit() {
+    const next = Number(draft)
+    if (!Number.isFinite(next) || next < 0 || draft === '') { setEditing(false); return }
+    if (next === Number(value)) { setEditing(false); return }
+    setSaving(true)
+    setError('')
+    try {
+      await onSave(Math.round(next))
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-col items-end">
+        <input
+          autoFocus
+          type="number"
+          min="0"
+          value={draft}
+          disabled={saving}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditing(false) }}
+          className="w-28 px-2 py-1 text-right tabular-nums text-sm bg-white border border-gold-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gold-200"
+        />
+        {error && <span className="text-[10px] text-red-500 mt-0.5">{error}</span>}
+      </div>
+    )
+  }
+  if (locked) return <span className="tabular-nums text-gray-600">{formatRupiah(value)}</span>
+  return (
+    <button
+      type="button"
+      onClick={() => { setDraft(String(value || 0)); setEditing(true) }}
+      title="Klik untuk ubah honor per hari"
+      className="tabular-nums text-navy-800 font-medium border-b border-dashed border-gray-300 hover:border-gold-400 hover:text-navy-900"
+    >
+      {formatRupiah(value)}
+    </button>
+  )
+}
+
+function BulkRateModal({ month, year, isAdmin, onClose, onSaved }) {
+  const [rate, setRate] = useState('')
+  const [scope, setScope] = useState('coach')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const res = await api.setBulkDailyRate(Number(rate) || 0, scope, month, year)
+      onSaved(res.updated)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-navy-900">Atur Honor Massal</h3>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X size={16} /></button>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Honor per hari (Rp)</label>
+            <input type="number" min="0" required value={rate} onChange={(e) => setRate(e.target.value)} placeholder="mis. 150000" className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums" />
+          </div>
+          {isAdmin && (
+            <div className="flex gap-2 text-xs">
+              {[['coach', 'Semua coach'], ['all', 'Coach + head coach']].map(([v, label]) => (
+                <button key={v} type="button" onClick={() => setScope(v)} className={`flex-1 px-3 py-2 rounded-xl border font-semibold ${scope === v ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-navy-700 border-gray-200'}`}>{label}</button>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-gray-400">Berlaku untuk semua coach aktif dan menghitung ulang slip draft periode ini. Slip yang sudah dibayar tidak berubah. Honor tiap coach tetap bisa disesuaikan satu per satu.</p>
+          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Terapkan
           </button>
         </form>
       </div>

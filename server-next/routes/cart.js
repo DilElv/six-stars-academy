@@ -9,6 +9,7 @@ import { getUserBranchIds } from '../lib/branchAccess.js'
 import { resolveCustomPackage } from '../lib/studentCustomPackage.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
 import { getBpjsSettings, bpjsLabel } from '../lib/bpjsBilling.js'
+import { validateCustomValues, findNumberConflict, customSummary, productFields } from '../lib/merch.js'
 
 const router = Router()
 
@@ -105,7 +106,7 @@ router.get('/student/:studentId', authenticate, authorize('admin', 'head_coach')
 // dan SATU tagihan BPJS per periode yang masih "open" — supaya parent tidak
 // pernah ditagih dua kali untuk hal yang sama.
 router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async (req, res) => {
-  const { type, packageId, productId, label, amount, metadata, note, customPackage } = req.body
+  const { type, packageId, productId, label, amount, metadata, note, customPackage, custom } = req.body
   if (!CART_TYPES.includes(type)) return res.status(400).json({ error: 'Tipe item keranjang tidak valid' })
 
   // Validasi nominal lebih dulu supaya paket custom tidak pernah terbuat
@@ -117,6 +118,8 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
   }
 
   try {
+    let merchProduct = null
+    let merchCustom = []
     let student
     if (req.user.role === 'parent') {
       // Parent boleh menambah perpanjangan paket, atau merchandise yang diambil
@@ -208,13 +211,19 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
       const product = await prisma.product.findUnique({ where: { id: productId } })
       if (!product || !product.isActive) return res.status(400).json({ error: 'Produk tidak tersedia' })
       if (product.stock !== null && product.stock <= 0) return res.status(400).json({ error: 'Stok produk habis' })
+      // Isian custom (nama punggung, ukuran, nomor, dll) divalidasi terhadap
+      // definisi produk; nomor unik dicek lagi di dalam transaksi saat disimpan.
+      const checked = validateCustomValues(product, custom)
+      if (checked.error) return res.status(400).json({ error: checked.error })
+      merchProduct = product
+      merchCustom = checked.custom
       itemData = {
         type,
-        label: product.name,
+        label: checked.custom.length ? `${product.name} — ${customSummary(checked.custom)}` : product.name,
         category: TYPE_CATEGORY.merchandise,
         amount: product.price,
         productId: product.id,
-        metadata: { productId: product.id, productName: product.name, productCategory: product.category, note: note?.trim() || null },
+        metadata: { productId: product.id, productName: product.name, productCategory: product.category, custom: checked.custom, note: note?.trim() || null },
       }
     } else {
       const trimmed = typeof label === 'string' ? label.trim() : ''
@@ -241,9 +250,19 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
       }
     }
 
-    const item = await prisma.cartItem.create({
-      data: { ...itemData, studentId: student.id, addedById: req.user.id, status: 'open' },
-    })
+    const createData = { ...itemData, studentId: student.id, addedById: req.user.id, status: 'open' }
+    let item
+    if (merchProduct && productFields(merchProduct).some((f) => f.type === 'number' && f.unique)) {
+      // Kunci per produk supaya dua parent tidak bisa mengambil nomor yang sama bersamaan.
+      item = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'merch-numbers:' + merchProduct.id}))`
+        const conflict = await findNumberConflict(tx, merchProduct, merchCustom)
+        if (conflict) throw Object.assign(new Error(conflict), { status: 409 })
+        return tx.cartItem.create({ data: createData })
+      })
+    } else {
+      item = await prisma.cartItem.create({ data: createData })
+    }
 
     if (req.user.role !== 'parent') {
       await notifyUser(student.userId, {
@@ -263,6 +282,7 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
 
     res.status(201).json(item)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
     console.error(err)
     res.status(500).json({ error: 'Server error' })
   }

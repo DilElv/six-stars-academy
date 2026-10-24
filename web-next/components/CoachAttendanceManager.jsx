@@ -1038,8 +1038,11 @@ export default function CoachAttendanceManager() {
                                 <td className="px-3 py-2.5 text-gray-500 text-[11px] max-w-[160px]">
                                   {record.session ? (
                                     <>
-                                      <div className="font-semibold text-navy-800 truncate">{record.session.title}</div>
-                                      <div className="text-gray-400">{record.session.checkInOpen}–{record.session.checkInClose}</div>
+                                      <div className="font-semibold text-navy-800 truncate">
+                                        {record.kind === 'event' && <span className="mr-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-gold-100 text-gold-700 align-middle">Event</span>}
+                                        {record.session.title}
+                                      </div>
+                                      {record.session.checkInOpen && record.session.checkInClose && <div className="text-gray-400">{record.session.checkInOpen}–{record.session.checkInClose}</div>}
                                     </>
                                   ) : '-'}
                                 </td>
@@ -1086,7 +1089,7 @@ export default function CoachAttendanceManager() {
           )}
 
           <p className="text-xs text-gray-400">
-            Hari hadir dihitung dari absen masuk (beberapa sesi di hari yang sama tetap dihitung 1 hari). Angka ini menjadi dasar honor di menu Payroll.
+            Hari hadir dihitung dari absen masuk latihan dan absen event (beberapa sesi di hari yang sama tetap dihitung 1 hari). Angka ini menjadi dasar honor di menu Payroll.
           </p>
         </div>
       )}

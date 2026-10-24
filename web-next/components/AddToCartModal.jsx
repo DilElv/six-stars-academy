@@ -6,6 +6,7 @@ import * as api from '@/lib/api'
 import ModalPortal from '@/components/ui/modal-portal'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
+import MerchCustomForm, { missingRequired } from '@/components/MerchCustomForm'
 
 const TYPES = [
   { value: 'package', label: 'Perpanjangan Paket' },
@@ -34,6 +35,7 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
   const [type, setType] = useState('package')
   const [packageId, setPackageId] = useState('')
   const [productId, setProductId] = useState('')
+  const [customValues, setCustomValues] = useState({})
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState(0)
   const [note, setNote] = useState('')
@@ -66,6 +68,7 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
     setNote('')
     setPackageId('')
     setProductId('')
+    setCustomValues({})
     setCustomName('')
     setCustomSessions('1')
     setCustomDuration('1')
@@ -86,7 +89,7 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
           note,
           customPackage: { name: customName.trim(), sessionsPerWeek: Number(customSessions) || 1, durationMonths: Number(customDuration) || 1, price: Number(customPrice) || 0 },
         }
-      } else if (type === 'merchandise') payload = { studentId: student.id, type, productId, note }
+      } else if (type === 'merchandise') payload = { studentId: student.id, type, productId, note, custom: customValues }
       else payload = { studentId: student.id, type, label, amount, note }
 
       await api.addCartItem(payload)
@@ -148,10 +151,11 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
 
   const items = cart?.items || []
   const total = cart?.total || 0
+  const selectedProduct = products.find((p) => p.id === productId)
   const selectedCount = items.filter((i) => selected[i.id]).length
   const canSubmit = type === 'package' ? !!packageId
     : type === 'package_custom' ? !!customName.trim() && customPrice > 0
-    : type === 'merchandise' ? !!productId
+    : type === 'merchandise' ? !!productId && !missingRequired(selectedProduct, customValues)
     : !!label.trim()
 
   return (
@@ -265,7 +269,7 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
                   <label className="mb-1 block text-xs font-semibold text-gray-500">Produk</label>
                   <AppSelect
                     value={productId}
-                    onChange={setProductId}
+                    onChange={(v) => { setProductId(v); setCustomValues({}) }}
                     placeholder="Pilih produk"
                     className="w-full"
                     options={products.map((p) => ({ value: p.id, label: `${p.name} · ${formatRupiah(p.price)}` }))}
@@ -279,6 +283,13 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
                 </div>
               )}
             </div>
+
+            {type === 'merchandise' && selectedProduct?.customFields?.length > 0 && (
+              <div className="rounded-2xl bg-gray-50 p-3">
+                <div className="text-xs font-bold text-navy-800 mb-2">Detail pesanan {selectedProduct.name}</div>
+                <MerchCustomForm product={selectedProduct} values={customValues} onChange={setCustomValues} />
+              </div>
+            )}
 
             {type === 'package_custom' && (
               <div className="space-y-3 rounded-2xl bg-gray-50 p-3">

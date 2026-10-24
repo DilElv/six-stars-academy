@@ -185,6 +185,22 @@ export async function updateProduct(id, payload) {
   return request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function getProductNumbers(id) {
+  return request(`/products/${id}/numbers`)
+}
+
+export async function setBlockedNumbers(id, fieldKey, numbers) {
+  return request(`/products/${id}/blocked-numbers`, { method: 'PUT', body: JSON.stringify({ fieldKey, numbers }) })
+}
+
+export async function getMerchOrders(filters) {
+  return request(`/products/orders/list${buildQuery(filters)}`)
+}
+
+export async function setOrderFulfillment(itemId, fulfillment) {
+  return request(`/products/orders/${itemId}/fulfillment`, { method: 'PATCH', body: JSON.stringify({ fulfillment }) })
+}
+
 export async function deleteProduct(id) {
   return request(`/products/${id}`, { method: 'DELETE' })
 }
@@ -192,6 +208,14 @@ export async function deleteProduct(id) {
 // Payroll coach (admin) — honor harian x hari hadir (dari absen).
 export async function getPayroll(month, year) {
   return request(`/payroll?month=${month}&year=${year}`)
+}
+
+export async function setCoachDailyRate(userId, dailyRate, month, year) {
+  return request(`/payroll/rate/${userId}`, { method: 'PUT', body: JSON.stringify({ dailyRate, month, year }) })
+}
+
+export async function setBulkDailyRate(dailyRate, scope, month, year) {
+  return request('/payroll/rate', { method: 'PUT', body: JSON.stringify({ dailyRate, scope, month, year }) })
 }
 
 export async function generatePayroll(month, year) {
@@ -309,6 +333,27 @@ export async function saveAssessment(payload) {
 export async function getMyAssessment(month, year, endMonth, endYear) {
   const qs = month && year ? `?month=${month}&year=${year}${endMonth && endYear ? `&endMonth=${endMonth}&endYear=${endYear}` : ''}` : ''
   return request(`/assessments/me${qs}`)
+}
+
+// Unduh invoice PDF sebuah pembayaran lunas (parent: miliknya; admin/head coach: semua).
+export async function downloadInvoice(paymentId) {
+  const token = getToken()
+  const res = await fetch(`${API_URL}/payments/${paymentId}/invoice`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) {
+    let message = 'Gagal mengunduh invoice'
+    try { message = (await res.json()).error || message } catch {}
+    throw new Error(message)
+  }
+  const blob = await res.blob()
+  const match = /filename="?([^";]+)"?/.exec(res.headers.get('Content-Disposition') || '')
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = match ? match[1] : 'invoice.pdf'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 4000)
 }
 
 export async function getMyChildQrCodeUrl() {

@@ -106,6 +106,59 @@ router.post('/generate', async (req, res) => {
   }
 })
 
+// Atur honor per hari. Disimpan di profil coach (dipakai semua periode berikutnya)
+// dan langsung menghitung ulang slip DRAFT periode yang sedang dibuka. Slip yang
+// sudah dibayar tidak diubah. Head coach hanya boleh mengatur honor coach.
+async function applyDailyRate(actor, userIds, dailyRate, { month, year } = {}) {
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, role: { in: actor.role === 'admin' ? PAYROLL_ROLES : ['coach'] } },
+    select: { id: true },
+  })
+  const ids = users.map((u) => u.id)
+  if (ids.length === 0) return { updated: 0 }
+  await prisma.user.updateMany({ where: { id: { in: ids } }, data: { dailyRate } })
+  if (month && year) {
+    const drafts = await prisma.coachPayroll.findMany({ where: { coachId: { in: ids }, month, year, status: { not: 'paid' } } })
+    for (const draft of drafts) {
+      await prisma.coachPayroll.update({
+        where: { id: draft.id },
+        data: { dailyRate, total: computeTotal({ dailyRate, daysPresent: draft.daysPresent, bonus: draft.bonus, deduction: draft.deduction }) },
+      })
+    }
+  }
+  return { updated: ids.length }
+}
+
+router.put('/rate/:userId', async (req, res) => {
+  const { dailyRate } = req.body
+  if (!isNonNegInt(dailyRate)) return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
+  try {
+    const { month, year } = parsePeriod(req.body)
+    const result = await applyDailyRate(req.user, [req.params.userId], Number(dailyRate), { month, year })
+    if (result.updated === 0) return res.status(403).json({ error: 'Anda tidak dapat mengatur honor akun ini' })
+    res.json({ ok: true, dailyRate: Number(dailyRate) })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Honor massal: satu nominal untuk banyak coach sekaligus ("coach" atau semua).
+router.put('/rate', async (req, res) => {
+  const { dailyRate, scope } = req.body
+  if (!isNonNegInt(dailyRate)) return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
+  try {
+    const { month, year } = parsePeriod(req.body)
+    const roles = req.user.role === 'admin' && scope === 'all' ? PAYROLL_ROLES : ['coach']
+    const targets = await prisma.user.findMany({ where: { role: { in: roles }, status: 'active' }, select: { id: true } })
+    const result = await applyDailyRate(req.user, targets.map((t) => t.id), Number(dailyRate), { month, year })
+    res.json({ ok: true, ...result })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Koreksi manual satu slip: tarif, hari hadir, bonus, potongan, catatan.
 router.put('/:id', async (req, res) => {
   const { dailyRate, daysPresent, bonus, deduction, note, status } = req.body

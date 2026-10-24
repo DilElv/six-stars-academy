@@ -6,6 +6,7 @@ import { verifyCallback, verifyCallbackToken, PAYMENT_METHODS, isSupportedPaymen
 import { logPaymentAudit } from '../lib/paymentAudit.js'
 import { missingProofWhere } from '../lib/paymentProof.js'
 import { getUserBranchIds } from '../lib/branchAccess.js'
+import { generateInvoicePdf, invoiceNumber } from '../lib/generateInvoicePdf.js'
 
 const router = Router()
 
@@ -156,6 +157,39 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
       orderBy: { createdAt: 'desc' },
     })
     res.json(payments)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Invoice PDF untuk satu pembayaran lunas. Parent hanya bisa mengunduh invoice
+// miliknya; admin/head coach untuk pembayaran mana pun (head coach: cabangnya).
+router.get('/:id/invoice', authenticate, authorize('parent', 'admin', 'head_coach'), async (req, res) => {
+  try {
+    const payment = await prisma.payment.findUnique({
+      where: { id: req.params.id },
+      include: {
+        student: { include: { branch: true } },
+        package: true,
+        cartItems: { orderBy: { createdAt: 'asc' } },
+        eventParticipant: { include: { event: true } },
+      },
+    })
+    if (!payment) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    if (req.user.role === 'parent' && payment.student?.userId !== req.user.id) return res.status(404).json({ error: 'Pembayaran tidak ditemukan' })
+    if (req.user.role === 'head_coach') {
+      const branchIds = await getUserBranchIds(req.user.id)
+      if (branchIds.length && !branchIds.includes(payment.student?.branchId)) return res.status(403).json({ error: 'Anda hanya dapat melihat invoice anak di cabang Anda' })
+    }
+    if (payment.status !== 'success') return res.status(400).json({ error: 'Invoice tersedia setelah pembayaran lunas' })
+
+    const settingsRow = await prisma.cmsContent.findFirst({ where: { section: 'settings' } })
+    const settings = { ssbName: 'SixStars Academy Indonesia', ...(settingsRow?.content || {}) }
+    const pdf = await generateInvoicePdf({ payment, settings })
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${invoiceNumber(payment)}.pdf"`)
+    res.send(pdf)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

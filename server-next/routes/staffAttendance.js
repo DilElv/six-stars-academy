@@ -308,13 +308,29 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
       },
       orderBy: [{ date: 'asc' }, { checkInTime: 'asc' }],
     })
+    // Absensi event ikut masuk rekap (dan dihitung sebagai hari hadir).
+    const eventRecords = await prisma.eventStaffAttendance.findMany({
+      where: recordWhere,
+      include: { branch: true, event: { select: { id: true, title: true, startTime: true, endTime: true } } },
+      orderBy: [{ date: 'asc' }, { checkInTime: 'asc' }],
+    })
+    const allRecords = [
+      ...records.map((r) => ({ ...r, kind: 'training' })),
+      ...eventRecords.map((r) => ({
+        ...r,
+        kind: 'event',
+        session: { id: null, title: r.event?.title || 'Event', type: 'event', checkInOpen: r.event?.startTime || null, checkInClose: r.event?.endTime || null },
+      })),
+    ].sort((a, b) => new Date(a.date) - new Date(b.date) || new Date(a.checkInTime || 0) - new Date(b.checkInTime || 0))
 
     const byUser = new Map()
-    for (const record of records) {
-      const entry = byUser.get(record.userId) || { records: [], days: new Set(), pending: 0, rejected: 0, missingCheckout: 0 }
+    for (const record of allRecords) {
+      const entry = byUser.get(record.userId) || { records: [], days: new Set(), eventDays: new Set(), pending: 0, rejected: 0, missingCheckout: 0 }
       entry.records.push(record)
       if (record.verifyStatus === 'approved') {
-        entry.days.add(new Date(record.date).toISOString().slice(0, 10))
+        const day = new Date(record.date).toISOString().slice(0, 10)
+        entry.days.add(day)
+        if (record.kind === 'event') entry.eventDays.add(day)
         if (record.checkOutVerifyStatus !== 'approved') entry.missingCheckout += 1
       } else if (record.verifyStatus === 'rejected') {
         entry.rejected += 1
@@ -325,11 +341,12 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
     }
 
     const entries = coaches.map((coach) => {
-      const entry = byUser.get(coach.id) || { records: [], days: new Set(), pending: 0, rejected: 0, missingCheckout: 0 }
+      const entry = byUser.get(coach.id) || { records: [], days: new Set(), eventDays: new Set(), pending: 0, rejected: 0, missingCheckout: 0 }
       return {
         coach,
         stats: {
           daysPresent: entry.days.size,
+          eventDays: entry.eventDays.size,
           pending: entry.pending,
           rejected: entry.rejected,
           missingCheckout: entry.missingCheckout,
@@ -337,6 +354,7 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
         },
         records: entry.records.map((r) => ({
           id: r.id,
+          kind: r.kind,
           date: r.date,
           branch: r.branch,
           checkInTime: r.checkInTime,
@@ -361,6 +379,7 @@ router.get('/recap', authenticate, authorize('admin', 'head_coach'), async (req,
       totals: {
         coaches: entries.length,
         daysPresent: entries.reduce((sum, e) => sum + e.stats.daysPresent, 0),
+        eventDays: entries.reduce((sum, e) => sum + e.stats.eventDays, 0),
         pending: entries.reduce((sum, e) => sum + e.stats.pending, 0),
         rejected: entries.reduce((sum, e) => sum + e.stats.rejected, 0),
         missingCheckout: entries.reduce((sum, e) => sum + e.stats.missingCheckout, 0),

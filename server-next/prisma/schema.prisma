@@ -837,6 +837,10 @@ model Product {
   imageUrl    String?
   stock       Int? // NULL = tak terbatas
   isActive    Boolean  @default(true)
+  // Opsi yang diisi pembeli (nama punggung, ukuran, nomor punggung, catatan).
+  // Array { key, label, type: 'text'|'select'|'number', required, choices?,
+  // maxLength?, min?, max?, unique?, blockedNumbers? } — lihat lib/merch.js.
+  customFields Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

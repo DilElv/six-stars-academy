@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react'
 import { formatRupiah, formatDateTime } from '@/components/finance/shared'
+import InvoiceButton from '@/components/InvoiceButton'
 
 const STATUS_LABEL = { success: 'Lunas', pending: 'Menunggu Pembayaran', failed: 'Gagal', expired: 'Kedaluwarsa' }
 
@@ -39,6 +40,9 @@ export default function PaymentDetailModal({ item, onClose }) {
             </div>
           ))}
         </dl>
+        {item.status === 'success' && (
+          <div className="mt-4"><InvoiceButton paymentId={item.id} className="w-full" label="Unduh Invoice PDF" /></div>
+        )}
       </div>
     </div>
   )

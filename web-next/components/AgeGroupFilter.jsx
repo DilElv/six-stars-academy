@@ -8,8 +8,11 @@ export default function AgeGroupFilter({ value, onChange, allowAll = false, allL
 
   return (
     <>
-      <div className={`sm:hidden w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain touch-pan-x scrollbar-none ${className}`}>
-        <div className="grid w-max min-w-full grid-flow-col grid-rows-2 auto-cols-max gap-2 px-1 pb-1">
+      <div className={`sm:hidden basis-full w-full min-w-0 max-w-full ${className}`}>
+        <div
+          className="flex flex-nowrap gap-2 overflow-x-auto px-1 pb-2 snap-x"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', touchAction: 'pan-x pan-y', scrollbarWidth: 'none' }}
+        >
           {options.map((age) => {
             const active = value === age
             return (
@@ -17,7 +20,7 @@ export default function AgeGroupFilter({ value, onChange, allowAll = false, allL
                 key={age || 'all'}
                 type="button"
                 onClick={() => onChange(age)}
-                className={`shrink-0 rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                className={`shrink-0 snap-start rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
                   active
                     ? 'border-navy-900 bg-navy-900 text-white'
                     : 'border-gray-200 bg-white text-navy-700'

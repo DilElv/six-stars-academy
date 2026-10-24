@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Store, ShoppingCart, Loader2, Check, Package, ImagePlus } from 'lucide-react'
 import * as api from '@/lib/api'
+import ModalPortal from '@/components/ui/modal-portal'
+import MerchCustomForm, { missingRequired } from '@/components/MerchCustomForm'
 
 function formatRupiah(n) {
   return 'Rp' + (Number(n) || 0).toLocaleString('id-ID')
@@ -14,20 +16,36 @@ export default function TokoPage() {
   const [adding, setAdding] = useState('')
   const [added, setAdded] = useState('')
   const [error, setError] = useState('')
+  const [customTarget, setCustomTarget] = useState(null)
+  const [customValues, setCustomValues] = useState({})
+  const [modalError, setModalError] = useState('')
 
   useEffect(() => {
     api.getProducts().then(setProducts).catch((err) => setError(err.message))
   }, [])
 
-  async function handleAdd(product) {
+  function startAdd(product) {
+    if (product.customFields?.length) {
+      setCustomValues({})
+      setModalError('')
+      setCustomTarget(product)
+    } else {
+      handleAdd(product)
+    }
+  }
+
+  async function handleAdd(product, custom) {
     setAdding(product.id)
     setError('')
+    setModalError('')
     try {
-      await api.addCartItem({ type: 'merchandise', productId: product.id })
+      await api.addCartItem({ type: 'merchandise', productId: product.id, custom })
       setAdded(product.id)
+      setCustomTarget(null)
       setTimeout(() => setAdded((cur) => (cur === product.id ? '' : cur)), 2500)
     } catch (err) {
-      setError(err.message)
+      if (custom) setModalError(err.message)
+      else setError(err.message)
     } finally {
       setAdding('')
     }
@@ -85,7 +103,7 @@ export default function TokoPage() {
                   <div className="mt-auto pt-3">
                     <div className="font-bold text-navy-900 tabular-nums mb-2">{formatRupiah(p.price)}</div>
                     <button
-                      onClick={() => handleAdd(p)}
+                      onClick={() => startAdd(p)}
                       disabled={soldOut || adding === p.id || isAdded}
                       className={`w-full flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2.5 rounded-2xl transition-colors ${
                         soldOut
@@ -102,7 +120,7 @@ export default function TokoPage() {
                       ) : (
                         <ShoppingCart size={13} />
                       )}
-                      {soldOut ? 'Stok Habis' : isAdded ? 'Masuk Keranjang' : 'Tambah ke Keranjang'}
+                      {soldOut ? 'Stok Habis' : isAdded ? 'Masuk Keranjang' : p.customFields?.length ? 'Pilih & Pesan' : 'Tambah ke Keranjang'}
                     </button>
                   </div>
                 </div>
@@ -110,6 +128,30 @@ export default function TokoPage() {
             )
           })}
         </div>
+      )}
+
+      {customTarget && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={() => setCustomTarget(null)}>
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[88vh] overflow-y-auto modal-scroll p-5" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-bold text-navy-900 text-sm">{customTarget.name}</h3>
+              <p className="text-xs text-gray-400 mb-4">{formatRupiah(customTarget.price)} · isi detail pesanan di bawah</p>
+              {modalError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{modalError}</div>}
+              <MerchCustomForm product={customTarget} values={customValues} onChange={setCustomValues} />
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setCustomTarget(null)} className="flex-1 border border-gray-200 text-navy-700 text-sm font-semibold py-2.5 rounded-2xl">Batal</button>
+                <button
+                  onClick={() => handleAdd(customTarget, customValues)}
+                  disabled={adding === customTarget.id || !!missingRequired(customTarget, customValues)}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-gold-400 hover:bg-gold-500 text-navy-900 text-sm font-semibold py-2.5 rounded-2xl disabled:opacity-50"
+                >
+                  {adding === customTarget.id ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />} Masukkan Keranjang
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import { Wallet, CheckCircle2, Clock, ChevronDown, Receipt, CreditCard, Hash, Ca
 import * as api from '@/lib/api'
 import RenewalModal from '@/components/RenewalModal'
 import PaymentProofUpload from '@/components/PaymentProofUpload'
+import InvoiceButton from '@/components/InvoiceButton'
 
 const statusMap = {
   success: { label: 'Lunas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -247,6 +248,7 @@ export default function PembayaranAnakPage() {
                           </div>
                         )}
                       </div>
+                      {p.status === 'success' && <InvoiceButton paymentId={p.id} className="w-full" />}
                       {/* Bukti pembayaran — wajib agar transaksi masuk laporan keuangan */}
                       <div className="h-px bg-gray-200" />
                       {!p.proofUrl && !p.proofExempt && (

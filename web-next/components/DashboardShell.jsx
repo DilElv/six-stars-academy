@@ -252,8 +252,8 @@ export default function DashboardShell({ role, title, navItems, children }) {
           </div>
         </div>
       )}
-      {/* Tombol Chat Admin (semua dashboard kecuali admin) */}
-      {SHOW_WA_ADMIN_BUTTON && role !== 'admin' && !moreOpen && (
+      {/* Tombol Chat Admin (hanya coach & parent; admin dan head coach tidak memakainya) */}
+      {SHOW_WA_ADMIN_BUTTON && role !== 'admin' && role !== 'head_coach' && !moreOpen && (
         <WhatsAppFloatingButton
           number={waAdminNumber}
           hideOnDashboard={false}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package } from 'lucide-react'
+import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package, Hash, SlidersHorizontal } from 'lucide-react'
 import * as api from '@/lib/api'
 import ModalPortal from '@/components/ui/modal-portal'
 import { AppSelect } from '@/components/ui/app-select'
@@ -26,6 +26,7 @@ function stockLabel(stock) {
 export default function ProductCatalog() {
   const [products, setProducts] = useState(null)
   const [editTarget, setEditTarget] = useState(null) // null | 'new' | product
+  const [numbersTarget, setNumbersTarget] = useState(null)
   const [error, setError] = useState('')
 
   function load() {
@@ -91,7 +92,15 @@ export default function ProductCatalog() {
                     Nonaktif
                   </span>
                 )}
+                {p.customFields?.length > 0 && (
+                  <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold-400 text-navy-900 flex items-center gap-1"><SlidersHorizontal size={10} /> Custom</span>
+                )}
                 <div className="absolute top-2 right-2 flex gap-1">
+                  {p.customFields?.some((f) => f.type === 'number' && f.unique) && (
+                    <button onClick={() => setNumbersTarget(p)} title="Kelola nomor punggung" className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
+                      <Hash size={13} />
+                    </button>
+                  )}
                   <button onClick={() => setEditTarget(p)} className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
                     <Pencil size={13} />
                   </button>
@@ -113,6 +122,8 @@ export default function ProductCatalog() {
         </div>
       )}
 
+      {numbersTarget && <NumbersManagerModal product={numbersTarget} onClose={() => setNumbersTarget(null)} onChanged={load} />}
+
       {editTarget && (
         <ProductModal
           product={editTarget === 'new' ? null : editTarget}
@@ -133,6 +144,7 @@ function ProductModal({ product, onClose, onSaved }) {
     description: product?.description || '',
     imageUrl: product?.imageUrl || '',
     isActive: product ? product.isActive : true,
+    customFields: product?.customFields || [],
   })
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -168,6 +180,7 @@ function ProductModal({ product, onClose, onSaved }) {
         description: form.description,
         imageUrl: form.imageUrl,
         isActive: form.isActive,
+        customFields: form.customFields,
       }
       if (product) await api.updateProduct(product.id, payload)
       else await api.createProduct(payload)
@@ -256,6 +269,8 @@ function ProductModal({ product, onClose, onSaved }) {
               />
             </div>
 
+            <CustomFieldsEditor fields={form.customFields} onChange={(customFields) => setForm((f) => ({ ...f, customFields }))} />
+
             <label className="flex items-center gap-2 text-sm text-navy-800">
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} className="rounded" />
               Tampilkan di katalog parent
@@ -269,6 +284,182 @@ function ProductModal({ product, onClose, onSaved }) {
               {saving ? <Loader2 size={14} className="animate-spin" /> : null} {product ? 'Simpan Perubahan' : 'Tambah Produk'}
             </button>
           </form>
+        </div>
+      </div>
+    </ModalPortal>
+  )
+}
+
+const PRESETS = [
+  { label: 'Nama Punggung', type: 'text', required: true, maxLength: 15 },
+  { label: 'Ukuran', type: 'select', required: true, choices: ['S', 'M', 'L', 'XL'] },
+  { label: 'Nomor Punggung', type: 'number', required: true, min: 1, max: 99, unique: true },
+  { label: 'Catatan', type: 'text', required: false, maxLength: 60 },
+]
+
+const TYPE_OPTIONS = [
+  { value: 'text', label: 'Teks' },
+  { value: 'select', label: 'Pilihan' },
+  { value: 'number', label: 'Angka / Nomor' },
+]
+
+// Admin & head coach menentukan opsi yang diisi pembeli untuk produk ini.
+function CustomFieldsEditor({ fields, onChange }) {
+  const update = (i, patch) => onChange(fields.map((f, idx) => (idx === i ? { ...f, ...patch } : f)))
+  const remove = (i) => onChange(fields.filter((_, idx) => idx !== i))
+  const add = (preset) => onChange([...fields, { ...preset }])
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3 space-y-3">
+      <div>
+        <div className="text-xs font-bold text-navy-800 flex items-center gap-1.5"><SlidersHorizontal size={13} /> Opsi Custom (opsional)</div>
+        <p className="text-[11px] text-gray-400 mt-0.5">Untuk produk yang perlu diisi pembeli, mis. jersey: nama punggung, ukuran, nomor punggung.</p>
+      </div>
+
+      {fields.map((f, i) => (
+        <div key={i} className="rounded-xl bg-white border border-gray-100 p-2.5 space-y-2">
+          <div className="flex items-center gap-2">
+            <input value={f.label} onChange={(e) => update(i, { label: e.target.value })} placeholder="Nama opsi" className="flex-1 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2 text-sm" />
+            <button type="button" onClick={() => remove(i)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <AppSelect value={f.type} onChange={(v) => update(i, { type: v || 'text' })} className="w-full" options={TYPE_OPTIONS} />
+            <label className="flex items-center gap-2 text-xs text-navy-800">
+              <input type="checkbox" checked={!!f.required} onChange={(e) => update(i, { required: e.target.checked })} className="rounded" /> Wajib diisi
+            </label>
+          </div>
+          {f.type === 'select' && (
+            <input
+              value={(f.choices || []).join(', ')}
+              onChange={(e) => update(i, { choices: e.target.value.split(',').map((c) => c.trim()).filter(Boolean) })}
+              placeholder="Pilihan, pisahkan koma: S, M, L, XL"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-2 text-sm"
+            />
+          )}
+          {f.type === 'text' && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              Maks. karakter
+              <input type="number" min="1" max="100" value={f.maxLength || 20} onChange={(e) => update(i, { maxLength: Number(e.target.value) })} className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm" />
+            </div>
+          )}
+          {f.type === 'number' && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                Dari
+                <input type="number" min="0" max="999" value={f.min ?? 1} onChange={(e) => update(i, { min: Number(e.target.value) })} className="w-16 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm" />
+                sampai
+                <input type="number" min="0" max="999" value={f.max ?? 99} onChange={(e) => update(i, { max: Number(e.target.value) })} className="w-16 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 text-sm" />
+              </div>
+              <label className="flex items-center gap-2 text-xs text-navy-800">
+                <input type="checkbox" checked={f.unique !== false} onChange={(e) => update(i, { unique: e.target.checked })} className="rounded" /> Nomor tidak boleh kembar (yang sudah dipesan jadi terkunci)
+              </label>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="flex flex-wrap gap-1.5">
+        {PRESETS.map((preset) => (
+          <button key={preset.label} type="button" onClick={() => add(preset)} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white text-navy-700 hover:border-gold-300">
+            + {preset.label}
+          </button>
+        ))}
+        <button type="button" onClick={() => add({ label: '', type: 'text', required: false, maxLength: 30 })} className="text-[11px] font-semibold px-2.5 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-gold-300">
+          + Opsi lain
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Peta nomor punggung: tutup/buka nomor manual, lihat nomor yang sudah dipesan.
+function NumbersManagerModal({ product, onClose, onChanged }) {
+  const fieldDefs = (product.customFields || []).filter((f) => f.type === 'number' && f.unique)
+  const [fieldKey, setFieldKey] = useState(fieldDefs[0]?.key)
+  const [info, setInfo] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  function load() {
+    api.getProductNumbers(product.id).then((res) => setInfo(res.fields)).catch((err) => setError(err.message))
+  }
+  useEffect(load, [product.id])
+
+  const field = info?.find((f) => f.key === fieldKey)
+
+  async function toggle(n) {
+    if (!field || busy) return
+    if (field.ordered.some((o) => o.number === n)) return
+    const blocked = new Set(field.blocked)
+    if (blocked.has(n)) blocked.delete(n)
+    else blocked.add(n)
+    setBusy(true)
+    setError('')
+    try {
+      await api.setBlockedNumbers(product.id, fieldKey, [...blocked])
+      load()
+      onChanged?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const range = field ? Array.from({ length: field.max - field.min + 1 }, (_, i) => field.min + i) : []
+  const orderedMap = new Map((field?.ordered || []).map((o) => [o.number, o]))
+
+  return (
+    <ModalPortal>
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[88vh] overflow-y-auto modal-scroll p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-bold text-navy-900 text-sm">Nomor Punggung · {product.name}</h3>
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">Klik nomor kosong untuk menutupnya (sudah dipakai pemain lain). Klik lagi untuk membukanya. Nomor yang sudah dipesan parent otomatis terkunci.</p>
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</div>}
+          {fieldDefs.length > 1 && (
+            <div className="mb-3"><AppSelect value={fieldKey} onChange={setFieldKey} className="w-full" options={fieldDefs.map((f) => ({ value: f.key, label: f.label }))} /></div>
+          )}
+          {!field ? <Loader2 size={18} className="animate-spin text-navy-300" /> : (
+            <>
+              <div className="flex items-center gap-4 text-[11px] text-gray-500 mb-2">
+                <span><b className="text-navy-900">{range.length - field.taken.length}</b> kosong</span>
+                <span><b className="text-navy-900">{field.blocked.length}</b> ditutup manual</span>
+                <span><b className="text-navy-900">{field.ordered.length}</b> dipesan</span>
+              </div>
+              <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5">
+                {range.map((n) => {
+                  const order = orderedMap.get(n)
+                  const blocked = field.blocked.includes(n)
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => toggle(n)}
+                      disabled={!!order || busy}
+                      title={order ? `Dipesan${order.studentName ? ` oleh ${order.studentName}` : ''}${order.paid ? ' (lunas)' : ' (belum lunas)'}` : blocked ? 'Ditutup manual — klik untuk membuka' : 'Kosong — klik untuk menutup'}
+                      className={`rounded-lg py-1.5 text-xs font-semibold tabular-nums transition-colors ${
+                        order ? (order.paid ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-navy-900')
+                        : blocked ? 'bg-gray-300 text-gray-600 line-through'
+                        : 'bg-white border border-gray-200 text-navy-700 hover:border-gold-400'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mt-3">
+                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white border border-gray-200" /> Kosong</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-300" /> Ditutup manual</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400" /> Dipesan (belum lunas)</span>
+                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Dipesan (lunas)</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </ModalPortal>
