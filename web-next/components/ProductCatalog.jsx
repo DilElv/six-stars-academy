@@ -97,7 +97,7 @@ export default function ProductCatalog() {
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
                   {p.customFields?.some((f) => f.type === 'number' && f.unique) && (
-                    <button onClick={() => setNumbersTarget(p)} title="Kelola nomor punggung" className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
+                    <button onClick={() => setNumbersTarget(p)} title="Atur nomor yang tidak bisa dipesan" className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
                       <Hash size={13} />
                     </button>
                   )}
@@ -372,11 +372,13 @@ function CustomFieldsEditor({ fields, onChange }) {
   )
 }
 
-// Peta nomor punggung: tutup/buka nomor manual, lihat nomor yang sudah dipesan.
+// Nomor punggung yang tidak bisa dipesan: admin/head coach mengetik nomornya satu per
+// satu (mis. nomor milik pemain lama). Nomor yang sudah dipesan parent otomatis terkunci.
 function NumbersManagerModal({ product, onClose, onChanged }) {
   const fieldDefs = (product.customFields || []).filter((f) => f.type === 'number' && f.unique)
   const [fieldKey, setFieldKey] = useState(fieldDefs[0]?.key)
   const [info, setInfo] = useState(null)
+  const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -387,16 +389,11 @@ function NumbersManagerModal({ product, onClose, onChanged }) {
 
   const field = info?.find((f) => f.key === fieldKey)
 
-  async function toggle(n) {
-    if (!field || busy) return
-    if (field.ordered.some((o) => o.number === n)) return
-    const blocked = new Set(field.blocked)
-    if (blocked.has(n)) blocked.delete(n)
-    else blocked.add(n)
+  async function save(numbers) {
     setBusy(true)
     setError('')
     try {
-      await api.setBlockedNumbers(product.id, fieldKey, [...blocked])
+      await api.setBlockedNumbers(product.id, fieldKey, numbers)
       load()
       onChanged?.()
     } catch (err) {
@@ -406,59 +403,81 @@ function NumbersManagerModal({ product, onClose, onChanged }) {
     }
   }
 
-  const range = field ? Array.from({ length: field.max - field.min + 1 }, (_, i) => field.min + i) : []
-  const orderedMap = new Map((field?.ordered || []).map((o) => [o.number, o]))
+  async function addNumber(e) {
+    e.preventDefault()
+    if (!field || busy || input.trim() === '') return
+    const n = Number(input)
+    if (!Number.isInteger(n) || n < field.min || n > field.max) return setError(`Masukkan angka ${field.min}–${field.max}`)
+    if (field.blocked.includes(n)) return setError(`Nomor ${n} sudah ada di daftar`)
+    if (field.ordered.some((o) => o.number === n)) return setError(`Nomor ${n} sudah dipesan parent`)
+    setInput('')
+    await save([...field.blocked, n])
+  }
+
+  const removeNumber = (n) => save(field.blocked.filter((x) => x !== n))
 
   return (
     <ModalPortal>
       <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-        <div className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full max-h-[88vh] overflow-y-auto modal-scroll p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[88vh] overflow-y-auto modal-scroll p-5" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="font-bold text-navy-900 text-sm">Nomor Punggung · {product.name}</h3>
+            <h3 className="font-bold text-navy-900 text-sm">Nomor Tidak Tersedia · {product.name}</h3>
             <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
-          <p className="text-xs text-gray-400 mb-3">Klik nomor kosong untuk menutupnya (sudah dipakai pemain lain). Klik lagi untuk membukanya. Nomor yang sudah dipesan parent otomatis terkunci.</p>
+          <p className="text-xs text-gray-400 mb-3">Ketik nomor yang sudah dipakai, satu per satu, lalu tekan Tambah. Nomor di daftar ini tidak bisa dipesan parent.</p>
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{error}</div>}
           {fieldDefs.length > 1 && (
-            <div className="mb-3"><AppSelect value={fieldKey} onChange={setFieldKey} className="w-full" options={fieldDefs.map((f) => ({ value: f.key, label: f.label }))} /></div>
+            <div className="mb-3"><AppSelect value={fieldKey} onChange={(v) => { setFieldKey(v); setError('') }} className="w-full" options={fieldDefs.map((f) => ({ value: f.key, label: f.label }))} /></div>
           )}
           {!field ? <Loader2 size={18} className="animate-spin text-navy-300" /> : (
-            <>
-              <div className="flex items-center gap-4 text-[11px] text-gray-500 mb-2">
-                <span><b className="text-navy-900">{range.length - field.taken.length}</b> kosong</span>
-                <span><b className="text-navy-900">{field.blocked.length}</b> ditutup manual</span>
-                <span><b className="text-navy-900">{field.ordered.length}</b> dipesan</span>
+            <div className="space-y-4">
+              <form onSubmit={addNumber} className="flex gap-2">
+                <input
+                  type="number"
+                  min={field.min}
+                  max={field.max}
+                  value={input}
+                  onChange={(e) => { setInput(e.target.value); setError('') }}
+                  placeholder={`Nomor ${field.min}–${field.max}`}
+                  className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm tabular-nums"
+                />
+                <button type="submit" disabled={busy || input === ''} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold px-4 rounded-2xl disabled:opacity-50">
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Tambah
+                </button>
+              </form>
+
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1.5">Nomor yang tidak bisa dipesan ({field.blocked.length})</div>
+                {field.blocked.length === 0 ? (
+                  <p className="text-xs text-gray-400">Belum ada. Semua nomor {field.min}–{field.max} masih bisa dipesan.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {field.blocked.map((n) => (
+                      <span key={n} className="inline-flex items-center gap-1 rounded-xl bg-gray-100 text-navy-800 text-xs font-semibold tabular-nums pl-2.5 pr-1 py-1">
+                        {n}
+                        <button type="button" onClick={() => removeNumber(n)} disabled={busy} title="Buka kembali nomor ini" className="p-0.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50"><X size={12} /></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-8 sm:grid-cols-10 gap-1.5">
-                {range.map((n) => {
-                  const order = orderedMap.get(n)
-                  const blocked = field.blocked.includes(n)
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => toggle(n)}
-                      disabled={!!order || busy}
-                      title={order ? `Dipesan${order.studentName ? ` oleh ${order.studentName}` : ''}${order.paid ? ' (lunas)' : ' (belum lunas)'}` : blocked ? 'Ditutup manual — klik untuk membuka' : 'Kosong — klik untuk menutup'}
-                      className={`rounded-lg py-1.5 text-xs font-semibold tabular-nums transition-colors ${
-                        order ? (order.paid ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-navy-900')
-                        : blocked ? 'bg-gray-300 text-gray-600 line-through'
-                        : 'bg-white border border-gray-200 text-navy-700 hover:border-gold-400'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  )
-                })}
+
+              <div>
+                <div className="text-xs font-semibold text-gray-500 mb-1.5">Sudah dipesan parent ({field.ordered.length})</div>
+                {field.ordered.length === 0 ? (
+                  <p className="text-xs text-gray-400">Belum ada pesanan.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...field.ordered].sort((a, b) => a.number - b.number).map((o) => (
+                      <span key={o.number} title={o.paid ? 'Lunas' : 'Belum lunas'} className={`rounded-xl text-xs font-semibold px-2.5 py-1 ${o.paid ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                        {o.number}{o.studentName ? ` · ${o.studentName}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-400 mt-3">
-                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-white border border-gray-200" /> Kosong</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-300" /> Ditutup manual</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-amber-400" /> Dipesan (belum lunas)</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Dipesan (lunas)</span>
-              </div>
-            </>
+            </div>
           )}
         </div>
       </div>

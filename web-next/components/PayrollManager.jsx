@@ -253,7 +253,7 @@ export default function PayrollManager() {
           year={year}
           isAdmin={currentRole === 'admin'}
           onClose={() => setBulkOpen(false)}
-          onSaved={(n) => { setBulkOpen(false); setFlash(`Honor harian diperbarui untuk ${n} coach.`); load() }}
+          onSaved={(n) => { setBulkOpen(false); setFlash(`Honor harian diperbarui untuk ${n} akun.`); load() }}
         />
       )}
 
@@ -422,8 +422,8 @@ function RateCell({ value, locked, onSave }) {
 }
 
 function BulkRateModal({ month, year, isAdmin, onClose, onSaved }) {
-  const [rate, setRate] = useState('')
-  const [scope, setScope] = useState('coach')
+  const [coachRate, setCoachRate] = useState('')
+  const [headRate, setHeadRate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -432,7 +432,10 @@ function BulkRateModal({ month, year, isAdmin, onClose, onSaved }) {
     setSaving(true)
     setError('')
     try {
-      const res = await api.setBulkDailyRate(Number(rate) || 0, scope, month, year)
+      const rates = {}
+      if (coachRate !== '') rates.coachRate = Number(coachRate)
+      if (isAdmin && headRate !== '') rates.headCoachRate = Number(headRate)
+      const res = await api.setBulkDailyRate(rates, month, year)
       onSaved(res.updated)
     } catch (err) {
       setError(err.message)
@@ -440,6 +443,8 @@ function BulkRateModal({ month, year, isAdmin, onClose, onSaved }) {
       setSaving(false)
     }
   }
+
+  const inputCls = 'w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums'
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
@@ -452,18 +457,17 @@ function BulkRateModal({ month, year, isAdmin, onClose, onSaved }) {
         <form onSubmit={submit} className="space-y-3">
           {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</div>}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Honor per hari (Rp)</label>
-            <input type="number" min="0" required value={rate} onChange={(e) => setRate(e.target.value)} placeholder="mis. 150000" className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm tabular-nums" />
+            <label className="block text-xs font-semibold text-gray-500 mb-1">Honor per hari — Coach (Rp)</label>
+            <input type="number" min="0" value={coachRate} onChange={(e) => setCoachRate(e.target.value)} placeholder="mis. 150000" className={inputCls} />
           </div>
           {isAdmin && (
-            <div className="flex gap-2 text-xs">
-              {[['coach', 'Semua coach'], ['all', 'Coach + head coach']].map(([v, label]) => (
-                <button key={v} type="button" onClick={() => setScope(v)} className={`flex-1 px-3 py-2 rounded-xl border font-semibold ${scope === v ? 'bg-navy-900 text-white border-navy-900' : 'bg-white text-navy-700 border-gray-200'}`}>{label}</button>
-              ))}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Honor per hari — Head Coach (Rp)</label>
+              <input type="number" min="0" value={headRate} onChange={(e) => setHeadRate(e.target.value)} placeholder="mis. 250000" className={inputCls} />
             </div>
           )}
-          <p className="text-[11px] text-gray-400">Berlaku untuk semua coach aktif dan menghitung ulang slip draft periode ini. Slip yang sudah dibayar tidak berubah. Honor tiap coach tetap bisa disesuaikan satu per satu.</p>
-          <button type="submit" disabled={saving} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
+          <p className="text-[11px] text-gray-400">Kosongkan kolom yang tidak ingin diubah. Berlaku untuk semua akun aktif di peran itu dan menghitung ulang slip draft periode ini. Slip yang sudah dibayar tidak berubah. Honor tiap orang tetap bisa disesuaikan satu per satu.</p>
+          <button type="submit" disabled={saving || (coachRate === '' && headRate === '')} className="w-full flex items-center justify-center gap-2 bg-navy-900 hover:bg-navy-800 text-white font-semibold py-2.5 rounded-2xl disabled:opacity-50">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Terapkan
           </button>
         </form>

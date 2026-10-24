@@ -143,16 +143,27 @@ router.put('/rate/:userId', async (req, res) => {
   }
 })
 
-// Honor massal: satu nominal untuk banyak coach sekaligus ("coach" atau semua).
+// Honor massal per peran: nominal coach dan head coach berbeda, jadi masing-masing
+// diisi sendiri (kosongkan salah satu untuk tidak mengubahnya). Head coach hanya
+// boleh mengatur honor coach.
 router.put('/rate', async (req, res) => {
-  const { dailyRate, scope } = req.body
-  if (!isNonNegInt(dailyRate)) return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
+  const { coachRate, headCoachRate } = req.body
+  const isSet = (v) => v !== undefined && v !== null && v !== ''
+  if (!isSet(coachRate) && !isSet(headCoachRate)) return res.status(400).json({ error: 'Isi honor untuk coach atau head coach' })
+  for (const v of [coachRate, headCoachRate]) {
+    if (isSet(v) && !isNonNegInt(v)) return res.status(400).json({ error: 'Honor harian harus bilangan bulat minimal 0' })
+  }
+  if (isSet(headCoachRate) && req.user.role !== 'admin') return res.status(403).json({ error: 'Hanya admin yang dapat mengatur honor head coach' })
   try {
     const { month, year } = parsePeriod(req.body)
-    const roles = req.user.role === 'admin' && scope === 'all' ? PAYROLL_ROLES : ['coach']
-    const targets = await prisma.user.findMany({ where: { role: { in: roles }, status: 'active' }, select: { id: true } })
-    const result = await applyDailyRate(req.user, targets.map((t) => t.id), Number(dailyRate), { month, year })
-    res.json({ ok: true, ...result })
+    const result = { coach: 0, headCoach: 0 }
+    for (const [role, rate, key] of [['coach', coachRate, 'coach'], ['head_coach', headCoachRate, 'headCoach']]) {
+      if (!isSet(rate)) continue
+      const targets = await prisma.user.findMany({ where: { role, status: 'active' }, select: { id: true } })
+      const applied = await applyDailyRate(req.user, targets.map((t) => t.id), Number(rate), { month, year })
+      result[key] = applied.updated
+    }
+    res.json({ ok: true, ...result, updated: result.coach + result.headCoach })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })

@@ -214,8 +214,8 @@ export async function setCoachDailyRate(userId, dailyRate, month, year) {
   return request(`/payroll/rate/${userId}`, { method: 'PUT', body: JSON.stringify({ dailyRate, month, year }) })
 }
 
-export async function setBulkDailyRate(dailyRate, scope, month, year) {
-  return request('/payroll/rate', { method: 'PUT', body: JSON.stringify({ dailyRate, scope, month, year }) })
+export async function setBulkDailyRate(rates, month, year) {
+  return request('/payroll/rate', { method: 'PUT', body: JSON.stringify({ ...rates, month, year }) })
 }
 
 export async function generatePayroll(month, year) {
