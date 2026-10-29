@@ -6,9 +6,6 @@ import { PAYROLL_ROLES, attendanceRecap, statsFor, computeTotal } from '../lib/p
 
 const router = Router()
 
-// Payroll untuk admin & head coach — menyangkut nominal gaji staf.
-router.use(authenticate, authorize('admin', 'head_coach'))
-
 function isNonNegInt(value) {
   return Number.isSafeInteger(Number(value)) && Number(value) >= 0
 }
@@ -23,6 +20,26 @@ const COACH_SELECT = {
   id: true, name: true, photo: true, role: true, status: true, dailyRate: true,
   branches: { select: { branch: { select: { id: true, name: true, code: true } } } },
 }
+
+// Read-only untuk coach: hanya slip miliknya sendiri. Endpoint ini diletakkan
+// sebelum middleware payroll pengelola agar coach tidak pernah mendapatkan
+// daftar payroll/rekan kerja atau akses mutasi data.
+router.get('/me', authenticate, authorize('coach'), async (req, res) => {
+  const { month, year } = parsePeriod(req.query)
+  if (!month || month < 1 || month > 12 || !year) return res.status(400).json({ error: 'month dan year wajib diisi' })
+  try {
+    const payroll = await prisma.coachPayroll.findUnique({
+      where: { coachId_month_year: { coachId: req.user.id, month, year } },
+    })
+    res.json({ month, year, payroll })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// Payroll untuk admin & head coach — menyangkut nominal gaji staf.
+router.use(authenticate, authorize('admin', 'head_coach'))
 
 // Daftar semua coach/head coach + rekap absensi bulan itu + slip honor (bila
 // sudah di-generate). Menu #9 (Absensi Coach) memakai rekap yang sama.

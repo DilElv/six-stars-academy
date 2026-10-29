@@ -274,11 +274,11 @@ export default function HeadCoachEventPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Tanggal</label>
-                  <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} className="w-full" required />
+                  <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} className="w-full" futureYears={10} required />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Deadline Pendaftaran</label>
-                  <DatePicker value={form.registrationDeadline} onChange={(v) => setForm((f) => ({ ...f, registrationDeadline: v }))} className="w-full" />
+                  <DatePicker value={form.registrationDeadline} onChange={(v) => setForm((f) => ({ ...f, registrationDeadline: v }))} className="w-full" futureYears={10} />
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">

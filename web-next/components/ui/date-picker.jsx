@@ -11,10 +11,12 @@ import { cn } from '@/lib/utils'
 // `disabledDates`: 'yyyy-MM-dd' strings that can't be picked (e.g. a branch
 // already has a jadwal that day) — shown crossed-out and blocked, not just
 // visually flagged, so double-booking isn't possible from the picker itself.
-export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', className, max, min, disabledDates = [] }) {
+export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', className, max, min, disabledDates = [], futureYears = 0 }) {
   const [open, setOpen] = useState(false)
   const dateValue = value ? new Date(`${value}T00:00:00`) : undefined
-  const maxDate = max ? new Date(`${max}T23:59:59`) : new Date()
+  // Default tetap hari ini agar date picker lain (absensi/tanggal lahir) tidak
+  // berubah. Event secara eksplisit mengizinkan tanggal jauh di masa depan.
+  const maxDate = max ? new Date(`${max}T23:59:59`) : futureYears > 0 ? new Date(new Date().getFullYear() + futureYears, 11, 31) : new Date()
   const minDate = min ? new Date(`${min}T00:00:00`) : new Date(maxDate.getFullYear() - 25, 0, 1)
   const disabledSet = new Set(disabledDates)
 
@@ -37,7 +39,7 @@ export function DatePicker({ value, onChange, placeholder = 'Pilih tanggal', cla
           startMonth={minDate}
           endMonth={maxDate}
           selected={dateValue}
-          defaultMonth={dateValue || maxDate}
+          defaultMonth={dateValue || new Date()}
           onSelect={(d) => {
             if (!d) return
             onChange(format(d, 'yyyy-MM-dd'))

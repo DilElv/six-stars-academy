@@ -216,6 +216,11 @@ export async function getPayroll(month, year) {
   return request(`/payroll?month=${month}&year=${year}`)
 }
 
+// Read-only: backend membatasi hasil hanya ke payroll coach yang sedang login.
+export async function getMyPayroll(month, year) {
+  return request(`/payroll/me?month=${month}&year=${year}`)
+}
+
 export async function setCoachDailyRate(userId, dailyRate, month, year) {
   return request(`/payroll/rate/${userId}`, { method: 'PUT', body: JSON.stringify({ dailyRate, month, year }) })
 }
