@@ -7,6 +7,7 @@ import * as api from '@/lib/api'
 import { getCategoriesForStudent, formatPeriodLabel } from '@/lib/assessmentFields'
 import AgeGroupFilter from '@/components/AgeGroupFilter'
 import SkillRadar from '@/components/charts/SkillRadar'
+import AssessmentProgressChart from '@/components/charts/AssessmentProgressChart'
 import { AppSelect } from '@/components/ui/app-select'
 import AssessmentCategories from '@/components/AssessmentCategories'
 
@@ -46,6 +47,7 @@ function LaporanContent() {
   const [generating, setGenerating] = useState(false)
   const [hasAssessment, setHasAssessment] = useState(false)
   const [report, setReport] = useState(null)
+  const [assessmentHistory, setAssessmentHistory] = useState([])
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -82,7 +84,7 @@ function LaporanContent() {
   const periodEndYear = customPeriod ? endYear : year
 
   useEffect(() => {
-    if (!studentId) { setHasAssessment(false); setReport(null); return }
+    if (!studentId) { setHasAssessment(false); setReport(null); setAssessmentHistory([]); return }
     setLoading(true)
     api.getAssessment(studentId, month, year, periodEndMonth, periodEndYear)
       .then((data) => {
@@ -102,6 +104,7 @@ function LaporanContent() {
       })
       .finally(() => setLoading(false))
     api.getReport(studentId, month, year, periodEndMonth, periodEndYear).then(setReport).catch(() => setReport(null))
+    api.getAssessmentHistory(studentId).then(setAssessmentHistory).catch(() => setAssessmentHistory([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId, month, year, periodEndMonth, periodEndYear])
 
@@ -140,6 +143,7 @@ function LaporanContent() {
         coachComment: comment, activeCategories, ...numericScores,
       })
       setHasAssessment(true)
+      setAssessmentHistory(await api.getAssessmentHistory(studentId))
       setMessage('Penilaian berhasil disimpan')
     } catch (err) {
       setMessage(err.message)
@@ -287,6 +291,8 @@ function LaporanContent() {
             <h2 className="text-sm font-semibold text-gray-500 mb-2">Preview Radar Skill</h2>
             <SkillRadar assessment={liveAssessment} height={240} />
           </div>
+
+          <AssessmentProgressChart history={assessmentHistory} />
 
           {message && <div className="text-sm bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-2xl px-3 py-2">{message}</div>}
 

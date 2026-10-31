@@ -40,6 +40,30 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
   }
 })
 
+// Riwayat ringkas untuk grafik perkembangan di layar Penilaian/Laporan staf.
+// Akses siswa tetap dibatasi cabang untuk coach lewat assertCoachStudentAccess.
+router.get('/history', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
+  const { studentId } = req.query
+  if (!studentId) return res.status(400).json({ error: 'studentId wajib diisi' })
+  try {
+    await assertCoachStudentAccess(req.user, studentId)
+    const history = await prisma.assessment.findMany({
+      where: { studentId },
+      select: {
+        id: true, month: true, year: true, endMonth: true, endYear: true,
+        teknikAvg: true, taktikAvg: true, fisikAvg: true, mentalAvg: true,
+        overallAvg: true, assessmentDate: true,
+      },
+      orderBy: [{ year: 'asc' }, { month: 'asc' }, { endYear: 'asc' }, { endMonth: 'asc' }],
+    })
+    res.json(history)
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message })
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // Parent-facing, read-only. Returns the assessment directly (not gated
 // behind a generated Report/PDF) so the student's Rapor page reflects
 // whatever the head-coach has saved immediately, not only after a PDF has

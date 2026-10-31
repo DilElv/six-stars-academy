@@ -337,6 +337,10 @@ export async function getAssessment(studentId, month, year, endMonth, endYear) {
   return request(`/assessments?studentId=${studentId}&month=${month}&year=${year}${end}`)
 }
 
+export async function getAssessmentHistory(studentId) {
+  return request(`/assessments/history?studentId=${studentId}`)
+}
+
 export async function saveAssessment(payload) {
   return request('/assessments', { method: 'POST', body: JSON.stringify(payload) })
 }
