@@ -114,10 +114,10 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
   try {
     const branchIds = await getUserBranchIds(req.user.id)
     if (req.user.role === 'coach' && branchIds.length === 0) return res.json([])
+    const today = startOfDay()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
     try {
-      const today = startOfDay()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(tomorrow.getDate() + 1)
       await ensureSchedulesAttendanceInRange(today, tomorrow, branchIds.length ? branchIds : null)
     } catch (healErr) {
       console.error('Gagal melengkapi sesi absensi hari ini dari jadwal:', healErr)
@@ -126,7 +126,7 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
       where: {
         type: 'training',
         status: 'active',
-        date: startOfDay(),
+        date: today,
         AND: [
           { OR: [{ branchId: null }, { branchId: { in: branchIds.length ? branchIds : ['__none__'] } }] },
           // Sesi untuk satu coach (topik latihan), atau sesi dengan daftar coach
@@ -149,7 +149,7 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
     })
     const topics = req.user.role === 'coach'
       ? await prisma.trainingSession.findMany({
-          where: { coachId: req.user.id, date: { gte: startOfDay(), lt: tomorrow }, topicTitle: { not: '' } },
+          where: { coachId: req.user.id, date: { gte: today, lt: tomorrow }, topicTitle: { not: '' } },
           select: { branchId: true },
         })
       : []
