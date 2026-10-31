@@ -147,10 +147,19 @@ router.get('/today', authenticate, authorize('coach', 'head_coach'), async (req,
       },
       orderBy: [{ checkInOpen: 'asc' }, { title: 'asc' }],
     })
+    const topics = req.user.role === 'coach'
+      ? await prisma.trainingSession.findMany({
+          where: { coachId: req.user.id, date: { gte: startOfDay(), lt: tomorrow }, topicTitle: { not: '' } },
+          select: { branchId: true },
+        })
+      : []
     res.json(sessions.map(({ attendances, ...session }) => ({
       ...session,
       attendance: attendances[0] || null,
       window: windowState(session),
+      // Hanya coach yang perlu membuat topik sebelum timestamp; head coach
+      // mempertahankan flow absensi harian existing.
+      topicReady: req.user.role !== 'coach' || !!session.trainingSession?.topicTitle?.trim() || topics.some((topic) => !session.branchId || topic.branchId === session.branchId),
     })))
   } catch (err) {
     console.error(err)

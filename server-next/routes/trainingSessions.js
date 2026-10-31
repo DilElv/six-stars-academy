@@ -46,6 +46,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
   const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, fieldName, branchId } = req.body
   try {
     if (!Array.isArray(ageGroups) || ageGroups.length === 0) return res.status(400).json({ error: 'Pilih minimal satu kelompok umur' })
+    if (!String(topicTitle || '').trim()) return res.status(400).json({ error: 'Topik latihan wajib diisi sebelum membuat sesi latihan' })
     const coach = await prisma.user.findUnique({ where: { id: req.user.id } })
 
     if (req.user.role === 'coach') {
@@ -105,6 +106,7 @@ router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async 
 router.put('/:id', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { ageGroups, date, topicTitle, topicDescription, objective, duration, equipment, fieldId, fieldName, branchId } = req.body
   try {
+    if (topicTitle !== undefined && !String(topicTitle || '').trim()) return res.status(400).json({ error: 'Topik latihan wajib diisi' })
     if (req.user.role === 'coach' && branchId) {
       await assertBranchAccess(req.user.id, branchId)
     }

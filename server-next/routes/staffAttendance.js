@@ -23,7 +23,10 @@ async function findTodayRecord(userId, day, branchId) {
 }
 
 async function findCoachSession(user, sessionId, assignedBranchIds) {
-  const session = await prisma.coachAttendanceSession.findUnique({ where: { id: sessionId }, include: { branch: true } })
+  const session = await prisma.coachAttendanceSession.findUnique({
+    where: { id: sessionId },
+    include: { branch: true, trainingSession: { select: { topicTitle: true } } },
+  })
   if (!session) throw Object.assign(new Error('Sesi absensi tidak ditemukan'), { status: 404 })
   if (session.status !== 'active') throw Object.assign(new Error('Sesi absensi sudah dibatalkan'), { status: 400 })
   if (session.type !== 'training') throw Object.assign(new Error('Sesi ini memakai absensi event'), { status: 400 })
@@ -35,6 +38,28 @@ async function findCoachSession(user, sessionId, assignedBranchIds) {
   }
   if (session.branchId && !assignedBranchIds.includes(session.branchId)) {
     throw Object.assign(new Error('Anda tidak memiliki akses ke cabang ini'), { status: 403 })
+  }
+  // Timestamp sebelum melatih wajib didahului topik latihan. Sesi yang
+  // bersumber langsung dari TrainingSession memakai topiknya sendiri; sesi dari
+  // jadwal rutin mencari topik milik coach pada tanggal/cabang yang sama.
+  let hasTopic = !!session.trainingSession?.topicTitle?.trim()
+  if (!hasTopic) {
+    const day = startOfDay(session.date)
+    const nextDay = new Date(day)
+    nextDay.setDate(nextDay.getDate() + 1)
+    const topic = await prisma.trainingSession.findFirst({
+      where: {
+        coachId: user.id,
+        date: { gte: day, lt: nextDay },
+        topicTitle: { not: '' },
+        ...(session.branchId ? { branchId: session.branchId } : {}),
+      },
+      select: { id: true },
+    })
+    hasTopic = !!topic
+  }
+  if (!hasTopic) {
+    throw Object.assign(new Error('Buat topik latihan terlebih dahulu sebelum melakukan absen masuk/timestamp.'), { status: 400 })
   }
   return session
 }

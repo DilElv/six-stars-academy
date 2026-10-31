@@ -64,6 +64,28 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   }
 })
 
+// Riwayat ringkas untuk grafik perkembangan Profil Anak. Parent tidak pernah
+// dapat memilih studentId lain; hanya agregat rapor yang dikirim.
+router.get('/me/history', authenticate, authorize('parent'), async (req, res) => {
+  try {
+    const student = await prisma.student.findFirst({ where: { userId: req.user.id }, select: { id: true } })
+    if (!student) return res.json([])
+    const history = await prisma.assessment.findMany({
+      where: { studentId: student.id },
+      select: {
+        id: true, month: true, year: true, endMonth: true, endYear: true,
+        teknikAvg: true, taktikAvg: true, fisikAvg: true, mentalAvg: true,
+        overallAvg: true, assessmentDate: true,
+      },
+      orderBy: [{ year: 'asc' }, { month: 'asc' }, { endYear: 'asc' }, { endMonth: 'asc' }],
+    })
+    res.json(history)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.post('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   const { studentId, coachComment, activeCategories, ...scores } = req.body
   const { month, year, endMonth, endYear } = parsePeriod(req.body)

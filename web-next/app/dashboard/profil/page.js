@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { QrCode, Printer, Loader2, Upload, Save } from 'lucide-react'
+import { QrCode, Printer, Loader2, Upload, Save, Trophy } from 'lucide-react'
 import * as api from '@/lib/api'
 import { sanitizePhoneInput, PHONE_PLACEHOLDER } from '@/lib/phone'
 import { printStudentCard } from '@/lib/studentCard'
+import PlayerAssessmentSummary from '@/components/PlayerAssessmentSummary'
+import AssessmentProgressChart from '@/components/charts/AssessmentProgressChart'
 
 function Row({ label, value }) {
   return (
@@ -18,6 +20,8 @@ function Row({ label, value }) {
 export default function ProfilAnakPage() {
   const [tab, setTab] = useState('anak')
   const [student, setStudent] = useState(null)
+  const [assessment, setAssessment] = useState(null)
+  const [assessmentHistory, setAssessmentHistory] = useState([])
   const [error, setError] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   const [printing, setPrinting] = useState(false)
@@ -32,7 +36,9 @@ export default function ProfilAnakPage() {
   }
 
   useEffect(() => {
-    api.getMyChild().then(setStudent).catch((err) => setError(err.message))
+    Promise.all([api.getMyChild(), api.getMyAssessment(), api.getMyAssessmentHistory()])
+      .then(([child, latest, history]) => { setStudent(child); setAssessment(latest); setAssessmentHistory(history || []) })
+      .catch((err) => setError(err.message))
     api.getMyChildQrCodeUrl().then(setQrUrl).catch(() => {})
   }, [])
 
@@ -52,27 +58,41 @@ export default function ProfilAnakPage() {
         <>
           <p className="text-xs text-gray-400">Data ini hanya bisa diubah oleh Head Coach.</p>
 
-          <div className="glass-card rounded-3xl p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-20 h-20 rounded-full bg-gray-100 overflow-hidden shrink-0">
-                {student.photo && <img src={student.photo} alt="" className="w-full h-full object-cover" />}
-              </div>
-              <div>
-                <div className="font-bold text-navy-900 text-lg">{student.fullName}</div>
-                <div className="text-sm text-gray-400">{student.studentId}</div>
+          <div className="glass-card rounded-3xl overflow-hidden">
+            <div className="bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 p-6 text-white">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                <div className="w-44 h-52 sm:w-52 sm:h-60 rounded-3xl bg-white/10 overflow-hidden shrink-0 shadow-xl border border-white/10 flex items-center justify-center">
+                  {student.photo ? <img src={student.photo} alt={student.fullName} className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-gold-300">{student.fullName?.[0]}</span>}
+                </div>
+                <div className="text-center sm:text-left pt-1">
+                  <div className="text-xs uppercase tracking-wider text-gold-300 font-semibold">Profil Pemain</div>
+                  <h1 className="font-bold text-2xl mt-1">{student.fullName}</h1>
+                  <div className="text-sm text-gray-300 mt-1">{student.studentId} · {student.ageGroup}</div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-left">
+                    <ProfilePill label="Umur" value={`${age} tahun`} />
+                    <ProfilePill label="Posisi" value={student.position} />
+                  </div>
+                  {assessment?.overallAvg != null && <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gold-400/15 border border-gold-300/20 px-3 py-2 text-gold-100 text-sm"><Trophy size={15} className="text-gold-300" /> Nilai overall terakhir <b>{assessment.overallAvg}/10</b></div>}
+                </div>
               </div>
             </div>
-
-            <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
-            <Row label="Umur" value={`${age} tahun`} />
-            <Row label="Posisi" value={student.position} />
-            <Row label="Kelompok Umur" value={student.ageGroup} />
-            <Row label="Paket" value={student.package ? `${student.package.name} · ${student.package.sessionsPerWeek}x/minggu` : '-'} />
-            <Row label="Nama Orang Tua" value={student.parentName} />
-            <Row label="Telepon Orang Tua" value={student.parentPhone} />
-            <Row label="Alamat" value={student.address} />
-            <Row label="Status" value={student.status} />
+            <div className="p-5 sm:p-6 grid lg:grid-cols-2 gap-6">
+              <div>
+                <h2 className="font-bold text-navy-900 mb-3">Kemampuan Pemain</h2>
+                <PlayerAssessmentSummary assessment={assessment} />
+                {assessment && <p className="text-[11px] text-gray-400 mt-3">Bintang berdasarkan penilaian rapor terbaru dari pelatih.</p>}
+              </div>
+              <div>
+                <h2 className="font-bold text-navy-900 mb-2">Data Pemain</h2>
+                <Row label="Tanggal Lahir" value={new Date(student.dateOfBirth).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} />
+                <Row label="Paket" value={student.package ? `${student.package.name} · ${student.package.sessionsPerWeek}x/minggu` : '-'} />
+                <Row label="Status" value={student.status} />
+                <Row label="Cabang" value={student.branch ? `${student.branch.name} (${student.branch.code})` : '-'} />
+              </div>
+            </div>
           </div>
+
+          <AssessmentProgressChart history={assessmentHistory} />
 
           <div className="glass-card rounded-3xl p-6 text-center">
             <div className="flex items-center justify-center gap-2 mb-3">
@@ -102,6 +122,10 @@ export default function ProfilAnakPage() {
       )}
     </div>
   )
+}
+
+function ProfilePill({ label, value }) {
+  return <div className="rounded-2xl bg-white/10 px-3 py-2"><div className="text-[10px] uppercase tracking-wide text-gray-300">{label}</div><div className="font-bold text-sm text-white mt-0.5">{value || '-'}</div></div>
 }
 
 function AkunSayaTab({ studentBranch }) {

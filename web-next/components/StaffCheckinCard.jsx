@@ -67,11 +67,13 @@ function SessionAttendance({ session, onOpenModal }) {
   const needsCheckin = !hasCheckedIn || record.verifyStatus === 'rejected'
   const needsCheckout = hasCheckedIn && (!record.checkOutTime || record.checkOutVerifyStatus === 'rejected')
   const cancelled = session.status === 'cancelled'
-  const checkInBlocked = cancelled || !windowInfo?.canCheckIn
+  const topicBlocked = session.topicReady === false
+  const checkInBlocked = cancelled || topicBlocked || !windowInfo?.canCheckIn
   const checkOutBlocked = cancelled || !windowInfo?.canCheckOut
 
   let checkInHint = null
   if (cancelled) checkInHint = 'Sesi absensi dibatalkan admin/head coach.'
+  else if (topicBlocked) checkInHint = 'Buat topik latihan terlebih dahulu sebelum melakukan absen masuk.'
   else if (!hasCheckedIn && windowInfo?.beforeOpen) checkInHint = `Absen masuk dibuka pukul ${windowInfo.checkInOpen}.`
   else if (!hasCheckedIn && windowInfo?.afterCheckInClose) checkInHint = `Batas absen masuk sudah lewat (ditutup pukul ${windowInfo.checkInClose}).`
 

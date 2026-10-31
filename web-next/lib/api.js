@@ -346,6 +346,10 @@ export async function getMyAssessment(month, year, endMonth, endYear) {
   return request(`/assessments/me${qs}`)
 }
 
+export async function getMyAssessmentHistory() {
+  return request('/assessments/me/history')
+}
+
 // Unduh invoice PDF sebuah pembayaran lunas (parent: miliknya; admin/head coach: semua).
 export async function downloadInvoice(paymentId) {
   const token = getToken()
