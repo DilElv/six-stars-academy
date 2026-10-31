@@ -42,50 +42,29 @@ export default function CoachUserManager({ role, label }) {
         </button>
       </div>
 
-      {loading ? null : (
-        <div className="glass-card rounded-3xl overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Nama</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Email</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Telepon</th>
-                {role !== 'admin' && <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500">Cabang</th>}
-                {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Absensi Dibuat</th>}
-                {role !== 'admin' && <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Topik Dibuat</th>}
-                {role !== 'admin' && <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500">Honor/hari</th>}
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-navy-900">{u.name}</td>
-                  <td className="px-3 py-3 text-gray-500">{u.email}</td>
-                  <td className="px-3 py-3 text-gray-500">{u.phone || '-'}</td>
-                  {role !== 'admin' && <td className="px-3 py-3 text-gray-500">{u.branches?.map((b) => b.branch.code).join(', ') || '-'}</td>}
-                  {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.coachAttendances ?? 0}</td>}
-                  {role !== 'admin' && <td className="px-3 py-3 text-center">{u._count?.trainingSessions ?? 0}</td>}
-                  {role !== 'admin' && <td className="px-3 py-3 text-right tabular-nums text-gray-500">{u.dailyRate ? 'Rp' + u.dailyRate.toLocaleString('id-ID') : '-'}</td>}
-                  <td className="px-3 py-3 text-center">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {u.status === 'active' ? 'Aktif' : 'Nonaktif'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setEditUser(u)} className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-gray-100 rounded-lg"><Edit3 size={14} /></button>
-                      <button onClick={() => handleDelete(u.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-          {users.length === 0 && <div className="p-10 text-center text-sm text-gray-400">Belum ada {label.toLowerCase()}.</div>}
+      {loading ? null : users.length === 0 ? (
+        <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Belum ada {label.toLowerCase()}.</div>
+      ) : (
+        <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+          {users.map((u) => (
+            <div key={u.id} className="glass-card rounded-3xl overflow-hidden">
+              <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-4 sm:p-5 text-center relative">
+                <span className={`absolute top-3 right-3 text-[10px] font-semibold px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-emerald-400/20 text-emerald-200' : 'bg-white/10 text-gray-300'}`}>{u.status === 'active' ? 'Aktif' : 'Nonaktif'}</span>
+                <div className="w-full h-44 sm:h-52 rounded-3xl bg-white/10 overflow-hidden flex items-center justify-center text-white text-4xl font-bold shadow-lg shadow-black/10">
+                  {u.photo ? <img src={u.photo} alt={u.name} className="w-full h-full object-cover object-top" /> : u.name?.[0]?.toUpperCase()}
+                </div>
+                <h2 className="font-bold text-white text-lg mt-3 truncate">{u.name}</h2>
+                <p className="text-xs text-gray-300 truncate mt-0.5">{u.email}</p>
+              </div>
+              <div className="p-4 space-y-2 text-sm">
+                <Info label="Telepon" value={u.phone || '-'} />
+                {role !== 'admin' && <Info label="Cabang" value={u.branches?.map((b) => b.branch.code).join(', ') || '-'} />}
+                {role !== 'admin' && <Info label="Honor/hari" value={u.dailyRate ? 'Rp' + u.dailyRate.toLocaleString('id-ID') : '-'} />}
+                {role !== 'admin' && <div className="grid grid-cols-2 gap-2 pt-1 text-center"><MiniStat label="Absensi" value={u._count?.coachAttendances ?? 0} /><MiniStat label="Topik" value={u._count?.trainingSessions ?? 0} /></div>}
+              </div>
+              <div className="flex border-t border-gray-100 p-2 gap-1"><button onClick={() => setEditUser(u)} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-navy-700 hover:bg-gray-50 rounded-xl"><Edit3 size={14} /> Edit</button><button onClick={() => handleDelete(u.id)} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><Trash2 size={14} /> Hapus</button></div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -93,6 +72,14 @@ export default function CoachUserManager({ role, label }) {
       {editUser && <EditModal user={editUser} onClose={() => setEditUser(null)} onSaved={() => { setEditUser(null); load() }} />}
     </div>
   )
+}
+
+function Info({ label, value }) {
+  return <div className="flex items-center justify-between gap-2"><span className="text-xs text-gray-400">{label}</span><span className="text-xs font-semibold text-navy-900 text-right truncate">{value}</span></div>
+}
+
+function MiniStat({ label, value }) {
+  return <div className="rounded-xl bg-gray-50 py-2"><div className="font-bold text-navy-900">{value}</div><div className="text-[10px] text-gray-400">{label}</div></div>
 }
 
 function AddModal({ role, label, onClose, onSaved }) {

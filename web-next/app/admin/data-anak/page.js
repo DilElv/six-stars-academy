@@ -156,23 +156,23 @@ export default function AdminDataAnakPage() {
           {loading ? null : filtered.length === 0 ? (
             <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">Tidak ada data.</div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
               {filtered.map((s) => (
                 <div key={s.id} onClick={() => setViewStudent(s)} className="cursor-pointer glass-card rounded-3xl overflow-hidden hover:border-gold-300 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
-                  <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-3 sm:p-5 text-center relative">
+                  <div className="bg-gradient-to-br from-navy-800 to-navy-900 p-4 sm:p-5 text-center relative">
                     <span className={`absolute top-2 right-2 sm:top-3 sm:right-3 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full ${(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).color}`}>
                       {(STUDENT_STATUS_BADGE[s.status] || STUDENT_STATUS_BADGE.inactive).label}
                     </span>
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-white/10 mx-auto mb-2 overflow-hidden flex items-center justify-center font-bold text-white text-sm">
-                      {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+                    <div className="w-full h-44 sm:h-52 rounded-3xl bg-white/10 mx-auto mb-3 overflow-hidden flex items-center justify-center font-bold text-white text-3xl shadow-lg shadow-black/10">
+                      {s.photo ? <img src={s.photo} alt={s.fullName} className="w-full h-full object-cover object-top" /> : initials(s.fullName)}
                     </div>
-                    <h3 className="font-heading font-bold text-white text-xs sm:text-sm truncate">{s.fullName}</h3>
+                    <h3 className="font-heading font-bold text-white text-base sm:text-lg truncate">{s.fullName}</h3>
                     <p className="text-[10px] sm:text-xs text-gray-300">{s.studentId}</p>
                     {s.isOldMember && (
                       <span className="inline-block mt-1 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200">Anak Lama</span>
                     )}
                   </div>
-                  <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
+                  <div className="p-4 sm:p-5 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Posisi</span>
                       <span className="font-medium text-navy-900">{s.position}</span>

@@ -179,8 +179,8 @@ function AbsensiContent() {
               key={s.id}
               className="flex items-center gap-4 glass-card rounded-3xl p-4 hover:border-gold-200 transition-colors duration-200"
             >
-              <div className="w-11 h-11 rounded-full bg-navy-50 overflow-hidden flex items-center justify-center shrink-0 font-bold text-navy-700 text-sm">
-                {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : initials(s.fullName)}
+              <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-2xl bg-navy-50 overflow-hidden flex items-center justify-center shrink-0 font-bold text-navy-700 text-lg">
+                {s.photo ? <img src={s.photo} alt={s.fullName} className="w-full h-full object-cover object-top" /> : initials(s.fullName)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-navy-900 truncate">{s.fullName}</div>
