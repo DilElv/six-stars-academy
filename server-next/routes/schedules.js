@@ -88,11 +88,18 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const where = {}
     if (req.query.branchId) where.branchId = req.query.branchId
-    // Coach hanya melihat jadwal cabang yang ditugaskan kepadanya.
+    // Coach hanya boleh menerima jadwal yang assignment-nya secara eksplisit
+    // menunjuk ke user login. Jadwal umum/kosong dan tugas coach lain tidak
+    // dikirim ke browser.
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
-      where.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : { in: branchIds.length ? branchIds : ['__none__'] }
-      if (req.query.branchId && !branchIds.includes(req.query.branchId)) where.branchId = '__none__'
+      where.AND = [
+        { coaches: { some: { userId: req.user.id } } },
+        { branchId: req.query.branchId && branchIds.includes(req.query.branchId)
+          ? req.query.branchId
+          : { in: branchIds.length ? branchIds : ['__none__'] } },
+      ]
+      if (req.query.branchId && !branchIds.includes(req.query.branchId)) where.AND[1] = { branchId: '__none__' }
     }
     // Coach bertugas & jendela absen hanya untuk staf; parent cukup jadwalnya.
     const staff = ['admin', 'head_coach', 'coach'].includes(req.user.role)
@@ -114,14 +121,8 @@ router.get('/', authenticate, async (req, res) => {
         return publicSchedule
       }
       // Daftar kosong = semua coach cabang bertugas.
-      const assignedToMe = req.user.role === 'coach'
-        ? schedule.coaches.length === 0 || schedule.coaches.some((row) => row.userId === req.user.id)
-        : undefined
+      const assignedToMe = req.user.role === 'coach' ? true : undefined
       // Catatan hanya untuk staf dan coach yang bertugas pada jadwal itu.
-      if (req.user.role === 'coach' && !assignedToMe) {
-        const { coachNote: _note, ...rest } = schedule
-        return { ...rest, assignedToMe }
-      }
       return { ...schedule, assignedToMe }
     }))
   } catch (err) {

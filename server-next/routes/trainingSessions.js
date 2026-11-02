@@ -24,6 +24,7 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin', 'parent'
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
       where.branchId = req.query.branchId && branchIds.includes(req.query.branchId) ? req.query.branchId : '__none__'
+      where.coachId = req.user.id
     }
 
     const sessions = await prisma.trainingSession.findMany({

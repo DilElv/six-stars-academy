@@ -6,7 +6,8 @@ import { Trophy, MapPin, Clock, ChevronRight } from 'lucide-react'
 import * as api from '@/lib/api'
 
 function dayKey(date) {
-  return new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(date)).map((part) => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}`
 }
 
 /** Event mendatang tempat coach ditugaskan head coach. Absen event tetap hanya di hari-H (kartu absen di atas). */
@@ -14,16 +15,22 @@ export default function CoachDutyEvents() {
   const [rows, setRows] = useState(null)
 
   useEffect(() => {
-    api.getEvents()
+    let active = true
+    const load = () => api.getEvents()
       .then((list) => {
+        if (!active) return
         const today = dayKey(new Date())
         setRows(
           list
-            .filter((e) => e.assignedToMe && e.status === 'open' && dayKey(e.date) >= today)
+            .filter((e) => e.assignedToMe === true && e.status === 'open' && dayKey(e.date) >= today)
             .sort((a, b) => new Date(a.date) - new Date(b.date)),
         )
       })
-      .catch(() => setRows([]))
+      .catch(() => { if (active) setRows([]) })
+    load()
+    const interval = setInterval(load, 60000)
+    window.addEventListener('focus', load)
+    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', load) }
   }, [])
 
   if (!rows || rows.length === 0) return null

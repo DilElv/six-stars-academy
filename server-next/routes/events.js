@@ -43,31 +43,32 @@ async function setEventBranches(tx, eventId, branchIds) {
 router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (req, res) => {
   try {
     const where = {}
+    const filters = []
     if (req.query.ageGroup) {
       const ag = req.query.ageGroup
-      where.OR = [
+      filters.push({ OR: [
         { ageGroup: ag },
         { ageGroup: { startsWith: ag + ',' } },
         { ageGroup: { endsWith: ',' + ag } },
         { ageGroup: { contains: ',' + ag + ',' } },
-      ]
+      ] })
     }
     if (req.query.status) where.status = req.query.status
 
     if (req.user.role === 'coach') {
       const branchIds = await getUserBranchIds(req.user.id)
-      where.OR = [
-        ...(where.OR || []),
+      filters.push({ attendanceSessions: { some: { assignedCoaches: { some: { userId: req.user.id } } } } })
+      filters.push({ OR: [
         { branches: { none: {} } },
         { branches: { some: { branchId: { in: branchIds.length ? branchIds : ['__none__'] } } } },
-      ]
+      ] })
     } else if (req.query.branchId) {
-      where.OR = [
-        ...(where.OR || []),
+      filters.push({ OR: [
         { branches: { none: {} } },
         { branches: { some: { branchId: req.query.branchId } } },
-      ]
+      ] })
     }
+    if (filters.length) where.AND = filters
 
     const events = await prisma.event.findMany({
       where,
@@ -79,11 +80,11 @@ router.get('/', authenticate, authorize('coach', 'head_coach', 'admin'), async (
       },
       orderBy: { date: 'desc' },
     })
-    // Coach: tandai event yang secara khusus menugaskan dirinya (kartu "Anda bertugas").
+    // Coach query sudah terscope di database ke assignment user login.
     res.json(req.user.role === 'coach'
       ? events.map((event) => ({
         ...event,
-        assignedToMe: event.attendanceSessions.some((session) => session.assignedCoaches.some((row) => row.userId === req.user.id)),
+        assignedToMe: true,
       }))
       : events)
   } catch (err) {

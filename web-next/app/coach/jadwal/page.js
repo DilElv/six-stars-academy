@@ -12,23 +12,29 @@ export default function CoachJadwalPage() {
   const [sessions, setSessions] = useState([])
   const [events, setEvents] = useState([])
   const [fields, setFields] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  function load(bId) {
+  function load(bId, coachId = me?.id) {
     if (!bId) {
       setSchedules([]); setSessions([]); setEvents([]); setFields([])
       return
     }
+    setLoading(true)
+    setError('')
     Promise.all([
       api.getSchedules(bId),
       api.getTrainingSessions(undefined, bId),
       api.getEvents(undefined, bId),
       api.getFields(bId),
     ]).then(([sched, sess, evts, flds]) => {
-      setSchedules(sched)
-      setSessions(sess)
-      setEvents(evts)
+      setSchedules(sched.filter((row) => row.assignedToMe === true && row.status === 'active'))
+      setSessions(sess.filter((row) => row.coachId === coachId))
+      setEvents(evts.filter((row) => row.assignedToMe === true))
       setFields(flds)
     })
+      .catch((err) => { setError(err.message || 'Gagal memuat jadwal. Coba muat ulang halaman.'); setSchedules([]); setSessions([]); setEvents([]); setFields([]) })
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
@@ -36,11 +42,22 @@ export default function CoachJadwalPage() {
       setMe(user)
       const first = user.branches?.[0]?.branch?.id || ''
       setBranchId(first)
-      load(first)
     })
   }, [])
 
-  if (!me) return null
+  useEffect(() => {
+    if (!me?.id || !branchId) return
+    let active = true
+    const refresh = () => {
+      if (!active) return
+      load(branchId, me.id)
+    }
+    const interval = setInterval(refresh, 60000)
+    window.addEventListener('focus', refresh)
+    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh) }
+  }, [me?.id, branchId])
+
+  if (!me) return <div className="glass-card rounded-3xl p-8 text-center text-sm text-gray-400">Memuat jadwal Coach...</div>
 
   const branchOptions = (me.branches || []).map((b) => ({ value: b.branch.id, label: `${b.branch.name} (${b.branch.code})` }))
 
@@ -50,7 +67,7 @@ export default function CoachJadwalPage() {
         <h1 className="font-bold text-navy-900 text-lg">Jadwal</h1>
         <AppSelect
           value={branchId}
-          onChange={(v) => { setBranchId(v); load(v) }}
+          onChange={(v) => { setBranchId(v); load(v, me.id) }}
           placeholder="Pilih cabang..."
           options={branchOptions}
         />
@@ -63,8 +80,12 @@ export default function CoachJadwalPage() {
         <div className="glass-card rounded-3xl p-10 text-center text-sm text-gray-400">
           Pilih cabang dulu untuk melihat kalender.
         </div>
+      ) : error ? (
+        <div className="glass-card rounded-3xl p-8 text-center text-sm text-red-500">{error}</div>
+      ) : loading ? (
+        <div className="glass-card rounded-3xl p-8 text-center text-sm text-gray-400">Memuat jadwal dan kalender...</div>
       ) : (
-        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic branchId={branchId} onChanged={() => load(branchId)} />
+        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic branchId={branchId} onChanged={() => load(branchId, me.id)} />
       )}
     </div>
   )
