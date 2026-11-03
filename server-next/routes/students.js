@@ -352,6 +352,25 @@ router.get('/me', authenticate, authorize('parent'), async (req, res) => {
   }
 })
 
+// Foto pemain adalah record terpisah dari foto akun Parent. Parent hanya
+// boleh memperbarui foto anak pertama yang terhubung ke akunnya sendiri.
+router.put('/me/photo', authenticate, authorize('parent'), async (req, res) => {
+  const photo = typeof req.body?.photo === 'string' ? req.body.photo.trim() : ''
+  if (!/^https:\/\//i.test(photo)) return res.status(400).json({ error: 'Foto harus diunggah terlebih dahulu melalui penyimpanan gambar' })
+  try {
+    const student = await prisma.student.findFirst({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!student) return res.status(404).json({ error: 'Data anak tidak ditemukan' })
+    const updated = await prisma.student.update({ where: { id: student.id }, data: { photo }, include: { package: true, branch: true } })
+    res.json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal menyimpan foto profil pemain' })
+  }
+})
+
 router.get('/me/qrcode.png', authenticate, authorize('parent'), async (req, res) => {
   try {
     const student = await prisma.student.findFirst({ where: { userId: req.user.id } })

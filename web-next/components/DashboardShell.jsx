@@ -60,6 +60,12 @@ export default function DashboardShell({ role, title, navItems, children }) {
       .catch(() => router.replace('/login'))
   }, [role, router])
 
+  useEffect(() => {
+    const syncProfile = (event) => setUser((current) => current ? { ...current, ...event.detail } : current)
+    window.addEventListener('sixstars:profile-updated', syncProfile)
+    return () => window.removeEventListener('sixstars:profile-updated', syncProfile)
+  }, [])
+
   // Re-checked on every navigation (not just initial load) so a parent with a
   // pending/expired payment can't reach other dashboard pages by clicking a
   // nav link after the first redirect.
@@ -68,7 +74,10 @@ export default function DashboardShell({ role, title, navItems, children }) {
     // keduanya adalah bagian dari alur invoice/payment yang sama. Sebelumnya
     // mereka selalu dilempar kembali ke Pembayaran, sehingga menu Toko terlihat
     // rusak walau API katalog sebenarnya tersedia.
-    if (user?.access === 'payment-only' && !['/dashboard/pembayaran', '/dashboard/event', '/dashboard/toko', '/dashboard/keranjang'].includes(pathname)) {
+    // Profil akun selalu tersedia agar Parent tetap dapat memperbarui foto,
+    // kontak, dan kredensial; tidak ada aturan bisnis yang mengaitkannya
+    // dengan status SPP/tagihan.
+    if (user?.access === 'payment-only' && !['/dashboard/pembayaran', '/dashboard/profil', '/dashboard/event', '/dashboard/toko', '/dashboard/keranjang'].includes(pathname)) {
       router.replace('/dashboard/pembayaran')
     }
   }, [pathname, user, router])
@@ -133,8 +142,8 @@ export default function DashboardShell({ role, title, navItems, children }) {
 
           <div className="relative p-3 border-t border-white/10 shrink-0">
             <div className="flex items-center gap-3 px-2 py-2 rounded-2xl bg-white/5">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-900 font-bold text-xs shrink-0">
-                {initials(user.name)}
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 overflow-hidden flex items-center justify-center text-navy-900 font-bold text-xs shrink-0">
+                {user.photo ? <img src={user.photo} alt="" className="w-full h-full object-cover" /> : initials(user.name)}
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-white truncate">{user.name}</div>

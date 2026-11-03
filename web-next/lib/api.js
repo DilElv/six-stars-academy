@@ -253,6 +253,10 @@ export async function updateMe(payload) {
   return request('/auth/me', { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function updateMyChildPhoto(photo) {
+  return request('/students/me/photo', { method: 'PUT', body: JSON.stringify({ photo }) })
+}
+
 export async function getStudents(ageGroup, branchId) {
   const params = new URLSearchParams()
   if (ageGroup) params.set('ageGroup', ageGroup)
@@ -776,6 +780,58 @@ export async function uploadFile(file) {
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || 'Upload failed')
   return data.url
+}
+
+// Foto profil diturunkan ke ukuran yang cukup untuk avatar/kartu (maks. 1600px)
+// dan WebP sebelum dikirim. HEIC atau browser yang tidak bisa decode gambar
+// tetap dikirim asli agar upload tidak gagal hanya karena format perangkat.
+const PROFILE_IMAGE_FORMATS = {
+  jpeg: { mime: 'image/jpeg', extension: 'jpg', label: 'JPEG' },
+  webp: { mime: 'image/webp', extension: 'webp', label: 'WebP' },
+  png: { mime: 'image/png', extension: 'png', label: 'PNG' },
+}
+
+function detectedImageLabel(file) {
+  if (file?.type === 'image/jpeg') return 'JPEG'
+  if (file?.type === 'image/png') return 'PNG'
+  if (file?.type === 'image/webp') return 'WebP'
+  if (file?.type === 'image/heic' || file?.type === 'image/heif') return 'HEIC/HEIF'
+  return 'file asli'
+}
+
+export async function prepareProfilePhoto(file, format = 'jpeg') {
+  if (!file?.type?.startsWith('image/')) throw new Error('Pilih file gambar terlebih dahulu')
+  if (format === 'original' || typeof createImageBitmap !== 'function') return file
+  const target = PROFILE_IMAGE_FORMATS[format] || PROFILE_IMAGE_FORMATS.jpeg
+  try {
+    const image = await createImageBitmap(file)
+    const maxSide = 1600
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height))
+    const width = Math.max(1, Math.round(image.width * scale))
+    const height = Math.max(1, Math.round(image.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    canvas.getContext('2d').drawImage(image, 0, 0, width, height)
+    image.close?.()
+    const quality = target.mime === 'image/png' ? undefined : 0.86
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, target.mime, quality))
+    if (!blob) return file
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, '') || 'foto-profil'}.${target.extension}`, { type: target.mime })
+  } catch {
+    return file
+  }
+}
+
+export async function uploadProfilePhoto(file, format = 'jpeg') {
+  const prepared = await prepareProfilePhoto(file, format)
+  const startedAt = performance.now()
+  const url = await uploadFile(prepared)
+  return { url, originalBytes: file.size, uploadedBytes: prepared.size, durationMs: Math.round(performance.now() - startedAt), format: detectedImageLabel(prepared) }
+}
+
+export function notifyProfilePhotoUpdated(profile) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('sixstars:profile-updated', { detail: profile }))
 }
 
 // Lampirkan bukti pembayaran (foto/screenshot) ke satu pembayaran. Bukti wajib

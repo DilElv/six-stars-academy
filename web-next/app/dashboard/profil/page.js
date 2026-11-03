@@ -8,6 +8,13 @@ import { printStudentCard } from '@/lib/studentCard'
 import PlayerAssessmentSummary from '@/components/PlayerAssessmentSummary'
 import AssessmentProgressChart from '@/components/charts/AssessmentProgressChart'
 
+const PHOTO_FORMAT_OPTIONS = [
+  { value: 'jpeg', label: 'JPEG — disarankan untuk foto' },
+  { value: 'webp', label: 'WebP — paling hemat ukuran' },
+  { value: 'png', label: 'PNG — untuk gambar transparan' },
+  { value: 'original', label: 'Format asli — tanpa konversi' },
+]
+
 function Row({ label, value }) {
   return (
     <div className="flex justify-between py-2.5 border-b border-gray-50 last:border-0">
@@ -25,6 +32,9 @@ export default function ProfilAnakPage() {
   const [error, setError] = useState('')
   const [qrUrl, setQrUrl] = useState('')
   const [printing, setPrinting] = useState(false)
+  const [uploadingChildPhoto, setUploadingChildPhoto] = useState(false)
+  const [photoMessage, setPhotoMessage] = useState('')
+  const [childPhotoFormat, setChildPhotoFormat] = useState('jpeg')
 
   async function handlePrint() {
     setPrinting(true)
@@ -32,6 +42,24 @@ export default function ProfilAnakPage() {
       await printStudentCard(student, qrUrl)
     } finally {
       setPrinting(false)
+    }
+  }
+
+  async function handleChildPhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingChildPhoto(true)
+    setPhotoMessage('')
+    try {
+      const upload = await api.uploadProfilePhoto(file, childPhotoFormat)
+      const updated = await api.updateMyChildPhoto(upload.url)
+      setStudent((current) => ({ ...current, ...updated }))
+      setPhotoMessage(`Foto pemain berhasil diperbarui dalam format ${upload.format}${upload.originalBytes > upload.uploadedBytes ? ` (${Math.round((1 - upload.uploadedBytes / upload.originalBytes) * 100)}% lebih kecil)` : ''}.`)
+    } catch (err) {
+      setPhotoMessage(err.message || 'Gagal mengunggah foto pemain')
+    } finally {
+      e.target.value = ''
+      setUploadingChildPhoto(false)
     }
   }
 
@@ -56,13 +84,19 @@ export default function ProfilAnakPage() {
 
       {tab === 'anak' ? (
         <>
-          <p className="text-xs text-gray-400">Data ini hanya bisa diubah oleh Head Coach.</p>
+          <p className="text-xs text-gray-400">Data pemain diatur Head Coach. Foto pemain dapat diperbarui oleh Parent.</p>
+
+          {photoMessage && <div className={`text-sm border rounded-2xl px-3 py-2 ${photoMessage.startsWith('Foto') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>{photoMessage}</div>}
 
           <div className="glass-card rounded-3xl overflow-hidden">
             <div className="bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 p-6 text-white">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-                <div className="w-44 h-52 sm:w-52 sm:h-60 rounded-3xl bg-white/10 overflow-hidden shrink-0 shadow-xl border border-white/10 flex items-center justify-center">
+                <div className="relative w-44 h-52 sm:w-52 sm:h-60 rounded-3xl bg-white/10 overflow-hidden shrink-0 shadow-xl border border-white/10 flex items-center justify-center">
                   {student.photo ? <img src={student.photo} alt={student.fullName} className="w-full h-full object-cover" /> : <span className="text-5xl font-bold text-gold-300">{student.fullName?.[0]}</span>}
+                  <label className="absolute bottom-2 left-2 right-2 text-center text-xs font-semibold bg-navy-950/75 hover:bg-navy-950 text-white rounded-xl px-2 py-2 cursor-pointer backdrop-blur-sm">
+                    {uploadingChildPhoto ? 'Mengunggah...' : 'Ganti Foto Pemain'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="hidden" onChange={handleChildPhotoChange} disabled={uploadingChildPhoto} />
+                  </label>
                 </div>
                 <div className="text-center sm:text-left pt-1">
                   <div className="text-xs uppercase tracking-wider text-gold-300 font-semibold">Profil Pemain</div>
@@ -73,6 +107,7 @@ export default function ProfilAnakPage() {
                     <ProfilePill label="Posisi" value={student.position} />
                   </div>
                   {assessment?.overallAvg != null && <div className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gold-400/15 border border-gold-300/20 px-3 py-2 text-gold-100 text-sm"><Trophy size={15} className="text-gold-300" /> Nilai overall terakhir <b>{assessment.overallAvg}/10</b></div>}
+                  <div className="mt-3 text-left"><label className="block text-[11px] text-gray-300 mb-1">Format foto pemain</label><select value={childPhotoFormat} onChange={(e) => setChildPhotoFormat(e.target.value)} disabled={uploadingChildPhoto} className="max-w-full bg-white/10 border border-white/20 rounded-xl px-2.5 py-1.5 text-xs text-white">{PHOTO_FORMAT_OPTIONS.map((option) => <option key={option.value} value={option.value} className="text-navy-900">{option.label}</option>)}</select></div>
                 </div>
               </div>
             </div>
@@ -133,6 +168,7 @@ function AkunSayaTab({ studentBranch }) {
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [photoFormat, setPhotoFormat] = useState('jpeg')
 
   useEffect(() => {
     api.getMe().then((profile) => {
@@ -144,10 +180,17 @@ function AkunSayaTab({ studentBranch }) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setMessage('')
     try {
-      const url = await api.uploadFile(file)
-      setForm((f) => ({ ...f, photo: url }))
+      const upload = await api.uploadProfilePhoto(file, photoFormat)
+      const profile = await api.updateMe({ photo: upload.url })
+      setForm((f) => ({ ...f, photo: profile.photo || upload.url }))
+      api.notifyProfilePhotoUpdated(profile)
+      setMessage(`Foto akun berhasil diperbarui dalam format ${upload.format}${upload.originalBytes > upload.uploadedBytes ? ` (${Math.round((1 - upload.uploadedBytes / upload.originalBytes) * 100)}% lebih kecil)` : ''}.`)
+    } catch (err) {
+      setMessage(err.message || 'Gagal mengunggah foto akun')
     } finally {
+      e.target.value = ''
       setUploading(false)
     }
   }
@@ -156,7 +199,8 @@ function AkunSayaTab({ studentBranch }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await api.updateMe(form)
+      const profile = await api.updateMe(form)
+      api.notifyProfilePhotoUpdated(profile)
       setMessage('Akun berhasil disimpan')
     } catch (err) {
       setMessage(err.message)
@@ -181,6 +225,13 @@ function AkunSayaTab({ studentBranch }) {
             {uploading ? 'Mengunggah...' : 'Ganti Foto'}
             <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} disabled={uploading} />
           </label>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Format foto akun</label>
+          <select value={photoFormat} onChange={(e) => setPhotoFormat(e.target.value)} disabled={uploading} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm">
+            {PHOTO_FORMAT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <p className="text-[11px] text-gray-400 mt-1">JPEG cocok untuk foto dan kompatibel luas. PNG biasanya lebih besar; gunakan hanya jika memerlukan transparansi.</p>
         </div>
 
         <div>
