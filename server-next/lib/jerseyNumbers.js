@@ -297,7 +297,9 @@ export async function releaseNumbersForItems(client, itemIds) {
   // Tandai item supaya sinkronisasi data lama tidak mengunci nomornya lagi.
   const items = await client.cartItem.findMany({ where: { id: { in: itemIds } }, select: { id: true, metadata: true } })
   for (const item of items) {
-    if (!item.metadata || !item.metadata.jerseyNumber || item.metadata.jerseyReleased) continue
+    const hasJersey = item.metadata?.jerseyNumber
+      || (Array.isArray(item.metadata?.custom) && item.metadata.custom.some((entry) => /nomor|jersey/i.test(`${entry.key} ${entry.label}`)))
+    if (!hasJersey || item.metadata?.jerseyReleased) continue
     await client.cartItem.update({ where: { id: item.id }, data: { metadata: { ...item.metadata, jerseyReleased: true } } })
   }
 }
