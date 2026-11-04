@@ -6,6 +6,7 @@ import { assignAgeGroup } from './ageGroup.js'
 import { computePackagePeriod } from './packagePeriod.js'
 import { monthlySessionLimit } from './sessionQuota.js'
 import { toGatewayPhone } from './phone.js'
+import { markNumbersUsed, releaseNumbersForItems } from './jerseyNumbers.js'
 
 function formatDateForRintisan(d) {
   const day = String(d.getDate()).padStart(2, '0')
@@ -96,6 +97,8 @@ export async function releasePendingPayment(payment, { mode = 'delete', reason }
     if (!current || current.status !== 'pending' || current.effectsAppliedAt) {
       return { released: false, status: current?.status ?? null }
     }
+    const bound = await tx.cartItem.findMany({ where: { paymentId: current.id }, select: { id: true } })
+    await releaseNumbersForItems(tx, bound.map((item) => item.id))
     await tx.cartItem.updateMany({ where: { paymentId: current.id }, data: { paymentId: null, status: 'open' } })
     if (mode === 'fail') {
       await tx.payment.update({ where: { id: current.id }, data: { status: 'failed', failReason: reason || null } })
@@ -200,13 +203,15 @@ export async function applyPaymentSuccess(payment) {
       }
     }
 
-    // Merchandise dari katalog: kurangi stok (NULL = stok tak terbatas).
+    // Merchandise dari katalog: kurangi stok (NULL = stok tak terbatas) dan
+    // kunci nomor punggung sebagai Terpakai setelah pembayaran lunas.
     for (const item of updated.cartItems?.filter((i) => i.type === 'merchandise' && i.productId) || []) {
       const product = await tx.product.findUnique({ where: { id: item.productId } })
       if (product && product.stock !== null) {
         await tx.product.update({ where: { id: product.id }, data: { stock: Math.max(0, product.stock - 1) } })
       }
     }
+    await markNumbersUsed(tx, updated.cartItems, updated.student)
   }
 
   const appliedAt = new Date()

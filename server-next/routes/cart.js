@@ -10,6 +10,11 @@ import { resolveCustomPackage } from '../lib/studentCustomPackage.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
 import { getBpjsSettings, bpjsLabel } from '../lib/bpjsBilling.js'
 import { validateCustomValues, findNumberConflict, customSummary, productFields } from '../lib/merch.js'
+import {
+  jerseyNumberField, jerseyAgeGroupForStudent, normalizeJerseyAgeGroup,
+  assertNumberAvailable, assignNumberToItem, releaseNumbersForItems, revalidateCheckoutNumbers,
+  JERSEY_NUMBER_MIN, JERSEY_NUMBER_MAX,
+} from '../lib/jerseyNumbers.js'
 
 const router = Router()
 
@@ -120,6 +125,7 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
   try {
     let merchProduct = null
     let merchCustom = []
+    let merchJersey = null
     let student
     if (req.user.role === 'parent') {
       // Parent boleh menambah perpanjangan paket, atau merchandise yang diambil
@@ -217,13 +223,40 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
       if (checked.error) return res.status(400).json({ error: checked.error })
       merchProduct = product
       merchCustom = checked.custom
+
+      const numberField = jerseyNumberField(product)
+      if (numberField) {
+        const ageGroup = jerseyAgeGroupForStudent(student)
+        const numberEntry = checked.custom.find((entry) => entry.key === numberField.key)
+        const number = Number(numberEntry?.value)
+        if (!Number.isInteger(number) || number < JERSEY_NUMBER_MIN || number > JERSEY_NUMBER_MAX) {
+          return res.status(400).json({ error: `Nomor punggung harus ${JERSEY_NUMBER_MIN}–${JERSEY_NUMBER_MAX}` })
+        }
+        const playerName = checked.custom.find((entry) => /nama/i.test(`${entry.key} ${entry.label}`))?.value || student.fullName
+        const size = checked.custom.find((entry) => /ukuran|size/i.test(`${entry.key} ${entry.label}`))?.value || null
+        merchJersey = { field: numberField, ageGroup, number, playerName, size }
+      }
+
       itemData = {
         type,
         label: checked.custom.length ? `${product.name} — ${customSummary(checked.custom)}` : product.name,
         category: TYPE_CATEGORY.merchandise,
         amount: product.price,
         productId: product.id,
-        metadata: { productId: product.id, productName: product.name, productCategory: product.category, custom: checked.custom, note: note?.trim() || null },
+        metadata: {
+          productId: product.id,
+          productName: product.name,
+          productCategory: product.category,
+          custom: checked.custom,
+          note: note?.trim() || null,
+          ...(merchJersey ? {
+            jerseyFieldKey: merchJersey.field.key,
+            jerseyAgeGroup: merchJersey.ageGroup,
+            jerseyNumber: merchJersey.number,
+            playerName: merchJersey.playerName,
+            size: merchJersey.size,
+          } : {}),
+        },
       }
     } else {
       const trimmed = typeof label === 'string' ? label.trim() : ''
@@ -252,7 +285,27 @@ router.post('/', authenticate, authorize('parent', 'admin', 'head_coach'), async
 
     const createData = { ...itemData, studentId: student.id, addedById: req.user.id, status: 'open' }
     let item
-    if (merchProduct && productFields(merchProduct).some((f) => f.type === 'number' && f.unique)) {
+    if (merchProduct && merchJersey) {
+      // Kunci per produk + kategori usia: nomor yang sama boleh di kategori
+      // berbeda, tetapi tidak boleh dobel dalam kategori yang sama.
+      item = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'jersey:' + merchProduct.id + ':' + merchJersey.ageGroup}))`
+        // Cek ketersediaan SEBELUM item dibuat, lalu pasang nomor ke item
+        // tanpa sinkronisasi ulang (lihat assignNumberToItem).
+        await assertNumberAvailable(tx, merchProduct, merchJersey.ageGroup, merchJersey.number)
+        const created = await tx.cartItem.create({ data: createData })
+        await assignNumberToItem(tx, {
+          product: merchProduct,
+          ageGroup: merchJersey.ageGroup,
+          number: merchJersey.number,
+          student,
+          cartItemId: created.id,
+          playerName: merchJersey.playerName,
+          size: merchJersey.size,
+        })
+        return created
+      })
+    } else if (merchProduct && productFields(merchProduct).some((f) => f.type === 'number' && f.unique)) {
       // Kunci per produk supaya dua parent tidak bisa mengambil nomor yang sama bersamaan.
       item = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'merch-numbers:' + merchProduct.id}))`
@@ -345,7 +398,10 @@ router.delete('/:id', authenticate, authorize('parent', 'admin', 'head_coach'), 
     if (req.user.role === 'head_coach' && !(await getUserBranchIds(req.user.id)).includes(item.student.branchId)) {
       return res.status(403).json({ error: 'Anda hanya dapat mengelola keranjang anak di cabang Anda' })
     }
-    await prisma.cartItem.delete({ where: { id: item.id } })
+    await prisma.$transaction(async (tx) => {
+      await releaseNumbersForItems(tx, [item.id])
+      await tx.cartItem.delete({ where: { id: item.id } })
+    })
     await logPaymentAudit({
       studentId: item.studentId,
       action: 'invoice_delete',
@@ -592,6 +648,23 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
         throw Object.assign(new Error('Ada lebih dari satu tagihan perpanjangan paket. Hapus yang tidak perlu dulu sebelum checkout.'), { status: 400 })
       }
 
+      // Validasi ulang nomor jersey tepat sebelum Payment dibuat. Nomor bisa
+      // saja baru diambil Parent lain setelah item masuk keranjang.
+      const jerseyItems = items.filter((i) => i.type === 'merchandise' && i.productId)
+      const groups = new Map()
+      for (const item of jerseyItems) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } })
+        if (!product || !jerseyNumberField(product)) continue
+        const ageGroup = normalizeJerseyAgeGroup(item.metadata?.jerseyAgeGroup) || jerseyAgeGroupForStudent(student)
+        const key = `${product.id}:${ageGroup}`
+        if (!groups.has(key)) groups.set(key, { product, ageGroup, items: [] })
+        groups.get(key).items.push(item)
+      }
+      for (const { product, ageGroup, items: list } of groups.values()) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'jersey:' + product.id + ':' + ageGroup}))`
+        await revalidateCheckoutNumbers(tx, product, ageGroup, list)
+      }
+
       const total = items.reduce((sum, i) => sum + i.amount, 0)
       const created = await tx.payment.create({
         data: {
@@ -642,6 +715,7 @@ router.post('/checkout', authenticate, authorize('parent'), async (req, res) => 
       // gagal, lalu buka kembali item secara atomik supaya parent bisa hapus
       // atau mencoba lagi. Jangan hapus transaksi historis.
       await prisma.$transaction(async (tx) => {
+        await releaseNumbersForItems(tx, itemIds)
         await tx.cartItem.updateMany({ where: { id: { in: itemIds }, paymentId: payment.id }, data: { paymentId: null, status: 'open' } })
         await tx.payment.updateMany({ where: { id: payment.id, status: 'pending' }, data: { status: 'failed', failReason: err.message || 'Gagal membuat tagihan gateway' } })
       }).catch((rollbackErr) => console.error('Gagal mengembalikan item checkout:', rollbackErr))

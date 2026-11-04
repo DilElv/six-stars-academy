@@ -199,6 +199,29 @@ export async function setBlockedNumbers(id, fieldKey, numbers) {
   return request(`/products/${id}/blocked-numbers`, { method: 'PUT', body: JSON.stringify({ fieldKey, numbers }) })
 }
 
+// Registry nomor punggung per kategori usia (U6–U14).
+export async function getJerseyNumbers(productId, ageGroup) {
+  return request(`/products/${productId}/jersey-numbers${ageGroup ? `?ageGroup=${encodeURIComponent(ageGroup)}` : ''}`)
+}
+
+export async function setJerseyNumbers(productId, { ageGroup, numbers, status }) {
+  return request(`/products/${productId}/jersey-numbers`, {
+    method: 'PUT',
+    body: JSON.stringify({ ageGroup, numbers, status }),
+  })
+}
+
+export async function markJerseyNumberUsed(productId, payload) {
+  return request(`/products/${productId}/jersey-numbers/used`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function releaseJerseyNumber(productId, { ageGroup, number }) {
+  return request(`/products/${productId}/jersey-numbers/release`, {
+    method: 'POST',
+    body: JSON.stringify({ ageGroup, number }),
+  })
+}
+
 export async function getMerchOrders(filters) {
   return request(`/products/orders/list${buildQuery(filters)}`)
 }

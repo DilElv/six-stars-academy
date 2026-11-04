@@ -73,10 +73,14 @@ export default function MerchOrders() {
   }
 
   function exportCsv() {
-    const header = ['Tanggal', 'Produk', 'Anak', 'Cabang', 'Orang Tua', 'No. HP', 'Detail Custom', 'Catatan', 'Harga', 'Status Bayar', 'Progres']
+    const header = ['Tanggal', 'Produk', 'Kategori Usia', 'No. Punggung', 'Nama Punggung', 'Ukuran', 'Anak', 'Cabang', 'Orang Tua', 'No. HP', 'Detail Custom', 'Catatan', 'Harga', 'Status Bayar', 'Progres']
     const rows = orders.map((o) => [
       new Date(o.createdAt).toLocaleDateString('id-ID'),
       o.productName,
+      o.jersey?.ageGroup || '',
+      o.jersey?.number ?? '',
+      o.jersey?.playerName || '',
+      o.jersey?.size || '',
       o.student?.fullName,
       o.student?.branch?.code,
       o.student?.parentName,
@@ -173,8 +177,15 @@ export default function MerchOrders() {
                 </div>
               </div>
 
-              {(o.custom.length > 0 || o.note) && (
+              {(o.jersey || o.custom.length > 0 || o.note) && (
                 <div className="flex flex-wrap gap-1.5">
+                  {o.jersey && (
+                    <>
+                      <span className="text-xs rounded-xl bg-navy-900 text-white px-2.5 py-1 font-bold">#{o.jersey.number} · {o.jersey.ageGroup}</span>
+                      {o.jersey.playerName && <span className="text-xs rounded-xl bg-gold-50 border border-gold-100 px-2.5 py-1 text-navy-800">Nama: <b>{o.jersey.playerName}</b></span>}
+                      {o.jersey.size && <span className="text-xs rounded-xl bg-gold-50 border border-gold-100 px-2.5 py-1 text-navy-800">Ukuran: <b>{o.jersey.size}</b></span>}
+                    </>
+                  )}
                   {o.custom.map((c) => (
                     <span key={c.key} className="text-xs rounded-xl bg-gold-50 border border-gold-100 px-2.5 py-1 text-navy-800"><span className="text-gray-500">{c.label}:</span> <b>{c.value}</b></span>
                   ))}

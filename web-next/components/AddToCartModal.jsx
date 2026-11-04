@@ -287,7 +287,7 @@ export default function AddToCartModal({ student, packages = [], onClose, onSave
             {type === 'merchandise' && selectedProduct?.customFields?.length > 0 && (
               <div className="rounded-2xl bg-gray-50 p-3">
                 <div className="text-xs font-bold text-navy-800 mb-2">Detail pesanan {selectedProduct.name}</div>
-                <MerchCustomForm product={selectedProduct} values={customValues} onChange={setCustomValues} />
+                <MerchCustomForm product={selectedProduct} student={student} values={customValues} onChange={setCustomValues} />
               </div>
             )}
 

@@ -320,6 +320,7 @@ model Student {
   eventParticipants EventParticipant[]
   cartItems         CartItem[]
   paymentReminders  PaymentReminder[]
+  jerseyNumbers     JerseyNumber[]    @relation("StudentJerseyNumbers")
 
   @@map("students")
 }
@@ -818,6 +819,8 @@ model CartItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  jerseyNumber JerseyNumber?
+
   @@index([studentId, status])
   @@index([paymentId])
   @@index([productId])
@@ -845,9 +848,39 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   cartItems CartItem[]
+  jerseyNumbers JerseyNumber[]
 
   @@index([isActive])
   @@map("products")
+}
+
+// Registry nomor punggung jersey per produk + kategori usia. Nomor 1–100
+// tersedia secara implisit; baris hanya dibuat saat nomor diblokir, dipesan,
+// atau terpakai. Unik per (produk, kategori, nomor) sehingga nomor yang sama
+// boleh dipakai di kategori berbeda, tetapi tidak boleh dobel di kategori sama.
+model JerseyNumber {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ageGroup    String    // U6 | U8 | U10 | U12 | U14
+  number      Int
+  status      String    @default("available") // available | blocked | reserved | used
+  studentId   String?
+  student     Student?  @relation("StudentJerseyNumbers", fields: [studentId], references: [id], onDelete: SetNull)
+  cartItemId  String?   @unique
+  cartItem    CartItem? @relation(fields: [cartItemId], references: [id], onDelete: SetNull)
+  playerName  String?
+  size        String?
+  note        String?
+  reservedAt  DateTime?
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, ageGroup, number])
+  @@index([productId, ageGroup, status])
+  @@index([studentId])
+  @@map("jersey_numbers")
 }
 
 // Jejak audit pembayaran ("Audit Pembayaran"). Mencatat aksi manual yang

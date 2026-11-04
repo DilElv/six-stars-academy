@@ -1,4 +1,5 @@
 import prisma from './prisma.js'
+import { isJerseyNumberField } from './jerseyNumbers.js'
 
 // Opsi custom merchandise. Disimpan di Product.customFields sebagai array:
 //   { key, label, type: 'text' | 'select' | 'number', required,
@@ -110,8 +111,13 @@ export function validateCustomValues(product, values) {
       custom.push({ key: field.key, label: field.label, value: text })
     } else {
       const n = Number(text)
-      if (!Number.isInteger(n) || n < NUMBER_MIN || n > NUMBER_MAX) return { error: `${field.label} harus berupa angka bulat ${NUMBER_MIN}–${NUMBER_MAX}` }
-      if (field.blockedNumbers?.includes(n)) return { error: `${field.label} ${n} sudah dipakai` }
+      // Nomor jersey memakai registry per kategori usia (1–100); validasi
+      // ketersediaan sebenarnya dilakukan atomik saat keranjang dibuat.
+      const jersey = isJerseyNumberField(product, field)
+      const min = jersey ? 1 : NUMBER_MIN
+      const max = jersey ? 100 : NUMBER_MAX
+      if (!Number.isInteger(n) || n < min || n > max) return { error: `${field.label} harus berupa angka bulat ${min}–${max}` }
+      if (!jersey && field.blockedNumbers?.includes(n)) return { error: `${field.label} ${n} sudah dipakai` }
       custom.push({ key: field.key, label: field.label, value: n })
     }
   }
@@ -122,6 +128,9 @@ export function validateCustomValues(product, values) {
 export async function findNumberConflict(client, product, custom) {
   for (const field of productFields(product)) {
     if (field.type !== 'number' || !field.unique) continue
+    // Nomor jersey dicek per kategori usia di registry, bukan lintas semua
+    // kategori produk.
+    if (isJerseyNumberField(product, field)) continue
     const entry = custom.find((c) => c.key === field.key)
     if (!entry) continue
     const taken = await orderedNumbers(client, product.id, field.key)

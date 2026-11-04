@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package, SlidersHorizontal } from 'lucide-react'
+import { Store, Plus, Pencil, Trash2, Loader2, ImagePlus, X, Package, SlidersHorizontal, Hash } from 'lucide-react'
 import * as api from '@/lib/api'
 import ModalPortal from '@/components/ui/modal-portal'
 import { AppSelect } from '@/components/ui/app-select'
 import { RupiahInput } from '@/components/ui/rupiah-input'
+import JerseyNumberManager from '@/components/JerseyNumberManager'
+import { jerseyNumberField, isJerseyNumberField } from '@/lib/jerseyNumbers'
 
 const CATEGORIES = [
   { value: 'Jersey', label: 'Jersey' },
@@ -26,6 +28,7 @@ function stockLabel(stock) {
 export default function ProductCatalog() {
   const [products, setProducts] = useState(null)
   const [editTarget, setEditTarget] = useState(null) // null | 'new' | product
+  const [numbersTarget, setNumbersTarget] = useState(null)
   const [error, setError] = useState('')
 
   function load() {
@@ -95,6 +98,11 @@ export default function ProductCatalog() {
                   <span className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gold-400 text-navy-900 flex items-center gap-1"><SlidersHorizontal size={10} /> Custom</span>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1">
+                  {jerseyNumberField(p) && (
+                    <button onClick={() => setNumbersTarget(p)} title="Kelola nomor punggung" className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-navy-700">
+                      <Hash size={13} />
+                    </button>
+                  )}
                   <button onClick={() => setEditTarget(p)} className="p-1.5 rounded-lg bg-black/60 text-white hover:bg-black/75">
                     <Pencil size={13} />
                   </button>
@@ -123,6 +131,8 @@ export default function ProductCatalog() {
           onSaved={() => { setEditTarget(null); load() }}
         />
       )}
+
+      {numbersTarget && <JerseyNumberManager product={numbersTarget} onClose={() => setNumbersTarget(null)} />}
     </div>
   )
 }
@@ -335,7 +345,11 @@ function CustomFieldsEditor({ fields, onChange }) {
             </div>
           )}
           {f.type === 'number' && (
-            <BlockedNumbersInput value={f.blockedNumbers || []} onChange={(blockedNumbers) => update(i, { blockedNumbers })} />
+            isJerseyNumberField({}, f) ? (
+              <p className="text-[11px] text-gray-400">Nomor 1–100 per kategori usia dikelola lewat tombol <b>#</b> pada kartu produk setelah disimpan.</p>
+            ) : (
+              <BlockedNumbersInput value={f.blockedNumbers || []} onChange={(blockedNumbers) => update(i, { blockedNumbers })} />
+            )
           )}
         </div>
       ))}

@@ -13,6 +13,7 @@ function formatRupiah(n) {
 
 export default function TokoPage() {
   const [products, setProducts] = useState(null)
+  const [child, setChild] = useState(null)
   const [adding, setAdding] = useState('')
   const [added, setAdded] = useState('')
   const [error, setError] = useState('')
@@ -22,6 +23,7 @@ export default function TokoPage() {
 
   useEffect(() => {
     api.getProducts().then(setProducts).catch((err) => setError(err.message))
+    api.getMyChild().then(setChild).catch(() => {})
   }, [])
 
   function startAdd(product) {
@@ -138,7 +140,7 @@ export default function TokoPage() {
               <h3 className="font-bold text-navy-900 text-sm">{customTarget.name}</h3>
               <p className="text-xs text-gray-400 mb-4">{formatRupiah(customTarget.price)} · isi detail pesanan di bawah</p>
               {modalError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-3">{modalError}</div>}
-              <MerchCustomForm product={customTarget} values={customValues} onChange={setCustomValues} />
+              <MerchCustomForm product={customTarget} student={child} values={customValues} onChange={setCustomValues} />
               <div className="flex gap-2 mt-5">
                 <button onClick={() => setCustomTarget(null)} className="flex-1 border border-gray-200 text-navy-700 text-sm font-semibold py-2.5 rounded-2xl">Batal</button>
                 <button

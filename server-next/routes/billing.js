@@ -5,6 +5,7 @@ import { getUserBranchIds } from '../lib/branchAccess.js'
 import { toGatewayPhone } from '../lib/phone.js'
 import { syncPaymentWithRintisan, releasePendingPayment } from '../lib/paymentHelpers.js'
 import { logPaymentAudit } from '../lib/paymentAudit.js'
+import { releaseNumbersForItems } from '../lib/jerseyNumbers.js'
 
 const router = Router()
 
@@ -181,6 +182,7 @@ router.post('/delete', async (req, res) => {
       }
       const result = await prisma.cartItem.updateMany({ where: { id: item.id, status: { in: ['open', 'checked_out'] } }, data: { status: 'canceled', paymentId: null } })
       if (result.count === 0) { skipped++; continue }
+      await releaseNumbersForItems(prisma, [item.id])
       deleted++
       await logPaymentAudit({
         studentId: item.studentId,

@@ -3,27 +3,32 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import * as api from '@/lib/api'
+import JerseyNumberPicker from '@/components/JerseyNumberPicker'
+import { jerseyNumberField } from '@/lib/jerseyNumbers'
 
 // Form isian custom untuk satu produk merchandise (nama punggung, ukuran, nomor
 // punggung, catatan, dll) sesuai `product.customFields`. Field angka bernomor-unik
 // menampilkan nomor yang sudah dipakai sebagai tombol nonaktif, jadi pembeli
 // langsung tahu nomor mana yang masih kosong.
 export function missingRequired(product, values) {
+  const jerseyField = jerseyNumberField(product)
   return (product?.customFields || []).find((f) => {
     const text = String(values?.[f.key] ?? '').trim()
     if (!text) return f.required
     if (f.type === 'number') {
       const n = Number(text)
+      if (jerseyField?.key === f.key) return !Number.isInteger(n) || n < 1 || n > 100
       return !Number.isInteger(n) || n < 0 || n > 999 || (f.blockedNumbers || []).includes(n)
     }
     return false
   })
 }
 
-export default function MerchCustomForm({ product, values, onChange }) {
+export default function MerchCustomForm({ product, student, values, onChange }) {
   const fields = product?.customFields || []
+  const jerseyField = jerseyNumberField(product)
   const [numbers, setNumbers] = useState(null)
-  const hasNumber = fields.some((f) => f.type === 'number' && f.unique)
+  const hasNumber = fields.some((f) => f.type === 'number' && f.unique && jerseyField?.key !== f.key)
 
   useEffect(() => {
     setNumbers(null)
@@ -71,13 +76,22 @@ export default function MerchCustomForm({ product, values, onChange }) {
             </div>
           )}
           {field.type === 'number' && (
-            <NumberPicker
-              field={field}
-              info={numbers?.find((n) => n.key === field.key)}
-              loading={field.unique && numbers === null}
-              value={values[field.key]}
-              onPick={(n) => set(field.key, n)}
-            />
+            jerseyField?.key === field.key ? (
+              <JerseyNumberPicker
+                product={product}
+                student={student}
+                value={values[field.key]}
+                onChange={(number) => set(field.key, number)}
+              />
+            ) : (
+              <NumberPicker
+                field={field}
+                info={numbers?.find((n) => n.key === field.key)}
+                loading={field.unique && numbers === null}
+                value={values[field.key]}
+                onPick={(n) => set(field.key, n)}
+              />
+            )
           )}
         </div>
       ))}
