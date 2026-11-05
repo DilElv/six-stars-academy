@@ -15,13 +15,15 @@ export default function CoachJadwalPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  function load(bId, coachId = me?.id) {
+  function load(bId, coachId = me?.id, { silent = false } = {}) {
     if (!bId) {
-      setSchedules([]); setSessions([]); setEvents([]); setFields([])
+      if (!silent) { setSchedules([]); setSessions([]); setEvents([]); setFields([]) }
       return
     }
-    setLoading(true)
-    setError('')
+    if (!silent) {
+      setLoading(true)
+      setError('')
+    }
     Promise.all([
       api.getSchedules(bId),
       api.getTrainingSessions(undefined, bId),
@@ -33,8 +35,14 @@ export default function CoachJadwalPage() {
       setEvents(evts.filter((row) => row.assignedToMe === true))
       setFields(flds)
     })
-      .catch((err) => { setError(err.message || 'Gagal memuat jadwal. Coba muat ulang halaman.'); setSchedules([]); setSessions([]); setEvents([]); setFields([]) })
-      .finally(() => setLoading(false))
+      .catch((err) => {
+        // Refresh latar belakang tidak boleh mengosongkan halaman atau
+        // menutup form yang sedang diisi Coach.
+        if (silent) return
+        setError(err.message || 'Gagal memuat jadwal. Coba muat ulang halaman.')
+        setSchedules([]); setSessions([]); setEvents([]); setFields([])
+      })
+      .finally(() => { if (!silent) setLoading(false) })
   }
 
   useEffect(() => {
@@ -48,14 +56,15 @@ export default function CoachJadwalPage() {
   useEffect(() => {
     if (!me?.id || !branchId) return
     let active = true
-    const refresh = () => {
+    const refresh = (silent) => {
       if (!active) return
-      load(branchId, me.id)
+      load(branchId, me.id, { silent })
     }
-    refresh()
-    const interval = setInterval(refresh, 60000)
-    window.addEventListener('focus', refresh)
-    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh) }
+    refresh(false)
+    const interval = setInterval(() => refresh(true), 60000)
+    const onFocus = () => refresh(true)
+    window.addEventListener('focus', onFocus)
+    return () => { active = false; clearInterval(interval); window.removeEventListener('focus', onFocus) }
   }, [me?.id, branchId])
 
   if (!me) return <div className="glass-card rounded-3xl p-8 text-center text-sm text-gray-400">Memuat jadwal Coach...</div>
@@ -68,7 +77,7 @@ export default function CoachJadwalPage() {
         <h1 className="font-bold text-navy-900 text-lg">Jadwal</h1>
         <AppSelect
           value={branchId}
-          onChange={(v) => { setBranchId(v); load(v, me.id) }}
+          onChange={setBranchId}
           placeholder="Pilih cabang..."
           options={branchOptions}
         />
@@ -86,7 +95,7 @@ export default function CoachJadwalPage() {
       ) : loading ? (
         <div className="glass-card rounded-3xl p-8 text-center text-sm text-gray-400">Memuat jadwal dan kalender...</div>
       ) : (
-        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic branchId={branchId} onChanged={() => load(branchId, me.id)} />
+        <JadwalCalendar schedules={schedules} sessions={sessions} events={events} fields={fields} canAddTopic branchId={branchId} onChanged={() => load(branchId, me.id, { silent: true })} />
       )}
     </div>
   )

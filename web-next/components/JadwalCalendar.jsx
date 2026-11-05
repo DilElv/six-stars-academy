@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Clock, MapPin, CalendarDays, Info, Plus, Trash2, Loader2, Users, Trophy, Wallet } from 'lucide-react'
 import * as api from '@/lib/api'
 import { Calendar } from '@/components/ui/calendar'
@@ -43,6 +43,13 @@ export default function JadwalCalendar({
   const [topicForm, setTopicForm] = useState(emptyTopicForm)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    if (!success) return
+    const timer = setTimeout(() => setSuccess(''), 6000)
+    return () => clearTimeout(timer)
+  }, [success])
 
   const scheduleByDate = useMemo(() => {
     const map = {}
@@ -89,6 +96,7 @@ export default function JadwalCalendar({
     setTopicForm(emptyTopicForm)
     setShowTopicForm(true)
     setError('')
+    setSuccess('')
   }
 
   async function handleSubmitTopic(e) {
@@ -96,6 +104,7 @@ export default function JadwalCalendar({
     if (topicForm.ageGroups.length === 0) { setError('Pilih minimal satu kelompok umur'); return }
     setSaving(true)
     setError('')
+    setSuccess('')
     try {
       await api.createTrainingSession({
         ...topicForm,
@@ -105,9 +114,10 @@ export default function JadwalCalendar({
         branchId,
       })
       setShowTopicForm(false)
+      setSuccess('Topik latihan berhasil disimpan dan sudah tersinkron ke kalender.')
       onChanged?.()
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Gagal menyimpan topik latihan. Coba lagi.')
     } finally {
       setSaving(false)
     }
@@ -171,12 +181,18 @@ export default function JadwalCalendar({
             <div className="flex items-center gap-2 shrink-0">
               {renderDateBadge?.(selectedDate, selectedAttendance)}
               {canAddTopic && hasSchedule && (
-                <button onClick={openTopicForm} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold px-3 py-1.5 rounded-xl">
+                <button type="button" onClick={openTopicForm} className="flex items-center gap-1.5 bg-navy-900 hover:bg-navy-800 text-white text-xs font-semibold px-3 py-1.5 rounded-xl">
                   <Plus size={13} /> Tambah Topik Latihan
                 </button>
               )}
             </div>
           </div>
+
+          {success && (
+            <div role="status" aria-live="polite" className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              {success}
+            </div>
+          )}
 
           {selectedDayEvents.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -238,7 +254,7 @@ export default function JadwalCalendar({
                           <div className="text-[11px] text-gold-600 font-semibold">{s.ageGroup?.split(',').join(', ')}</div>
                         </div>
                         {canAddTopic && (
-                          <button onClick={() => handleDeleteTopic(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0">
+                          <button type="button" onClick={() => handleDeleteTopic(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0">
                             <Trash2 size={13} />
                           </button>
                         )}
