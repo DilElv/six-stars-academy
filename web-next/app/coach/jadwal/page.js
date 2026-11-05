@@ -52,6 +52,7 @@ export default function CoachJadwalPage() {
       if (!active) return
       load(branchId, me.id)
     }
+    refresh()
     const interval = setInterval(refresh, 60000)
     window.addEventListener('focus', refresh)
     return () => { active = false; clearInterval(interval); window.removeEventListener('focus', refresh) }
